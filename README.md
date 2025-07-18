@@ -1,5 +1,5 @@
 # Passflare
-A modern and secure password manager which runs on the Cloudflare Workers, D1, and R2
+A modern and secure password manager which runs on Cloudflare Workers, D1, and R2
 
 Features:
 ---------
@@ -43,17 +43,29 @@ secure-password-manager/
 │   ├── vaults.ts                 # Vault data management (D1 and R2 interaction)
 │   └── worker.ts                 # Main Worker router and entry point
 ├── migrations/                   # D1 database schema migrations
-│   └── 0001\_initial\_schema.sql
+│   └── 0001_init.sql
 ├── package.json                  # Node.js dependencies for dev/build
 ├── tsconfig.json                 # TypeScript configuration for backend
 ├── wrangler.toml                 # Cloudflare Worker configuration
 └── README.md                     # This file you are reading right now
 ```
 
+-> document
+  -> block_quote
+       paragraph
+         "Lorem ipsum dolor\nsit amet."
+    -> list (type=bullet tight=true bullet_char=-)
+         list_item
+           paragraph
+             "Qui *quodsi iracundia*"
+      -> list_item
+        -> paragraph
+             "aliquando id"
+
 Getting Started:
 ----------------
 
-For detailed deployment and usage instructions, please refer to the dedicated documentation site:
+For detailed usage instructions for a user or admin, please refer to the dedicated documentation pages:
 
 [Go to Documentation Site](https://passflare.com/docs.html "Passflare Documentation Site")
 
@@ -62,17 +74,19 @@ Development:
 
 To set up and run locally:
 
-1.  \*\*Clone/Create Project:\*\* Set up the file structure as described above.
-2.  \*\*Install Dependencies:\*\* In the project root (\`secure-password-manager/\`), run: `npm install`
-3.  \*\*Cloudflare Setup:\*\*
-    *   Install Wrangler CLI: `npm install -g wrangler`
-    *   Login to Wrangler: `wrangler login`
-    *   Create D1 Database: `wrangler d1 create secure-password-db` (Note ID and name)
-    *   Apply D1 migrations: `wrangler d1 execute secure-password-db --file=./migrations/0001_initial_schema.sql`
-    *   Create R2 Bucket: `wrangler r2 bucket create secure-vaults-r2`
-    *   \*\*Update `wrangler.toml`:\*\* Fill in your actual \`JWT\_SECRET\`, D1 \`database\_id\`, and R2 \`bucket\_name\`.
-4.  \*\*Run Locally:\*\* In the project root, run: `npm start` (This will start both the backend worker and serve the frontend).
-5.  Access the frontend at the URL provided by `live-server` (e.g., `http://127.0.0.1:8080/`).
+1. Clone/Create Project: This will set up the file structure as described above
+2. Install Dependencies:** In the project root (\`Passflare/\`), run: `npm install`
+3. **Cloudflare Setup:**
+   3a. Install Wrangler CLI via the [Cloudflare Docs](https://developers.cloudflare.com/workers/wrangler/install-and-update/ "Cloudflare Wrangler Install/Update Docs")
+   **Note:** Make sure you have also installed or updated `Node.js` and `npm` as per the guide above.
+   3b. Create a local D1 Database: `npx wrangler d1 create secure-password-db --local` (required for local D1)
+   3c. Apply D1 migrations: `npx wrangler d1 migrations apply secure-password-db --local`
+   3d. Create the file `.dev.vars.local`
+   3e. Generate a JWT secret, e.g. run `openssl rand -base64 512` from any terminal
+   3f. Add this to the `.dev.vars.local` file in format `JWT_SECRET="<secret_here>"`
+   **Note:** If you changed anything, ensure you update the `wrangler.toml` with for the new JWT secret, D1 database name, and R2 bucket name or any other changes you made.
+5. Run Locally: `npx wrangler dev --env local` (this will start the dev environment using the `.dev.vars.local` file for the secrets)
+7. Access the frontend at the URL provided by the output (e.g., `http://127.0.0.1:8080/`).
 
 License:
 --------
