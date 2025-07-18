@@ -16,7 +16,7 @@ Project Structure:
 ------------------
 
 ```
-secure-password-manager/
+Passflare/
 ├── public/                       # Frontend (HTML, CSS, JS) - Deployed to Cloudflare Pages (via Worker)
 │   ├── index.html
 │   ├── css/
