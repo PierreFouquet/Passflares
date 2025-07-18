@@ -80,6 +80,6 @@ To set up and run locally:
 License:
 --------
 
-This project is open-source and available under the *GNU General Public License v3.0*. See the [./LICENSE.md](LICENCE "Licence file") file for details.
+This project is open-source and available under the *GNU General Public License v3.0*. See the [LICENSE.md](./LICENCE "Licence file") file for details.
 
 © 2025 Passflares. All rights reserved.
