@@ -17,37 +17,37 @@ Project Structure:
 
 ```
 secure-password-manager/
-├── public/                # Frontend (HTML, CSS, JS) - Deployed to Cloudflare Pages (via Worker)
+├── public/                       # Frontend (HTML, CSS, JS) - Deployed to Cloudflare Pages (via Worker)
 │   ├── index.html
 │   ├── css/
-│   │   ├── docs.css       # Stylesheet for the documentation part of the site
-│   │   └── style.css      # Stylesheet for the password managemenent part of the site
+│   │   ├── docs.css              # Stylesheet for the documentation part of the site
+│   │   └── style.css             # Stylesheet for the password managemenent part of the site
+│   ├── docs/                     # The area of the site for user/admin guides
+│   │   ├── docs.html
+│   │   ├── user-guide.html       # The user guides
+│   │   └── admin-guide.html      # The admin guides
 │   ├── js/
-│   │   ├── main.js        # Main application logic and event handling
-│   │   ├── api.js         # API client for Worker interactions
-│   │   ├── crypto.js      # Client-side encryption/decryption
-│   │   ├── ui.js          # UI manipulation and element references
-│   │   ├── utils.js       # General utility functions (e.g., password strength, generate)
-│   │   └── session.js     # Manages client-side session state and inactivity
-├── documentation/         # The area of the site for user/admin guides
-│   ├── docs.html
-│   ├── user-guide.html    # The user guides
-│   ├── admin-guide.html   # The admin guides
-├── src/                   # Backend (Cloudflare Worker) - Deployed to Cloudflare Workers
-│   ├── auth.ts            # User authentication (register, login, password change)
-│   ├── auditLog.ts        # Audit logging functions
-│   ├── middleware.ts      # JWT authentication and authorization checks
-│   ├── organizations.ts   # Organization management
-│   ├── types.ts           # Shared TypeScript interfaces/types
-│   ├── utils.ts           # Worker-side utilities (e.g., Scrypt hashing, hex conversion)
-│   ├── vaults.ts          # Vault data management (D1 and R2 interaction)
-│   └── worker.ts          # Main Worker router and entry point
-├── migrations/            # D1 database schema migrations
+│   │   ├── main.js               # Main application logic and event handling
+│   │   ├── api.js                # API client for Worker interactions
+│   │   ├── crypto.js             # Client-side encryption/decryption
+│   │   ├── ui.js                 # UI manipulation and element references
+│   │   ├── utils.js              # General utility functions (e.g., password strength, generate)
+│   │   └── session.js            # Manages client-side session state and inactivity
+├── src/                          # Backend (Cloudflare Worker) - Deployed to Cloudflare Workers
+│   ├── auth.ts                   # User authentication (register, login, password change)
+│   ├── auditLog.ts               # Audit logging functions
+│   ├── middleware.ts             # JWT authentication and authorization checks
+│   ├── organizations.ts          # Organization management
+│   ├── types.ts                  # Shared TypeScript interfaces/types
+│   ├── utils.ts                  # Worker-side utilities (e.g., Scrypt hashing, hex conversion)
+│   ├── vaults.ts                 # Vault data management (D1 and R2 interaction)
+│   └── worker.ts                 # Main Worker router and entry point
+├── migrations/                   # D1 database schema migrations
 │   └── 0001\_initial\_schema.sql
-├── package.json           # Node.js dependencies for dev/build
-├── tsconfig.json          # TypeScript configuration for backend
-├── wrangler.toml          # Cloudflare Worker configuration
-└── README.md              # This file you are reading right now
+├── package.json                  # Node.js dependencies for dev/build
+├── tsconfig.json                 # TypeScript configuration for backend
+├── wrangler.toml                 # Cloudflare Worker configuration
+└── README.md                     # This file you are reading right now
 ```
 
 Getting Started:
@@ -55,7 +55,7 @@ Getting Started:
 
 For detailed deployment and usage instructions, please refer to the dedicated documentation site:
 
-[Go to Documentation Site](https://passflare.com/docs.html{:target="_blank" rel="noopener"})
+[Go to Documentation Site](https://passflare.com/docs.html){target="_blank"}
 
 Development:
 ------------
