@@ -15,6 +15,7 @@ Features:
 Project Structure:
 ------------------
 
+```
 secure-password-manager/
 ├── public/                # Frontend (HTML, CSS, JS) - Deployed to Cloudflare Pages (via Worker)
 │   ├── index.html
@@ -47,14 +48,14 @@ secure-password-manager/
 ├── tsconfig.json          # TypeScript configuration for backend
 ├── wrangler.toml          # Cloudflare Worker configuration
 └── README.md              # This file you are reading right now
-    
+```
 
 Getting Started:
 ----------------
 
 For detailed deployment and usage instructions, please refer to the dedicated documentation site:
 
-[Go to Documentation Site](https://passflare.com/docs.html)
+[Go to Documentation Site](https://passflare.com/docs.html){:target="_blank"}
 
 Development:
 ------------
