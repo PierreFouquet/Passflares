@@ -66,7 +66,7 @@ To set up and run locally:
 2. Install Dependencies:** In the project root (\`Passflare/\`), run: `npm install`
 3. **Cloudflare Local dev Setup:**
     1. Install Wrangler CLI via the [Cloudflare Docs](https://developers.cloudflare.com/workers/wrangler/install-and-update/ "Cloudflare Wrangler Install/Update Docs")
-    - **Note:** Make sure you have also installed or updated `Node.js` and `npm` as per the guide above.
+    - **Note:** Make sure you have also installed or updated `Node.js` and `npm` as per the guide above - You can use [nvm](https://github.com/nvm-sh/nvm) to install both `Node.js` and `npm`.
     2. Create a local D1 Database: `npx wrangler d1 create secure-password-db --local` (required for local D1)
     3. Apply D1 migrations: `npx wrangler d1 migrations apply secure-password-db --local`
     4. Create the file `.dev.vars.local`
