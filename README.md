@@ -55,7 +55,7 @@ Getting Started:
 
 For detailed deployment and usage instructions, please refer to the dedicated documentation site:
 
-[Go to Documentation Site](https://passflare.com/docs.html){:target="_blank"}
+[Go to Documentation Site](https://passflare.com/docs.html{:target="_blank"})
 
 Development:
 ------------
