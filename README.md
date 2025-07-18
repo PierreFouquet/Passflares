@@ -64,14 +64,14 @@ To set up and run locally:
 
 1. Clone/Create Project: This will set up the file structure as described above
 2. Install Dependencies:** In the project root (\`Passflare/\`), run: `npm install`
-3. **Cloudflare Setup:**
-    3a. Install Wrangler CLI via the [Cloudflare Docs](https://developers.cloudflare.com/workers/wrangler/install-and-update/ "Cloudflare Wrangler Install/Update Docs")
+3. **Cloudflare Local dev Setup:**
+    1. Install Wrangler CLI via the [Cloudflare Docs](https://developers.cloudflare.com/workers/wrangler/install-and-update/ "Cloudflare Wrangler Install/Update Docs")
     **Note:** Make sure you have also installed or updated `Node.js` and `npm` as per the guide above.
-    3b. Create a local D1 Database: `npx wrangler d1 create secure-password-db --local` (required for local D1)
-    3c. Apply D1 migrations: `npx wrangler d1 migrations apply secure-password-db --local`
-    3d. Create the file `.dev.vars.local`
-    3e. Generate a JWT secret, e.g. run `openssl rand -base64 512` from any terminal
-    3f. Add this to the `.dev.vars.local` file in format `JWT_SECRET="<secret_here>"`
+    2. Create a local D1 Database: `npx wrangler d1 create secure-password-db --local` (required for local D1)
+    3. Apply D1 migrations: `npx wrangler d1 migrations apply secure-password-db --local`
+    4. Create the file `.dev.vars.local`
+    5. Generate a JWT secret, e.g. run `openssl rand -base64 512` from any terminal
+    6. Add this to the `.dev.vars.local` file in format `JWT_SECRET="<secret_here>"`
     **Note:** If you changed anything, ensure you update the `wrangler.toml` with for the new JWT secret, D1 database name, and R2 bucket name or any other changes you made.
 5. Run Locally: `npx wrangler dev --env local` (this will start the dev environment using the `.dev.vars.local` file for the secrets)
 7. Access the frontend at the URL provided by the output (e.g., `http://127.0.0.1:8080/`).
