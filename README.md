@@ -47,7 +47,7 @@ Passflares/
 ├── package.json                  # Node.js dependencies for dev/build
 ├── tsconfig.json                 # TypeScript configuration for backend
 ├── wrangler.toml                 # Cloudflare Worker configuration
-├── LICENCE.md                    # Licence file
+├── LICENCE                       # The software licence
 └── README.md                     # This file you are reading right now
 ```
 
@@ -80,6 +80,10 @@ To set up and run locally:
 License:
 --------
 
-This project is open-source and available under the *GNU General Public License v3.0*. See the [LICENSE.md](./LICENCE "Licence file") file for details.
+Copyright (C) 2025 Pierre Fouquet
 
-© 2025 Passflares. All rights reserved.
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a [copy of the GNU General Public License](./LICENCE "Licence file") along with this program. If not, see [GNU.org Licences](https://www.gnu.org/licenses/ "GNU GPL Licence Page").
