@@ -57,7 +57,7 @@ For detailed deployment and usage instructions, please refer to the dedicated do
 
 [Go to Documentation Site](https://passflare.com/docs.html)
 
-<script>
+<script type="text/javascript">
 const button = document.querySelector('#openTab');
 
 // add click event listener
