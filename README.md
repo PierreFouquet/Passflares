@@ -47,7 +47,7 @@ Passflares/
 ├── package.json                  # Node.js dependencies for dev/build
 ├── tsconfig.json                 # TypeScript configuration for backend
 ├── wrangler.toml                 # Cloudflare Worker configuration
-├── LICENCE                       # The software licence
+├── LICENSE                       # The software License
 └── README.md                     # This file you are reading right now
 ```
 
@@ -86,4 +86,4 @@ This program is free software: you can redistribute it and/or modify it under th
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a [copy of the GNU General Public License](LICENCE "Licence file") along with this program. If not, see [GNU.org Licences](https://www.gnu.org/licenses/ "GNU GPL Licence Page").
+You should have received a [copy of the GNU General Public License](LICENSE "License file") along with this program. If not, see [GNU.org Licenses](https://www.gnu.org/licenses/ "GNU GPL License Page").
