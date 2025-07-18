@@ -55,7 +55,34 @@ Getting Started:
 
 For detailed deployment and usage instructions, please refer to the dedicated documentation site:
 
-[Go to Documentation Site](https://passflare.com/docs.html){target="_blank"}
+[Go to Documentation Site](https://passflare.com/docs.html)
+
+<script>
+const button = document.querySelector('#openTab');
+
+// add click event listener
+button.addEventListener('click', () => {
+
+    // open an empty window
+    const tab = window.open('about:blank');
+
+    // make an API call
+    fetch('/api/validate')
+        .then(res => res.json())
+        .then(json => {
+
+            // TODO: do something with JSON response
+
+            // update the actual URL
+            tab.location = 'https://passflare.com/docs.html';
+            tab.focus();
+        })
+        .catch(err => {
+            // close the empty window
+            tab.close();
+        });
+});
+</script>
 
 Development:
 ------------
