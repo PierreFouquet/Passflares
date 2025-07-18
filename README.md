@@ -59,27 +59,7 @@ For detailed deployment and usage instructions, please refer to the dedicated do
 
 <!DOCTYPE html>
 <body>
-<script type="text/javascript">
-const button = document.querySelector('#openTab');
-// add click event listener
-button.addEventListener('click', () => {
-    // open an empty window
-    const tab = window.open('about:blank');
-    // make an API call
-    fetch('/api/validate')
-        .then(res => res.json())
-        .then(json => {
-            // TODO: do something with JSON response
-            // update the actual URL
-            tab.location = 'https://passflare.com/docs.html';
-            tab.focus();
-        })
-        .catch(err => {
-            // close the empty window
-            tab.close();
-        });
-});
-</script>
+<a href="https://passflare.com/docs.html" target="_blank">Link</a>
 </body>
 </>
 
