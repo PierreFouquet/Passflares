@@ -33,6 +33,7 @@ Passflares/
 │   │   ├── crypto.js             # Client-side encryption/decryption
 │   │   ├── ui.js                 # UI manipulation and element references
 │   │   ├── utils.js              # General utility functions (e.g., password strength, generate)
+│   │   ├── constants.js          # Constant variables shared between files
 │   │   └── session.js            # Manages client-side session state and inactivity
 ├── src/                          # Backend (Cloudflare Worker) - Deployed to Cloudflare Workers
 │   ├── auth.ts                   # User authentication (register, login, password change)
