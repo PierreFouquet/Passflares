@@ -4,11 +4,6 @@ compatibility_date = "2025-07-19"
 node_compat = true
 tsconfig = "tsconfig.json"
 
-[build]
-upload.format = "modules"
-upload.dir = "src"
-upload.main = "worker.ts"
-
 [assets]
 directory = "./public"
 binding = "ASSETS"
@@ -23,10 +18,11 @@ JWT_SECRET = "{{ JWT_SECRET }}"  # Same for all environments
 # PRODUCTION ENVIRONMENT
 # ========================
 [env.production]
-name = "passflares-prod"
+name = "passflares"
 
 routes = [
     "pierrefouquet.co.uk/*",
+    "passflares.pierrefouquet93.workers.dev/*",
     "api.pierrefouquet.co.uk/*"
 ]
 
@@ -47,69 +43,17 @@ binding = "RATE_LIMIT"
 id = "RATE_LIMIT_PROD_ID"
 
 # ========================
-# LIVEDEV ENVIRONMENT
-# ========================
-[env.livedev]
-name = "passflares-livedev"
-
-routes = [
-    "livedev.pierrefouquet93.workers.dev/*"
-]
-
-[vars]
-ENVIRONMENT = "development"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "secure-password-db-dev"
-database_id = "DEV_D1_DATABASE_ID"
-
-[[r2_buckets]]
-binding = "VAULTS"
-bucket_name = "secure-vaults-r2-dev"
-
-[[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "RATE_LIMIT_DEV_ID"
-
-# ========================
-# LIVETEST ENVIRONMENT
-# ========================
-[env.livetest]
-name = "passflares-livetest"
-
-routes = [
-    "livetest.pierrefouquet93.workers.dev/*"
-]
-
-[vars]
-ENVIRONMENT = "staging"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "secure-password-db-staging"
-database_id = "STAGING_D1_DATABASE_ID"
-
-[[r2_buckets]]
-binding = "VAULTS"
-bucket_name = "secure-vaults-r2-staging"
-
-[[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "RATE_LIMIT_STAGING_ID"
-
-# ========================
 # PRERELEASE ENVIRONMENT
 # ========================
 [env.prerelease]
 name = "passflares-prerelease"
 
 routes = [
-    "prerelease.pierrefouquet93.workers.dev/*"
+    "prerelease.passflares.pierrefouquet93.workers.dev/*\"
 ]
 
 [vars]
-ENVIRONMENT = "preview"
+ENVIRONMENT = "prerelease"
 
 [[d1_databases]]
 binding = "DB"
@@ -146,15 +90,6 @@ bucket_name = "secure-vaults-r2-local"
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
 id = "local"
-
-# ========================
-# GITHUB INTEGRATION
-# ========================
-[triggers]
-production = { branch = "main" }
-livedev = { branch = "livedev" }
-livetest = { branch = "livetest" }
-prerelease = { branch = "prerelease" }
 
 # ========================
 # OBSERVABILITY

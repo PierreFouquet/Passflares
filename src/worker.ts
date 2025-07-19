@@ -39,9 +39,8 @@ const SECURITY_HEADERS = {
 // Fixed list of allowed origins
 const ALLOWED_ORIGINS = [
     'https://pierrefouquet.co.uk',
-    'https://livedev.pierrefouquet93.workers.dev',
-    'https://livetest.pierrefouquet93.workers.dev',
-    'https://prerelease.pierrefouquet93.workers.dev',
+    'https://passflares.pierrefouquet93.workers.dev',
+    'https://prerelease.passflares.pierrefouquet93.workers.dev',
     'https://api.pierrefouquet.co.uk',
     'http://localhost:8080',
     'http://localhost:5173'
