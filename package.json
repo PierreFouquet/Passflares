@@ -15,9 +15,10 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.9",
-    "typescript": "^5.5.3",
+    "concurrently": "^8.2.2",
     "live-server": "^1.2.2",
-    "concurrently": "^8.2.2"
+    "typescript": "^5.5.3",
+    "wrangler": "^4.25.0"
   },
   "dependencies": {
     "@noble/hashes": "^1.4.0",
