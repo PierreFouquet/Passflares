@@ -4,8 +4,6 @@ A modern and secure password manager which runs on Cloudflare Workers, D1, and R
 
 ## Features
 
----------
-
 * **Client-Side Encryption:** All sensitive vault data is encrypted in your browser using AES-GCM before being sent to Cloudflare R2. Your Master Password never leaves your device.
 * **Strong Password Hashing:** Master Passwords are securely hashed server-side using Argon2id (Scrypt implementation is used in this version).
 * **Serverless Architecture:** Leverages Cloudflare Workers for backend logic, D1 for metadata, and R2 for encrypted data storage, offering global performance and scalability.
@@ -15,8 +13,6 @@ A modern and secure password manager which runs on Cloudflare Workers, D1, and R
 * **Data Export:** Ability to export your encrypted vault data for backup.
 
 ## Project Structure
-
----------
 
 ```plaintext
 Passflares/
@@ -58,15 +54,11 @@ Passflares/
 
 ## Getting Started
 
----------
-
 For detailed usage instructions for a user or admin, please refer to the dedicated documentation pages:
 
 [Go to Documentation Site](https://passflares.com/docs.html "Passflares' Documentation Site")
 
 ## Development
-
----------
 
 To set up and run locally:
 
@@ -85,8 +77,6 @@ To set up and run locally:
 10. Access the frontend at the URL provided by the output (e.g., `http://127.0.0.1:8080/`).
 
 ## License
-
----------
 
 Copyright ©️ 2025 Pierre Fouquet
 
