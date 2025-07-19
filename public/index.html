@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Password Manager</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <h1>Secure Password Manager</h1>
+
+        <div id="auth-section" class="card">
+            <h2>Access Your Vault</h2>
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="login">Login</button>
+                <button class="tab-button" data-tab="register">Register</button>
+            </div>
+
+            <div id="login-tab" class="tab-content active">
+                <form id="login-form">
+                    <input type="email" id="login-email" placeholder="Email" required autocomplete="username">
+                    <input type="password" id="login-master-password" placeholder="Master Password" required autocomplete="current-password">
+                    <button type="submit">Login</button>
+                </form>
+            </div>
+
+            <div id="register-tab" class="tab-content">
+                <form id="register-form">
+                    <input type="email" id="register-email" placeholder="Email" required autocomplete="username">
+                    <input type="password" id="register-master-password" placeholder="Master Password" required autocomplete="new-password">
+                    <div class="password-strength">
+                        Strength: <span id="password-strength-text">N/A</span>
+                    </div>
+                    <input type="password" id="register-confirm-master-password" placeholder="Confirm Master Password" required autocomplete="new-password">
+                    <button type="submit">Register</button>
+                </form>
+            </div>
+            <p id="auth-message" class="message"></p>
+        </div>
+
+        <div id="app-section" class="hidden">
+            <div class="user-info">
+                <span>Welcome, <span id="user-email-display"></span>!</span>
+                <button id="logout-button">Logout</button>
+            </div>
+
+            <div class="actions">
+                <button id="change-master-password-button">Change Master Password</button>
+                <button id="export-vault-data-button">Export All Vault Data</button>
+            </div>
+
+            <div id="vaults-section" class="card">
+                <h2>Your Vaults</h2>
+                <div class="vault-creation">
+                    <input type="text" id="new-vault-name" placeholder="New Vault Name (e.g., 'Personal Passwords')" required>
+                    <textarea id="new-vault-description" placeholder="Optional: Description"></textarea>
+                    <div class="form-group">
+                        <label for="new-vault-owner-type">Owner Type:</label>
+                        <select id="new-vault-owner-type">
+                            <option value="user">Me (Personal)</option>
+                            <option value="organization">Organization</option>
+                        </select>
+                    </div>
+                    <div id="organization-selection" class="hidden form-group">
+                        <label for="select-organization">Select Organization:</label>
+                        <select id="select-organization"></select>
+                        <p class="small-text">No organizations? <button id="create-organization-button" class="inline-button">Create one</button></p>
+                    </div>
+                    <button id="create-vault-button">Create Vault</button>
+                </div>
+                <div id="vaults-list">
+                    </div>
+                <p id="vault-message" class="message"></p>
+            </div>
+
+            <div id="create-organization-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h2>Create New Organization</h2>
+                    <input type="text" id="org-name-input" placeholder="Organization Name" required>
+                    <textarea id="org-description-input" placeholder="Organization Description (Optional)"></textarea>
+                    <button id="submit-create-org">Create</button>
+                    <button class="close-modal">Cancel</button>
+                    <p id="org-modal-message" class="message"></p>
+                </div>
+            </div>
+
+            <div id="add-org-member-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h2>Add Member to Organization</h2>
+                    <h3 id="add-member-org-name"></h3>
+                    <input type="email" id="member-email-input" placeholder="Member Email" required>
+                    <div class="form-group">
+                        <label for="member-role-select">Role:</label>
+                        <select id="member-role-select">
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button id="submit-add-member">Add Member</button>
+                    <button class="close-modal">Cancel</button>
+                    <p id="add-member-modal-message" class="message"></p>
+                </div>
+            </div>
+
+
+            <div id="vault-details-section" class="card hidden">
+                <h2 id="current-vault-name"></h2>
+                <p id="current-vault-description"></p>
+                <div class="current-vault-actions">
+                    <button id="delete-current-vault-button" class="danger-button">Delete Current Vault</button>
+                    <button id="load-another-vault-button">Load Another Vault</button>
+                </div>
+
+                <h3>Add New Entry</h3>
+                <form id="add-entry-form">
+                    <input type="text" id="entry-name" placeholder="Entry Name (e.g., Google)" required>
+                    <input type="text" id="entry-username" placeholder="Username/Email" required>
+                    <div class="password-input-group">
+                        <input type="text" id="entry-password" placeholder="Password" required>
+                        <button type="button" id="generate-password-button">Generate</button>
+                    </div>
+                    <input type="url" id="entry-url" placeholder="URL (optional)">
+                    <textarea id="entry-notes" placeholder="Notes (optional)"></textarea>
+                    <button type="submit">Add Entry</button>
+                </form>
+
+                <h3>Password Entry Details</h3>
+                <div class="search-bar">
+                    <input type="text" id="search-entries" placeholder="Search entries...">
+                    <button id="search-button">Search</button>
+                    <button id="clear-search-button">Clear Search</button>
+                </div>
+                <div id="entries-list">
+                    <p class="no-entries-message">No entries yet. Add one above!</p>
+                </div>
+                <button id="save-vault-data-button">Save Vault Data</button>
+                <p id="entry-message" class="message"></p>
+            </div>
+
+            <div id="change-master-password-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h2>Change Master Password</h2>
+                    <form id="change-master-password-form">
+                        <input type="password" id="old-master-password" placeholder="Old Master Password" required>
+                        <input type="password" id="new-master-password" placeholder="New Master Password" required>
+                        <div class="password-strength">
+                            Strength: <span id="new-password-strength-text">N/A</span>
+                        </div>
+                        <input type="password" id="confirm-new-master-password" placeholder="Confirm New Master Password" required>
+                        <button type="submit">Change Password</button>
+                    </form>
+                    <button class="close-modal">Cancel</button>
+                    <p id="change-password-message" class="message"></p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading...</p>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

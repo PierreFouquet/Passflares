@@ -1,0 +1,27 @@
+{
+  "name": "secure-password-manager",
+  "version": "1.0.0",
+  "description": "A secure password manager built on Cloudflare Workers, D1, and R2.",
+  "main": "src/worker.ts",
+  "scripts": {
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy",
+    "start:frontend": "live-server public",
+    "start": "concurrently --kill-others \"npm run dev:worker\" \"npm run start:frontend\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.3",
+    "live-server": "^1.2.2",
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.4.0",
+    "itty-router": "^4.0.12",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
