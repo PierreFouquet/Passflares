@@ -1,6 +1,6 @@
 # Passflares
 
-A modern and secure password manager which runs on Cloudflare Workers, D1, and R2.
+A modern and secure password manager which runs on the Cloudflare Stack.
 
 ## Features
 
