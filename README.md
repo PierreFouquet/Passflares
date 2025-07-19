@@ -20,12 +20,13 @@ Passflares/
 ├── public/                       # Frontend (HTML, CSS, JS) - Deployed to Cloudflare Pages (via Worker)
 │   ├── index.html
 │   ├── css/
-│   │   ├── docs.css              # Stylesheet for the documentation part of the site
 │   │   └── style.css             # Stylesheet for the password managemenent part of the site
 │   ├── docs/                     # The area of the site for user/admin guides
 │   │   ├── docs.html
 │   │   ├── user-guide.html       # The user guides
-│   │   └── admin-guide.html      # The admin guides
+│   │   ├── admin-guide.html      # The admin guides
+│   │   └── css/
+│   │       └── docs.css          # Stylesheet for the documentation part of the site
 │   ├── js/
 │   │   ├── main.js               # Main application logic and event handling
 │   │   ├── api.js                # API client for Worker interactions
