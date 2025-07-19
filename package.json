@@ -1,5 +1,5 @@
 {
-  "name": "secure-password-manager",
+  "name": "passflares",
   "version": "1.0.0",
   "description": "A secure password manager built on Cloudflare Workers, D1, and R2.",
   "main": "src/worker.ts",

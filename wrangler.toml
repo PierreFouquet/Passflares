@@ -1,20 +1,31 @@
 # wrangler.toml
-name = "secure-password-manager-worker"
-main = "src/worker.ts" # Point to the TypeScript source file
-compatibility_date = "2025-07-19" # Or a later date suitable for your CF environment
+name = "passflares"
+main = "src/worker.ts"
+compatibility_date = "2025-07-19"
 workers_dev = true
 
-[vars]
-binding = "JWT_SECRET"
-
+[env.local]
 [[d1_databases]]
-binding = "DB" # This is the variable name your Worker will use (env.DB)
-database_name = "secure-password-db" # Your D1 database name (from `wrangler d1 create`)
-database_id = "YOUR_D1_DATABASE_ID" # Your D1 database ID (from `wrangler d1 create`)
+binding = "DB"
+database_name = "secure-password-db"
+database_id = "local"  # Critical for local dev
 
-r2_buckets = [
-  { binding = "VAULTS", bucket_name = "secure-vaults-r2" }
-]
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "secure-vaults-r2"
+
+[vars]
+JWT_SECRET = "{{ JWT_SECRET }}"  # Overridden by .dev.vars.local
+
+[env.production]
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db"
+database_id = "YOUR_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "secure-vaults-r2"
 
 [assets]
 directory = "./public"

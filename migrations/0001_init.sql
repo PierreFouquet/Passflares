@@ -1,4 +1,4 @@
--- D1 Database Schema for Secure Password Manager
+-- D1 Database Schema for Passflares
 
 -- Users Table
 CREATE TABLE IF NOT EXISTS users (
