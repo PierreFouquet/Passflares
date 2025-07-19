@@ -56,7 +56,7 @@ Passflares/
 
 For detailed usage instructions for a user or admin, please refer to the dedicated documentation pages:
 
-[Go to Documentation Site](https://passflares.com/docs.html "Passflares' Documentation Site")
+[Go to Documentation Site](https://pierrefouquet.co.uk/docs/docs.html "Passflares' Documentation Site")
 
 ## Development
 

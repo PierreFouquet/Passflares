@@ -5,10 +5,10 @@ import { randomBytes } from '@noble/hashes/utils';
 import { Env } from './types.js'; // Ensure correct path and .js extension
 
 export const KDF_SALT_LENGTH_BYTES = 16;
-export const KDF_COST_N = 16384; // 2^14
-export const KDF_COST_R = 8;
+export const KDF_COST_N = 32768;  // Increased from 16384
+export const KDF_COST_R = 12;     // Increased from 8
 export const KDF_COST_P = 1;
-export const KDF_KEY_LENGTH_BYTES = 32; // 256-bit key
+export const KDF_KEY_LENGTH_BYTES = 32;
 
 /**
  * Derives a strong hash from a password using scrypt.

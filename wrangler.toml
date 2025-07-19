@@ -1,35 +1,163 @@
-# wrangler.toml
 name = "passflares"
 main = "src/worker.ts"
 compatibility_date = "2025-07-19"
-workers_dev = true
+node_compat = true
+tsconfig = "tsconfig.json"
 
-[env.local]
-[[d1_databases]]
-binding = "DB"
-database_name = "secure-password-db"
-database_id = "local"  # Critical for local dev
-
-[[r2_buckets]]
-binding = "VAULTS"
-bucket_name = "secure-vaults-r2"
-
-[vars]
-JWT_SECRET = "{{ JWT_SECRET }}"  # Overridden by .dev.vars.local
-
-[env.production]
-[[d1_databases]]
-binding = "DB"
-database_name = "secure-password-db"
-database_id = "YOUR_D1_DATABASE_ID"
-
-[[r2_buckets]]
-binding = "VAULTS"
-bucket_name = "secure-vaults-r2"
+[build]
+upload.format = "modules"
+upload.dir = "src"
+upload.main = "worker.ts"
 
 [assets]
 directory = "./public"
 binding = "ASSETS"
 
+# ========================
+# SHARED SECRETS
+# ========================
+[vars]
+JWT_SECRET = "{{ JWT_SECRET }}"  # Same for all environments
+
+# ========================
+# PRODUCTION ENVIRONMENT
+# ========================
+[env.production]
+name = "passflares-prod"
+
+routes = [
+    "pierrefouquet.co.uk/*",
+    "api.pierrefouquet.co.uk/*"
+]
+
+[vars]
+ENVIRONMENT = "production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-prod"
+database_id = "PROD_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "secure-vaults-r2-prod"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "RATE_LIMIT_PROD_ID"
+
+# ========================
+# LIVEDEV ENVIRONMENT
+# ========================
+[env.livedev]
+name = "passflares-livedev"
+
+routes = [
+    "livedev.pierrefouquet93.workers.dev/*"
+]
+
+[vars]
+ENVIRONMENT = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-dev"
+database_id = "DEV_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "secure-vaults-r2-dev"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "RATE_LIMIT_DEV_ID"
+
+# ========================
+# LIVETEST ENVIRONMENT
+# ========================
+[env.livetest]
+name = "passflares-livetest"
+
+routes = [
+    "livetest.pierrefouquet93.workers.dev/*"
+]
+
+[vars]
+ENVIRONMENT = "staging"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-staging"
+database_id = "STAGING_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "secure-vaults-r2-staging"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "RATE_LIMIT_STAGING_ID"
+
+# ========================
+# PRERELEASE ENVIRONMENT
+# ========================
+[env.prerelease]
+name = "passflares-prerelease"
+
+routes = [
+    "prerelease.pierrefouquet93.workers.dev/*"
+]
+
+[vars]
+ENVIRONMENT = "preview"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-preview"
+database_id = "PREVIEW_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "secure-vaults-r2-preview"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "RATE_LIMIT_PREVIEW_ID"
+
+# ========================
+# LOCAL DEVELOPMENT
+# ========================
+[env.local]
+name = "passflares-local"
+
+[vars]
+ENVIRONMENT = "local"
+JWT_SECRET = "your-local-secret"  # Can be hardcoded for local
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-local"
+database_id = "local"
+
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "secure-vaults-r2-local"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "local"
+
+# ========================
+# GITHUB INTEGRATION
+# ========================
+[triggers]
+production = { branch = "main" }
+livedev = { branch = "livedev" }
+livetest = { branch = "livetest" }
+prerelease = { branch = "prerelease" }
+
+# ========================
+# OBSERVABILITY
+# ========================
 [observability.logs]
 enabled = true

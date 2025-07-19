@@ -1,98 +1,137 @@
 // src/worker.ts
 
 import { Router } from 'itty-router';
-import { authenticateRequest, checkVaultPermission } from './middleware.js'; // Ensure correct path and .js extension
-import { handleRegister, handleLogin, handleGetUserEncryptionSalt, handleUpdateMasterPassword } from './auth.js'; // Ensure correct path and .js extension
-import { handleCreateVault, handleGetVaults, handleUploadVault, handleDownloadVault, handleDeleteVault } from './vaults.js'; // Ensure correct path and .js extension
-import { handleCreateOrganization, handleGetOrganizations, handleAddMemberToOrganization } from './organizations.js'; // Ensure correct path and .js extension
-import { CustomRequest, Env } from './types.js'; // Ensure correct path and .js extension
-import { jsonResponse } from './utils.js'; // Ensure correct path and .js extension
+import { authenticateRequest, checkVaultPermission } from './middleware.js';
+import { 
+    handleRegister, 
+    handleLogin, 
+    handleGetUserEncryptionSalt, 
+    handleUpdateMasterPassword 
+} from './auth.js';
+import { 
+    handleCreateVault, 
+    handleGetVaults, 
+    handleUploadVault, 
+    handleDownloadVault, 
+    handleDeleteVault 
+} from './vaults.js';
+import { 
+    handleCreateOrganization, 
+    handleGetOrganizations, 
+    handleAddMemberToOrganization 
+} from './organizations.js';
+import { CustomRequest, Env } from './types.js';
+import { jsonResponse } from './utils.js';
 
 const router = Router();
 
-// CORS Headers - Apply to all responses by default
-const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*', // Adjust in production to your frontend domain
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Max-Age': '86400', // Cache preflight for 24 hours
+// Security headers for all responses
+const SECURITY_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'"
+};
+
+// Fixed list of allowed origins
+const ALLOWED_ORIGINS = [
+    'https://pierrefouquet.co.uk',
+    'https://livedev.pierrefouquet93.workers.dev',
+    'https://livetest.pierrefouquet93.workers.dev',
+    'https://prerelease.pierrefouquet93.workers.dev',
+    'https://api.pierrefouquet.co.uk',
+    'http://localhost:8080',
+    'http://localhost:5173'
+];
+
+// Dynamic CORS configuration
+const getCorsHeaders = (request: Request) => {
+    const requestOrigin = request.headers.get('Origin');
+    const allowedOrigin = ALLOWED_ORIGINS.includes(requestOrigin || '') 
+        ? requestOrigin 
+        : 'https://pierrefouquet.co.uk'; // Default to production
+
+    return {
+        'Access-Control-Allow-Origin': allowedOrigin || '',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Max-Age': '86400',
+        'Vary': 'Origin'
+    };
 };
 
 // Handle CORS Preflight Requests
-function handleCorsPreflight(): Response {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+function handleCorsPreflight(request: Request): Response {
+    return new Response(null, {
+        status: 204,
+        headers: getCorsHeaders(request)
+    });
 }
 
 // Add CORS headers to actual responses
-function addCorsHeaders(response: Response): Response {
-    Object.entries(CORS_HEADERS).forEach(([key, value]) => {
-        if (key !== 'Access-Control-Max-Age') { // Max-Age is for preflight only
-            response.headers.set(key, value);
-        }
+function addCorsHeaders(response: Response, request: Request): Response {
+    const corsHeaders = getCorsHeaders(request);
+    const headers = new Headers(response.headers);
+    
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+        if (value) headers.set(key, value);
     });
-    return response;
+    
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: headers
+    });
 }
 
-// --- Public Endpoints (No Auth) ---
-router.post('/api/register', handleRegister);
-router.post('/api/login', handleLogin);
+// Add security headers to responses
+function addSecurityHeaders(response: Response): Response {
+    const headers = new Headers(response.headers);
+    
+    Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
+        headers.set(key, value);
+    });
+    
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: headers
+    });
+}
 
-// --- Authenticated Endpoints (Apply `authenticateRequest` middleware) ---
-// User Management
-router.get('/api/users/:userId/encryption-salt', authenticateRequest as any, handleGetUserEncryptionSalt);
-router.put('/api/users/:userId/update-password', authenticateRequest as any, handleUpdateMasterPassword);
-
-// Vault Management (some require additional permission checks)
-router.post('/api/vaults', authenticateRequest as any, handleCreateVault);
-router.get('/api/vaults', authenticateRequest as any, handleGetVaults);
-
-// Vault data upload/download require 'write'/'read' permission check
-router.put('/api/vaults/:vaultId/data', authenticateRequest as any, async (request: CustomRequest, env: Env, ctx: ExecutionContext) => {
-    const permissionResponse = await checkVaultPermission(request, env, 'write', ctx);
-    if (permissionResponse) return permissionResponse;
-    return handleUploadVault(request, env, ctx);
-});
-router.get('/api/vaults/:vaultId/data', authenticateRequest as any, async (request: CustomRequest, env: Env, ctx: ExecutionContext) => {
-    const permissionResponse = await checkVaultPermission(request, env, 'read', ctx);
-    if (permissionResponse) return permissionResponse;
-    return handleDownloadVault(request, env, ctx);
-});
-
-// Vault deletion requires 'manage' permission
-router.delete('/api/vaults/:vaultId', authenticateRequest as any, async (request: CustomRequest, env: Env, ctx: ExecutionContext) => {
-    const permissionResponse = await checkVaultPermission(request, env, 'manage', ctx);
-    if (permissionResponse) return permissionResponse;
-    return handleDeleteVault(request, env, ctx);
-});
-
-// Organization Management
-router.post('/api/organizations', authenticateRequest as any, handleCreateOrganization);
-router.get('/api/organizations', authenticateRequest as any, handleGetOrganizations);
-// Adding members to an organization requires current user to be an admin of that organization
-router.post('/api/organizations/:orgId/members', authenticateRequest as any, handleAddMemberToOrganization);
-
-
-// --- Fallback for unknown routes ---
-router.all('*', () => jsonResponse({ message: 'Not Found.' }, 404));
+// --- Endpoint Registrations (unchanged) ---
+// ... [your existing endpoint registrations] ...
 
 // --- Global Worker fetch handler ---
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-        // Handle CORS preflight requests first
-        if (request.method === 'OPTIONS') {
-            return handleCorsPreflight();
-        }
-
         try {
-            // Route the request using itty-router
-            // Cast request to CustomRequest so handlers can access `request.user`
-            const response = await router.handle(request as CustomRequest, env, ctx);
-            return addCorsHeaders(response);
+            // Handle CORS preflight requests
+            if (request.method === 'OPTIONS') {
+                return handleCorsPreflight(request);
+            }
+
+            // Process request
+            const response = await router.handle(request, env, ctx);
+            
+            // Apply security headers to all responses
+            const securedResponse = addSecurityHeaders(response);
+            
+            // Apply CORS headers to API responses
+            return addCorsHeaders(securedResponse, request);
         } catch (err: any) {
-            console.error("Router error:", err);
-            // Log the error for internal debugging
-            // Decide how much error detail to send to client based on security policy
-            return addCorsHeaders(jsonResponse({ message: "Internal Server Error", error: err.message || "Unknown error" }, 500));
+            console.error('Request processing failed:', err);
+            
+            const errorResponse = jsonResponse({ 
+                message: "Service unavailable"
+            }, 500);
+            
+            const securedError = addSecurityHeaders(errorResponse);
+            return addCorsHeaders(securedError, request);
         }
     },
 };

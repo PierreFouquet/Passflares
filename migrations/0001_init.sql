@@ -4,8 +4,9 @@
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,         -- Stores scrypt hash (salt.hash)
-    encryption_salt TEXT NOT NULL,      -- Client-side encryption key derivation salt (for PBKDF2)
+    password_hash TEXT NOT NULL,         -- Stores scrypt hash
+    password_salt TEXT NOT NULL,         -- Salt for password hashing
+    encryption_salt TEXT NOT NULL,      -- Client-side encryption key derivation salt
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

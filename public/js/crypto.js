@@ -18,6 +18,8 @@ import {
 // For this project, we are using PBKDF2 for client-side encryption key derivation
 // and Argon2id for server-side master password hashing.
 
+
+
 export async function deriveKey(masterPassword, saltHex) {
     const passwordBytes = new TextEncoder().encode(masterPassword);
     const saltBytes = hexStringToUint8Array(saltHex);
@@ -75,8 +77,8 @@ export async function decryptData(encryptedData, encryptionKey) {
 
         return JSON.parse(new TextDecoder().decode(decrypted));
     } catch (error) {
-        console.error('Decryption failed:', error);
-        throw new Error('Failed to decrypt data. This might be due to an incorrect Master Password or corrupted data.');
+        console.error('Decryption failed');
+        throw new Error('Failed to decrypt data. Please verify your credentials.');
     }
 }
 

@@ -92,8 +92,15 @@ export function hideElement(element) {
 
 export function showMessage(element, message, type = 'info') {
     element.textContent = message;
-    element.className = `message ${type}`; // 'message success', 'message error', 'message info'
+    element.className = `message ${type}`;
     showElement(element);
+    
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            hideElement(element);
+        }, 5000);
+    }
 }
 
 export function clearForm(formElement) {

@@ -1,10 +1,10 @@
-// src/auth.ts
+import { deriveScryptHash } from './utils.js';
+import { logAudit } from './auditLog.js';
+import { CustomRequest, Env, User } from './types.js';
+import { jsonResponse } from './utils.js';
 
-import { sign } from 'jsonwebtoken';
-import { deriveScryptHash } from './utils.js'; // Ensure correct path and .js extension
-import { logAudit } from './auditLog.js'; // Ensure correct path and .js extension
-import { CustomRequest, Env, User } from './types.js'; // Ensure correct path and .js extension
-import { jsonResponse } from './utils.js'; // Ensure correct path and .js extension
+const FAILED_ATTEMPTS_LIMIT = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
 
 export async function handleRegister(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { email, masterPassword, encryptionSalt } = await request.json() as { email: string; masterPassword: string; encryptionSalt: string };
@@ -27,10 +27,10 @@ export async function handleRegister(request: CustomRequest, env: Env, ctx: Exec
         // Derive hash for server-side storage
         const { hash: passwordHash, salt: storedSalt } = await deriveScryptHash(masterPassword);
 
-        // Store user in D1
+        // Store user in D1 with separate salt and hash columns
         const { success } = await env.DB.prepare(
-            "INSERT INTO users (email, password_hash, encryption_salt) VALUES (?, ?, ?)"
-        ).bind(email, passwordHash, encryptionSalt).run();
+            "INSERT INTO users (email, password_hash, password_salt, encryption_salt) VALUES (?, ?, ?, ?)"
+        ).bind(email, passwordHash, storedSalt, encryptionSalt).run();
 
         if (success) {
             logAudit(env, ctx, null, 'REGISTER_SUCCESS', { email }, ipAddress, userAgent);
@@ -56,28 +56,41 @@ export async function handleLogin(request: CustomRequest, env: Env, ctx: Executi
         return jsonResponse({ message: "Email and master password are required." }, 400);
     }
 
+    // Rate limiting check
+    const ipKey = `rate_limit:${ipAddress}`;
+    const failedAttempts = await env.RATE_LIMIT.get(ipKey);
+    if (failedAttempts && parseInt(failedAttempts) >= FAILED_ATTEMPTS_LIMIT) {
+        logAudit(env, ctx, null, 'LOGIN_FAILURE', { email, reason: 'Rate limited' }, ipAddress, userAgent);
+        return jsonResponse({ message: "Too many failed attempts. Try again later." }, 429);
+    }
+
     try {
-        const user: User | null = await env.DB.prepare("SELECT id, email, password_hash, encryption_salt FROM users WHERE email = ?").bind(email).first();
+        const user: User | null = await env.DB.prepare(
+            "SELECT id, email, password_hash, password_salt, encryption_salt FROM users WHERE email = ?"
+        ).bind(email).first();
 
         if (!user) {
+            // Increment failed attempts
+            const newCount = failedAttempts ? parseInt(failedAttempts) + 1 : 1;
+            await env.RATE_LIMIT.put(ipKey, newCount.toString(), { expirationTtl: LOCKOUT_DURATION / 1000 });
+            
             logAudit(env, ctx, null, 'LOGIN_FAILURE', { email, reason: 'User not found' }, ipAddress, userAgent);
             return jsonResponse({ message: "Invalid credentials." }, 401);
         }
 
         // Verify master password hash
-        const { hash: inputHash } = await deriveScryptHash(masterPassword, null); // We don't have the original salt for verification, need to store it with the hash
-        // FIX: The original `deriveScryptHash` function generates a new salt if `null` is passed.
-        // For verification, we MUST use the salt stored in the database with the hash.
-        // Let's assume for now that `password_hash` in DB is the full scrypt output (hash + salt prepended)
-        // or we need to fetch the salt separately.
-        // CORRECTED APPROACH: The `deriveScryptHash` returns `{ hash, salt }`. We need to store both.
-        // When verifying, we pass the stored salt to derive the hash from the input password and compare.
-
-        const { hash: verifiedHash } = await deriveScryptHash(masterPassword, user.password_hash.split('.')[0]); // Assuming password_hash is "salt.hash"
-        if (verifiedHash !== user.password_hash.split('.')[1]) { // Compare hash part
+        const { hash: verifiedHash } = await deriveScryptHash(masterPassword, user.password_salt);
+        if (verifiedHash !== user.password_hash) {
+            // Increment failed attempts
+            const newCount = failedAttempts ? parseInt(failedAttempts) + 1 : 1;
+            await env.RATE_LIMIT.put(ipKey, newCount.toString(), { expirationTtl: LOCKOUT_DURATION / 1000 });
+            
             logAudit(env, ctx, user.id, 'LOGIN_FAILURE', { email, reason: 'Password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: "Invalid credentials." }, 401);
         }
+
+        // Reset failed attempts on successful login
+        await env.RATE_LIMIT.delete(ipKey);
 
         // Generate JWT token
         const token = sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '1h' });
@@ -97,7 +110,6 @@ export async function handleLogin(request: CustomRequest, env: Env, ctx: Executi
         return jsonResponse({ message: "Internal Server Error during login." }, 500);
     }
 }
-
 
 export async function handleGetUserEncryptionSalt(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const userIdParam = request.params?.userId;
@@ -143,7 +155,7 @@ export async function handleUpdateMasterPassword(request: CustomRequest, env: En
     }
 
     try {
-        const user: User | null = await env.DB.prepare("SELECT id, password_hash FROM users WHERE id = ?").bind(request.user.userId).first();
+        const user: User | null = await env.DB.prepare("SELECT id, password_hash, password_salt FROM users WHERE id = ?").bind(request.user.userId).first();
 
         if (!user) {
             logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { reason: 'User not found' }, ipAddress, userAgent);
@@ -151,24 +163,19 @@ export async function handleUpdateMasterPassword(request: CustomRequest, env: En
         }
 
         // Verify old master password
-        const storedHashParts = user.password_hash.split('.'); // Assuming "salt.hash"
-        const oldPasswordSalt = storedHashParts[0];
-        const oldPasswordStoredHash = storedHashParts[1];
-
-        const { hash: verifiedOldHash } = await deriveScryptHash(oldMasterPassword, oldPasswordSalt);
-
-        if (verifiedOldHash !== oldPasswordStoredHash) {
+        const { hash: verifiedOldHash } = await deriveScryptHash(oldMasterPassword, user.password_salt);
+        if (verifiedOldHash !== user.password_hash) {
             logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { reason: 'Old password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: "Old master password is incorrect." }, 401);
         }
 
         // Derive new hash for server-side storage
-        const { hash: newPasswordHash, salt: newStoredSalt } = await deriveScryptHash(newMasterPassword); // Generates new salt for server hash
+        const { hash: newPasswordHash, salt: newStoredSalt } = await deriveScryptHash(newMasterPassword);
 
         // Update user's password_hash and client-side encryption_salt
         const { success } = await env.DB.prepare(
-            `UPDATE users SET password_hash = ?, encryption_salt = ? WHERE id = ?`
-        ).bind(`${newStoredSalt}.${newPasswordHash}`, newEncryptionSalt, request.user.userId).run();
+            `UPDATE users SET password_hash = ?, password_salt = ?, encryption_salt = ? WHERE id = ?`
+        ).bind(newPasswordHash, newStoredSalt, newEncryptionSalt, request.user.userId).run();
 
         if (success) {
             logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_SUCCESS', {}, ipAddress, userAgent);

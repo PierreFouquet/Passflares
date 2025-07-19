@@ -26,14 +26,19 @@ export function generateSalt(length = KDF_SALT_LENGTH) {
 }
 
 export function checkPasswordStrength(password) {
+    const minLength = 12;
+    const hasLower = /[a-z]/.test(password);
+    const hasUpper = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+    
     let score = 0;
-    if (password.length >= 10) score++;
-    if (password.length >= 14) score++;
-    if (/[a-z]/.test(password)) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[0-9]/.test(password)) score++;
-    if (/[!@#$%^&*()-_=+[{]}\\|;:'",<.>/?`~]/.test(password)) score++;
-
+    if (password.length >= minLength) score += 2;
+    if (hasLower) score++;
+    if (hasUpper) score++;
+    if (hasNumber) score++;
+    if (hasSpecial) score++;
+    
     let strength = "Very Weak";
     let color = "red";
     if (score >= 6) { strength = "Excellent"; color = "lime"; }
@@ -41,19 +46,42 @@ export function checkPasswordStrength(password) {
     else if (score >= 3) { strength = "Moderate"; color = "orange"; }
     else if (score >= 1) { strength = "Weak"; color = "yellow"; }
 
-    return { score, strength, color };
+    const meetsMinRequirements = password.length >= minLength && 
+                               hasLower && 
+                               hasUpper && 
+                               hasNumber && 
+                               hasSpecial;
+    
+    return { 
+        score, 
+        strength, 
+        color,
+        meetsMinRequirements
+    };
 }
 
 export function generateRandomPassword(length = 16) {
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[{]}\\|;:'\",<.>/?`~";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*()-_=+[{]}\\|;:'\",<.>/?`~";
+    
+    // Ensure at least one character from each set
+    const allChars = lowercase + uppercase + numbers + symbols;
     let password = "";
-    const values = new Uint32Array(length);
-    crypto.getRandomValues(values);
-
-    for (let i = 0; i < length; i++) {
-        password += charset[values[i] % charset.length];
+    
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+    
+    // Fill the rest with random characters
+    for (let i = 4; i < length; i++) {
+        password += allChars[Math.floor(Math.random() * allChars.length)];
     }
-    return password;
+    
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
 }
 
 export function searchVaultEntries(query, entries) {

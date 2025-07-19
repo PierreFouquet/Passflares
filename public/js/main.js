@@ -351,13 +351,12 @@ async function handleExportAllVaultData() {
 export async function loadVaults() {
     showLoading("Loading vaults...");
     try {
-        // Fetch organizations first, as they might be needed for new vault creation
         organizations = await getOrganizations();
         populateOrganizationDropdown(organizations);
 
         const vaults = await getVaults();
         populateVaultsList(vaults, handleLoadVault, handleManageOrganizationVault, handleDeleteVault);
-        hideVaultDetails(); // Ensure vault details are hidden when listing vaults
+        hideVaultDetails();
         showMessage(vaultMessage, `Loaded ${vaults.length} vaults.`, 'success');
     } catch (error) {
         console.error('Error loading vaults:', error);
@@ -373,7 +372,7 @@ async function handleCreateVault(event) {
     const vaultDescription = newVaultDescriptionInput.value.trim();
     const ownerType = newVaultOwnerTypeSelect.value;
     let ownerId = '';
-    let initialPermissionLevel = 'manage'; // Owner always has manage permission
+    let initialPermissionLevel = 'manage';
 
     if (!vaultName) {
         showMessage(vaultMessage, 'Vault name cannot be empty.', 'error');
@@ -394,7 +393,7 @@ async function handleCreateVault(event) {
             showMessage(vaultMessage, 'Please select an organization or create a new one.', 'error');
             return;
         }
-        ownerId = selectedOrgId; // This is already 'org_XYZ' from the option value
+        ownerId = `org_${selectedOrgId}`; // Add prefix
     } else {
         showMessage(vaultMessage, 'Invalid owner type selected.', 'error');
         return;
@@ -402,26 +401,38 @@ async function handleCreateVault(event) {
 
     showLoading("Creating vault...");
     try {
-        // The r2_object_key will be generated server-side.
-        const newVault = await createVault(vaultName, vaultDescription, ownerId, ownerType, 'auto-generated', initialPermissionLevel); // 'auto-generated' is placeholder
-
-        // Initialize with empty data array
+        const newVault = await createVault(vaultName, vaultDescription, ownerId, ownerType, 'auto-generated', initialPermissionLevel);
         currentVaultData = [];
         const encryptedInitialData = await encryptData(currentVaultData, currentEncryptionKey);
         await saveEncryptedVaultData(newVault.id, encryptedInitialData);
 
         showMessage(vaultMessage, `Vault '${newVault.name}' created and initialized!`, 'success');
-        clearForm(newVaultNameInput.closest('form')); // Clear vault creation form
-        newVaultDescriptionInput.value = ''; // Clear description explicitly
-        newVaultOwnerTypeSelect.value = 'user'; // Reset owner type
-        handleOwnerTypeChange(); // Hide org select if needed
-        await loadVaults(); // Reload list
+        clearForm(newVaultNameInput.closest('form'));
+        newVaultDescriptionInput.value = '';
+        newVaultOwnerTypeSelect.value = 'user';
+        handleOwnerTypeChange();
+        await loadVaults();
     } catch (error) {
         console.error('Error creating vault:', error);
         showMessage(vaultMessage, error.message, 'error');
     } finally {
         hideLoading();
     }
+}
+
+async function handleManageOrganizationVault(vaultId, vaultName) {
+    // Extract org ID from owner_id (format: "org_123")
+    const orgId = currentVaultMetadata.owner_id.split('_')[1];
+    const selectedOrg = organizations.find(org => org.id === parseInt(orgId));
+    
+    if (!selectedOrg) {
+        alert("Organization details are missing.");
+        return;
+    }
+
+    addMemberOrgName.textContent = `Organization: ${selectedOrg.name}`;
+    addOrgMemberModal.dataset.orgId = selectedOrg.id;
+    showModal(addOrgMemberModal);
 }
 
 async function handleLoadVault(vaultId, vaultName, vaultDescription, r2ObjectKey) {

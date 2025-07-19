@@ -2,10 +2,10 @@
 
 import { JWT_TOKEN_KEY, USER_INFO_KEY, SESSION_TIMEOUT_MINUTES } from './constants.js';
 import { showMessage, hideElement, showElement } from './ui.js';
-import { loadVaults } from './main.js'; // Cyclic dependency, usually handle with events or central store
 
 let sessionTimeoutTimer = null;
 let inactivityTimer = null;
+let resetTimerFunction = null; // Store reference to reset function
 
 export function storeSession(token, user) {
     localStorage.setItem(JWT_TOKEN_KEY, token);
@@ -26,7 +26,7 @@ export function clearSession() {
     localStorage.removeItem(JWT_TOKEN_KEY);
     localStorage.removeItem(USER_INFO_KEY);
     clearTimeout(sessionTimeoutTimer);
-    clearTimeout(inactivityTimer);
+    stopInactivityTimer(); // Clear inactivity timer and event listeners
     sessionTimeoutTimer = null;
     inactivityTimer = null;
     console.log("Session cleared.");
@@ -52,36 +52,40 @@ export function startInactivityTimer() {
         window.location.reload(); // Simple refresh to return to login
     };
 
-    const resetTimer = () => {
+    resetTimerFunction = () => {
         clearTimeout(inactivityTimer);
         inactivityTimer = setTimeout(logoutUser, timeoutDuration);
     };
 
     // Initialize the timer
-    resetTimer();
+    resetTimerFunction();
 
     // Attach event listeners to reset the timer on user activity
-    window.addEventListener('mousemove', resetTimer);
-    window.addEventListener('keydown', resetTimer);
-    window.addEventListener('click', resetTimer);
-    window.addEventListener('scroll', resetTimer);
+    window.addEventListener('mousemove', resetTimerFunction);
+    window.addEventListener('keydown', resetTimerFunction);
+    window.addEventListener('click', resetTimerFunction);
+    window.addEventListener('scroll', resetTimerFunction);
 
     console.log(`Inactivity timer started for ${SESSION_TIMEOUT_MINUTES} minutes.`);
 }
 
 export function stopInactivityTimer() {
     clearTimeout(inactivityTimer);
-    window.removeEventListener('mousemove', resetTimer); // Need to pass the exact function reference
-    window.removeEventListener('keydown', resetTimer);
-    window.removeEventListener('click', resetTimer);
-    window.removeEventListener('scroll', resetTimer);
+    if (resetTimerFunction) {
+        window.removeEventListener('mousemove', resetTimerFunction);
+        window.removeEventListener('keydown', resetTimerFunction);
+        window.removeEventListener('click', resetTimerFunction);
+        window.removeEventListener('scroll', resetTimerFunction);
+        resetTimerFunction = null;
+    }
     inactivityTimer = null;
     console.log("Inactivity timer stopped.");
 }
 
-// Helper to reset timer; needs to be defined globally or passed
+// Helper to reset timer
 function resetInactivityTimer() {
-    startInactivityTimer(); // Re-starts the timer
+    stopInactivityTimer();
+    startInactivityTimer();
 }
 
 // Function to check if user is logged in
