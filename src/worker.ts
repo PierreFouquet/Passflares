@@ -1,27 +1,72 @@
 // src/worker.ts
 
+export interface Env {
+  TURNSTILE_KEY: string;
+}
+
+const TURNSTILE_KEY = "${env.TURNSTILE_KEY}";
+
+async function handlePost(request) {
+  const body = await request.formData();
+  // Turnstile injects a token in "cf-turnstile-response".
+  const token = body.get("cf-turnstile-response");
+  const ip = request.headers.get("CF-Connecting-IP");
+
+  // Validate the token by calling the
+  // "/siteverify" API endpoint.
+  let formData = new FormData();
+  formData.append("secret", TURNSTILE_KEY);
+  formData.append("response", token);
+  formData.append("remoteip", ip);
+  const idempotencyKey = crypto.randomUUID();
+  formData.append("idempotency_key", idempotencyKey);
+
+  const url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+  const firstResult = await fetch(url, {
+    body: formData,
+    method: "POST",
+  });
+  const firstOutcome = await firstResult.json();
+  if (firstOutcome.success) {
+    // ...
+  }
+
+  // A subsequent validation request to the "/siteverify"
+  // API endpoint for the same token as before, providing
+  // the associated idempotency key as well.
+  const subsequentResult = await fetch(url, {
+    body: formData,
+    method: "POST",
+  });
+
+  const subsequentOutcome = await subsequentResult.json();
+  if (subsequentOutcome.success) {
+    // ...
+  }
+}
+
 import { Router } from 'itty-router';
-import { authenticateRequest, checkVaultPermission } from './middleware.js';
+import { authenticateRequest, checkVaultPermission } from './middleware.ts';
 import { 
     handleRegister, 
     handleLogin, 
     handleGetUserEncryptionSalt, 
     handleUpdateMasterPassword 
-} from './auth.js';
+} from './auth.ts';
 import { 
     handleCreateVault, 
     handleGetVaults, 
     handleUploadVault, 
     handleDownloadVault, 
     handleDeleteVault 
-} from './vaults.js';
+} from './vaults.ts';
 import { 
     handleCreateOrganization, 
     handleGetOrganizations, 
     handleAddMemberToOrganization 
-} from './organizations.js';
-import { CustomRequest, Env } from './types.js';
-import { jsonResponse } from './utils.js';
+} from './organizations.ts';
+import { CustomRequest, Env } from './types.ts';
+import { jsonResponse } from './utils.ts';
 
 const router = Router();
 
