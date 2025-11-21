@@ -1,9 +1,9 @@
 // src/middleware.ts
 
 import { verify } from 'jsonwebtoken';
-import { logAudit } from './auditLog.js'; // Ensure correct path and .js extension
-import { CustomRequest, Env, VaultAccessControl, VaultMetadata } from './types.js'; // Ensure correct path and .js extension
-import { jsonResponse } from './utils.js'; // Ensure correct path and .js extension
+import { logAudit } from './auditLog.ts'; // Ensure correct path and .js extension
+import { CustomRequest, Env, VaultAccessControl, VaultMetadata } from './types.ts'; // Ensure correct path and .js extension
+import { jsonResponse } from './utils.ts'; // Ensure correct path and .js extension
 
 export const JWT_EXPIRATION_TIME = '1h';
 

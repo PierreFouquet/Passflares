@@ -1,7 +1,7 @@
 {
   "name": "passflares",
-  "version": "1.0.0",
-  "description": "A secure password manager built on Cloudflare Workers, D1, and R2.",
+  "version": "0.0.1-alpha",
+  "description": "A modern and secure password manager built on the Cloudflare Stack.",
   "main": "src/worker.ts",
   "scripts": {
     "dev:worker": "wrangler dev",
@@ -18,7 +18,7 @@
     "concurrently": "^8.2.2",
     "live-server": "^1.2.2",
     "typescript": "^5.5.3",
-    "wrangler": "^4.25.0"
+    "wrangler": "^4.26.0"
   },
   "dependencies": {
     "@noble/hashes": "^1.4.0",
