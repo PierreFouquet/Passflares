@@ -5,18 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" 
           content="default-src 'self'; 
-          script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; 
+          script-src 'self' 'unsafe-inline'; 
           style-src 'self' 'unsafe-inline'; 
           img-src 'self' data:;
-          connect-src 'self' https://api.pierrefouquet.co.uk;
-          frame-src https://challenges.cloudflare.com;">
+          connect-src 'self' https://api.pierrefouquet.co.uk;">
     <title>Passflares Password Manager</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
-<main>
     <div class="container">
         <h1>Passflares</h1>
 
@@ -31,7 +28,6 @@
                 <form id="login-form">
                     <input type="email" id="login-email" placeholder="Email" required autocomplete="username">
                     <input type="password" id="login-master-password" placeholder="Master Password" required autocomplete="current-password">
-                    <div class="cf-turnstile" data-sitekey="0x4AAAAAABmEkyfvX0lChkqk"></div>
                     <button type="submit">Login</button>
                 </form>
             </div>
@@ -44,7 +40,6 @@
                         Strength: <span id="password-strength-text">N/A</span>
                     </div>
                     <input type="password" id="register-confirm-master-password" placeholder="Confirm Master Password" required autocomplete="new-password">
-                    <div class="cf-turnstile" data-sitekey="0x4AAAAAABmEkyfvX0lChkqk"></div>
                     <button type="submit">Register</button>
                 </form>
             </div>
@@ -176,9 +171,8 @@
     </div>
 
     <script type="module" src="js/main.js"></script>
-</main>
+</body>
 <footer>
     <p>The Admin and User Guides are avaliable on our <a href="docs/docs.html" target="_blank">Docs Page</a></p>
 </footer>
-</body>
 </html>

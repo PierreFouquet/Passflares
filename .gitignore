@@ -1,4 +1,2 @@
-.git
 .dev.vars.local
 node_modules
-.wrangler

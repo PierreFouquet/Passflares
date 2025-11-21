@@ -1,7 +1,7 @@
 name = "passflares"
 main = "src/worker.ts"
 compatibility_date = "2025-07-19"
-compatibility_flags = [ "nodejs_compat" ]
+node_compat = true
 tsconfig = "tsconfig.json"
 
 [assets]
@@ -9,69 +9,87 @@ directory = "./public"
 binding = "ASSETS"
 
 # ========================
-# PRODUCTION ENVIRONMENT
+# SHARED SECRETS
 # ========================
 [vars]
-JWT_SECRET = "{{ JWT_SECRET }}"
-TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
+JWT_SECRET = "{{ JWT_SECRET }}"  # Same for all environments
+
+# ========================
+# PRODUCTION ENVIRONMENT
+# ========================
+[env.production]
+name = "passflares"
 
 routes = [
-    { pattern = "*pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
+    "pierrefouquet.co.uk/*",
+    "passflares.pierrefouquet93.workers.dev/*",
+    "api.pierrefouquet.co.uk/*"
 ]
+
+[vars]
+ENVIRONMENT = "production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-prod"
+database_id = "PROD_D1_DATABASE_ID"
 
 [[r2_buckets]]
 binding = "VAULTS"
-bucket_name = "secure-vaults-r2"
+bucket_name = "secure-vaults-r2-prod"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
 id = "RATE_LIMIT_PROD_ID"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "secure-password-db"
-database_id = "PROD_D1_DATABASE_ID"
-
 # ========================
 # PRERELEASE ENVIRONMENT
 # ========================
 [env.prerelease]
-name = "passflares"
-workers_dev = true
-vars = { ENVIRONMENT = "prerelease", JWT_SECRET = "{{ JWT_SECRET }}", TURNSTILE_KEY = "{{ TURNSTILE_KEY }}", routes = "*passflares-prerelease.pierrefouquet93.workers.dev/*" }
+name = "passflares-prerelease"
 
-[[env.prerelease.r2_buckets]]
+routes = [
+    "prerelease.passflares.pierrefouquet93.workers.dev/*\"
+]
+
+[vars]
+ENVIRONMENT = "prerelease"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-preview"
+database_id = "PREVIEW_D1_DATABASE_ID"
+
+[[r2_buckets]]
 binding = "VAULTS"
-bucket_name = "secure-vaults-r2"
+bucket_name = "secure-vaults-r2-preview"
 
-[[env.prerelease.kv_namespaces]]
+[[kv_namespaces]]
 binding = "RATE_LIMIT"
 id = "RATE_LIMIT_PREVIEW_ID"
-
-[[env.prerelease.d1_databases]]
-binding = "DB"
-database_name = "secure-password-db"
-database_id = "PREVIEW_D1_DATABASE_ID"
 
 # ========================
 # LOCAL DEVELOPMENT
 # ========================
 [env.local]
 name = "passflares-local"
-vars = { ENVIRONMENT = "local", JWT_SECRET = "{{ JWT_SECRET }}", TURNSTILE_KEY = "{{ TURNSTILE_KEY }}", routes = "*localhost*"}
 
-[[env.local.r2_buckets]]
+[vars]
+ENVIRONMENT = "local"
+JWT_SECRET = "your-local-secret"  # Can be hardcoded for local
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db-local"
+database_id = "local"
+
+[[r2_buckets]]
 binding = "VAULTS"
 bucket_name = "secure-vaults-r2-local"
 
-[[env.local.kv_namespaces]]
+[[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "kv"
-
-[[env.local.d1_databases]]
-binding = "DB"
-database_name = "secure-password-db"
-database_id = "db"
+id = "local"
 
 # ========================
 # OBSERVABILITY
