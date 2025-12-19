@@ -39,10 +39,10 @@ database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
 name = "passflares"
 workers_dev = true
 
-[vars]
+[vars.prerelease]
 ENVIRONMENT = "prerelease"
 JWT_SECRET = "{{ JWT_SECRET }}"
-TURNSTILE_KEY = "{{ TURNSTILE_KEY }}" }
+TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
 
 routes = [
     { pattern = "*passflares-prerelease.passflares.pierrefouquet.co.uk/*", custom_domain = true }
