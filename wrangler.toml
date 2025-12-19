@@ -16,7 +16,7 @@ JWT_SECRET = "{{ JWT_SECRET }}"
 TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
 
 routes = [
-    { pattern = "*pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
+    { pattern = "*passflares.pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk", custom_domain = true }
 ]
 
 [[r2_buckets]]
@@ -38,7 +38,15 @@ database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
 [env.prerelease]
 name = "passflares"
 workers_dev = true
-vars = { ENVIRONMENT = "prerelease", JWT_SECRET = "{{ JWT_SECRET }}", TURNSTILE_KEY = "{{ TURNSTILE_KEY }}", routes = "*passflares-prerelease.pierrefouquet93.workers.dev/*" }
+
+[vars]
+ENVIRONMENT = "prerelease"
+JWT_SECRET = "{{ JWT_SECRET }}"
+TURNSTILE_KEY = "{{ TURNSTILE_KEY }}" }
+
+routes = [
+    { pattern = "*passflares-prerelease.passflares.pierrefouquet.co.uk/*", custom_domain = true }
+]
 
 [[env.prerelease.r2_buckets]]
 binding = "VAULTS"
