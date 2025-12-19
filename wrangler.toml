@@ -25,12 +25,12 @@ bucket_name = "secure-vaults-r2"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "RATE_LIMIT_PROD_ID"
+id = "RATE_LIMIT_KV"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "secure-password-db"
-database_id = "PROD_D1_DATABASE_ID"
+database_id = "PASSWORD_DB"
 
 # ========================
 # PRERELEASE ENVIRONMENT
@@ -46,12 +46,12 @@ bucket_name = "secure-vaults-r2"
 
 [[env.prerelease.kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "RATE_LIMIT_PREVIEW_ID"
+id = "RATE_LIMIT_KV"
 
 [[env.prerelease.d1_databases]]
 binding = "DB"
 database_name = "secure-password-db"
-database_id = "PREVIEW_D1_DATABASE_ID"
+database_id = "PASSWORD_DB"
 
 # ========================
 # LOCAL DEVELOPMENT
