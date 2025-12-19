@@ -11,13 +11,14 @@ binding = "ASSETS"
 # ========================
 # PRODUCTION ENVIRONMENT
 # ========================
-routes = [
-    { pattern = "passflares.pierrefouquet.co.uk", zone_name = "pierrefouquet.co.uk", custom_domain = true }
-]
-
 [vars]
 JWT_SECRET = "{{ JWT_SECRET }}"
 TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
+
+[[routes]]
+pattern = "passflares.pierrefouquet.co.uk/*"
+zone_name = "pierrefouquet.co.uk"
+custom_domain = true
 
 [[r2_buckets]]
 binding = "VAULTS"
@@ -35,10 +36,6 @@ database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
 # ========================
 # PRERELEASE ENVIRONMENT
 # ========================
-routes = [
-    { pattern = "passflares-prerelease.pierrefouquet.co.uk", custom_domain = true }
-]
-
 [env.prerelease]
 name = "passflares"
 workers_dev = true
@@ -47,6 +44,10 @@ workers_dev = true
 ENVIRONMENT = "prerelease"
 JWT_SECRET = "{{ JWT_SECRET }}"
 TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
+
+[[routes.prerelease]]
+pattern = "passflares-prerelease.pierrefouquet.co.uk/*"
+custom_domain = true
 
 [[env.prerelease.r2_buckets]]
 binding = "VAULTS"
