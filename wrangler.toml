@@ -16,7 +16,7 @@ JWT_SECRET = "{{ JWT_SECRET }}"
 TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
 
 routes = [
-    { pattern = "passflares.pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
+    { pattern = "*pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
 ]
 
 [[r2_buckets]]
