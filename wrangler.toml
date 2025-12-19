@@ -16,8 +16,7 @@ JWT_SECRET = "{{ JWT_SECRET }}"
 TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
 
 [[routes]]
-pattern = "passflares.pierrefouquet.co.uk/*"
-zone_name = "pierrefouquet.co.uk"
+pattern = "*passflares.pierrefouquet.co.uk/*"
 custom_domain = true
 
 [[r2_buckets]]
@@ -44,10 +43,6 @@ workers_dev = true
 ENVIRONMENT = "prerelease"
 JWT_SECRET = "{{ JWT_SECRET }}"
 TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
-
-[[routes.prerelease]]
-pattern = "passflares-prerelease.pierrefouquet.co.uk/*"
-custom_domain = true
 
 [[env.prerelease.r2_buckets]]
 binding = "VAULTS"
