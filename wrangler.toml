@@ -7,6 +7,7 @@ tsconfig = "tsconfig.json"
 routes = [
     { pattern = "*pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
 ]
+preview_urls = false
 
 [assets]
 directory = "./public"

@@ -1,13 +1,11 @@
 {
   "name": "passflares",
-  "version": "0.0.1-alpha",
+  "version": "1.0.0-beta",
   "description": "A modern and secure password manager built on the Cloudflare Stack.",
   "main": "src/worker.ts",
   "scripts": {
-    "dev:worker": "wrangler dev",
-    "deploy:worker": "wrangler deploy",
-    "start:frontend": "live-server public",
-    "start": "concurrently --kill-others \"npm run dev:worker\" \"npm run start:frontend\""
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --env=\"\""
   },
   "keywords": [],
   "author": "",
@@ -16,8 +14,6 @@
     "@cloudflare/workers-types": "^4.20260519.1",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.9",
-    "concurrently": "^8.2.2",
-    "live-server": "^1.2.0",
     "typescript": "^5.5.3",
     "wrangler": "^4.93.0"
   },
