@@ -57,12 +57,18 @@
                 <button id="logout-button">Logout</button>
             </div>
 
+            <div class="app-tab-buttons">
+                <button class="app-tab-button active" id="app-tab-vaults" data-app-tab="vaults">My Vaults</button>
+                <button class="app-tab-button" id="app-tab-organisations" data-app-tab="organisations">Organisations</button>
+            </div>
+
             <div class="actions">
                 <button id="change-master-password-button">Change Master Password</button>
                 <button id="export-vault-data-button">Export All Vault Data</button>
                 <button id="delete-account-button" class="danger-button">Delete Account</button>
             </div>
 
+            <div id="vaults-screen">
             <div id="vaults-section" class="card">
                 <h2>Your Vaults</h2>
                 <div class="vault-creation">
@@ -85,6 +91,20 @@
                 <div id="vaults-list">
                     </div>
                 <p id="vault-message" class="message"></p>
+            </div>
+            </div><!-- end #vaults-screen -->
+
+            <div id="organisations-screen" class="hidden">
+                <div id="organisations-section" class="card">
+                    <h2>Organisations</h2>
+                    <div class="org-screen-header">
+                        <button id="create-org-from-screen-button">Create New Organisation</button>
+                    </div>
+                    <div id="organisations-list">
+                        <p class="no-entries-message">No organisations yet. Create one above!</p>
+                    </div>
+                    <p id="org-screen-message" class="message"></p>
+                </div>
             </div>
 
             <div id="create-organization-modal" class="modal hidden">
