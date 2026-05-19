@@ -19,7 +19,11 @@ import {
 import {
     handleCreateOrganization,
     handleGetOrganizations,
-    handleAddMemberToOrganization
+    handleAddMemberToOrganization,
+    handleGetOrgMembers,
+    handleUpdateMemberRole,
+    handleRemoveMember,
+    handleDeleteOrganization
 } from './organizations.js';
 import { CustomRequest, Env } from './types.js';
 import { jsonResponse } from './utils.js';
@@ -106,7 +110,12 @@ router.delete('/api/vaults/:vaultId', withAuth, withVaultPermission('manage'), h
 // --- Organization routes ---
 router.post('/api/organizations', withAuth, handleCreateOrganization);
 router.get('/api/organizations', withAuth, handleGetOrganizations);
+// Member routes registered before org-level DELETE to avoid path conflicts
+router.get('/api/organizations/:orgId/members', withAuth, handleGetOrgMembers);
 router.post('/api/organizations/:orgId/members', withAuth, handleAddMemberToOrganization);
+router.put('/api/organizations/:orgId/members/:memberUserId', withAuth, handleUpdateMemberRole);
+router.delete('/api/organizations/:orgId/members/:memberUserId', withAuth, handleRemoveMember);
+router.delete('/api/organizations/:orgId', withAuth, handleDeleteOrganization);
 
 // --- Catch-all: serve static assets ---
 router.all('*', (request: Request, env: Env) => env.ASSETS.fetch(request));
