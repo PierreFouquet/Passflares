@@ -9,10 +9,11 @@ export interface CustomRequest extends Request {
         iat: number; // issued at
         exp: number; // expiration
     };
-    params?: { // itty-router params are added here
+    params?: {
         vaultId?: string;
         userId?: string;
         orgId?: string;
+        memberUserId?: string;
     };
     query?: { // itty-router query params
         [key: string]: string | string[] | undefined;
@@ -64,7 +65,7 @@ export interface Organization {
 export interface UserOrganization {
     user_id: number;
     organization_id: number;
-    role: 'member' | 'admin'; // Role within the organization
+    role: 'member' | 'admin' | 'super_admin';
     joined_at: string;
 }
 
