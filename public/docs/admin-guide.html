@@ -14,7 +14,9 @@
             <ul>
                 <li><a href="../index.html">App</a></li>
                 <li><a href="docs.html">Docs Home</a></li>
-                <li><a href="user-guide.html">User Guide</a></li>
+                <li><a href="user-guide.html">Getting Started</a></li>
+                <li><a href="vaults-guide.html">Vaults</a></li>
+                <li><a href="organisations-guide.html">Organisations</a></li>
             </ul>
         </nav>
     </header>
@@ -22,131 +24,8 @@
     <main>
 
         <section>
-            <h2>1. Organisations Overview</h2>
-            <p>Organisations allow a team to share vaults. Any registered user can create an organisation and becomes its first <strong>admin</strong>. Admins can invite members and create organisation-owned vaults.</p>
-            <p>Vault access is controlled per-vault with three permission levels:</p>
-            <ul>
-                <li><strong>read</strong> — can view and copy entries.</li>
-                <li><strong>write</strong> — can add, edit, and delete entries.</li>
-                <li><strong>manage</strong> — full control including deleting the vault and managing access.</li>
-            </ul>
-        </section>
-
-        <section>
-            <h2>2. Creating an Organisation</h2>
-            <ol>
-                <li>In the vault creation form, set <strong>Owner</strong> to <em>Organisation</em>.</li>
-                <li>In the organisation dropdown, choose <strong>Create New Organisation…</strong></li>
-                <li>Enter a name and optional description in the modal that appears.</li>
-                <li>Click <strong>Create Organisation</strong>.</li>
-            </ol>
-            <p>You are automatically added as an admin of the new organisation.</p>
-        </section>
-
-        <section>
-            <h2>3. Adding Members to an Organisation</h2>
-            <div class="callout info">
-                Only organisation admins can add members.
-            </div>
-            <ol>
-                <li>From the vault list, find a vault owned by the organisation.</li>
-                <li>Click <strong>Manage Org</strong> on that vault.</li>
-                <li>In the modal, enter the member's email address. They must already have a Passflares account.</li>
-                <li>Select their role: <strong>member</strong> or <strong>admin</strong>.</li>
-                <li>Click <strong>Add Member</strong>.</li>
-            </ol>
-            <p>Members gain access to all vaults assigned to the organisation according to the vault's permission level.</p>
-        </section>
-
-        <section>
-            <h2>4. Creating an Organisation-Owned Vault</h2>
-            <ol>
-                <li>In the vault creation form, set <strong>Owner</strong> to <em>Organisation</em>.</li>
-                <li>Select the organisation from the dropdown.</li>
-                <li>Enter a vault name and optional description.</li>
-                <li>Click <strong>Create Vault</strong>.</li>
-            </ol>
-            <div class="callout warning">
-                You must be an <strong>admin</strong> of the organisation to create a vault on its behalf.
-            </div>
-            <p>The vault is created with <strong>manage</strong> access for the organisation. All organisation members can access it at their respective permission level.</p>
-        </section>
-
-        <section>
-            <h2>5. Vault Permission Levels in Detail</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Action</th>
-                        <th>read</th>
-                        <th>write</th>
-                        <th>manage</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td>View entries</td><td>✓</td><td>✓</td><td>✓</td></tr>
-                    <tr><td>Copy credentials</td><td>✓</td><td>✓</td><td>✓</td></tr>
-                    <tr><td>Add entries</td><td></td><td>✓</td><td>✓</td></tr>
-                    <tr><td>Delete entries</td><td></td><td>✓</td><td>✓</td></tr>
-                    <tr><td>Save vault data</td><td></td><td>✓</td><td>✓</td></tr>
-                    <tr><td>Delete vault</td><td></td><td></td><td>✓</td></tr>
-                    <tr><td>Manage org members</td><td></td><td></td><td>✓ (org admin)</td></tr>
-                </tbody>
-            </table>
-        </section>
-
-        <section>
-            <h2>6. Security Best Practices</h2>
-            <h3>For admins</h3>
-            <ul>
-                <li>Use a different master password for Passflares than any other service.</li>
-                <li>Grant the <strong>minimum permission needed</strong> — most team members only need <em>read</em> or <em>write</em>, not <em>manage</em>.</li>
-                <li>Regularly review who has access to shared vaults.</li>
-                <li>Remove members promptly when they leave the organisation.</li>
-                <li>Use separate vaults for different sensitivity levels (e.g. one for shared team credentials, one for admin-only credentials).</li>
-            </ul>
-
-            <h3>For all users</h3>
-            <ul>
-                <li>Never share your master password with anyone, including other admins.</li>
-                <li>Log out when using a shared computer — or let the inactivity timer handle it.</li>
-                <li>Export your data regularly as a backup.</li>
-                <li>Report suspicious activity (unexpected logins, entries you didn't create) immediately.</li>
-            </ul>
-        </section>
-
-        <section>
-            <h2>7. Audit Logs</h2>
-            <p>Every sensitive action is recorded in the audit log, including:</p>
-            <ul>
-                <li>Successful and failed login attempts (with IP address)</li>
-                <li>Account registration</li>
-                <li>Vault creation, access, data upload, and deletion</li>
-                <li>Organisation creation and member additions</li>
-                <li>Master password changes</li>
-            </ul>
-            <p>Audit logs are accessible to Passflares administrators via the Cloudflare D1 database. Query example:</p>
-            <pre><code>SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100;</code></pre>
-        </section>
-
-        <section>
-            <h2>8. Account Management</h2>
-            <h3>Deleting an account</h3>
-            <p>Users can delete their own account from the app settings. This permanently removes:</p>
-            <ul>
-                <li>All personal vaults and their encrypted data from R2</li>
-                <li>Their user record and credentials from D1</li>
-                <li>Their organisation memberships</li>
-                <li>All audit log entries linked to their account</li>
-            </ul>
-            <div class="callout warning">
-                Deleting an account does <strong>not</strong> delete organisation-owned vaults. If the user was the sole admin of an organisation, that organisation's vaults will still exist but may become unmanageable. Assign another admin before deleting your account.
-            </div>
-        </section>
-
-        <section>
-            <h2>9. Infrastructure Reference</h2>
-            <p>Passflares runs on the following Cloudflare services:</p>
+            <h2>1. Infrastructure</h2>
+            <p>Passflares runs entirely on the Cloudflare stack:</p>
             <table>
                 <thead>
                     <tr><th>Service</th><th>Purpose</th></tr>
@@ -155,24 +34,115 @@
                     <tr><td>Workers</td><td>API routing and request handling</td></tr>
                     <tr><td>D1 (SQLite)</td><td>User accounts, vault metadata, organisations, audit logs</td></tr>
                     <tr><td>R2</td><td>Encrypted vault blobs (the actual password data)</td></tr>
-                    <tr><td>KV</td><td>Rate limiting counters for login attempts</td></tr>
-                    <tr><td>Turnstile</td><td>Bot protection on auth forms</td></tr>
+                    <tr><td>KV</td><td>Rate limiting counters for failed login attempts</td></tr>
+                    <tr><td>Turnstile</td><td>Bot protection on the login and register forms</td></tr>
                     <tr><td>Assets</td><td>Static frontend files (HTML, CSS, JS)</td></tr>
                 </tbody>
             </table>
+        </section>
 
-            <h3>Secrets</h3>
-            <p>Two secrets must be set in Cloudflare Workers (via <code>wrangler secret put</code>):</p>
+        <section>
+            <h2>2. Secrets</h2>
+            <p>Two secrets must be set in Cloudflare Workers. Never commit these to the repository.</p>
+            <pre><code># Set via Wrangler CLI (prompts for value securely)
+wrangler secret put JWT_SECRET
+wrangler secret put TURNSTILE_KEY</code></pre>
             <ul>
-                <li><code>JWT_SECRET</code> — signs and verifies auth tokens. Must be at least 32 characters, randomly generated.</li>
-                <li><code>TURNSTILE_KEY</code> — the Turnstile secret key from the Cloudflare dashboard.</li>
+                <li><code>JWT_SECRET</code> — signs and verifies authentication tokens. Use at least 32 random characters. Generate one with: <code>node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"</code></li>
+                <li><code>TURNSTILE_KEY</code> — the Turnstile <strong>secret key</strong> (not the site key) from your Cloudflare Turnstile dashboard. The site key is safe to embed in the frontend HTML; the secret key must never be exposed.</li>
             </ul>
+            <p>For local development, copy <code>.dev.vars.example</code> to <code>.dev.vars</code> and fill in local values. <code>.dev.vars</code> is gitignored and read automatically by <code>wrangler dev</code>.</p>
+        </section>
 
-            <h3>Database migrations</h3>
-            <p>To initialise or reset the database schema:</p>
-            <pre><code>wrangler d1 execute secure-password-db \
-  --file=./migrations/0001_init.sql \
-  --remote</code></pre>
+        <section>
+            <h2>3. Database Migrations</h2>
+            <p>Migrations live in <code>migrations/</code> and are applied with Wrangler:</p>
+            <pre><code># Apply all pending migrations to the live database
+npx wrangler d1 migrations apply secure-password-db --remote
+
+# Apply to local development database only
+npx wrangler d1 migrations apply secure-password-db</code></pre>
+            <p>Current migrations:</p>
+            <ul>
+                <li><code>0001_init.sql</code> — initial schema (users, vaults, organisations, audit logs, access controls)</li>
+                <li><code>0002_super_admin_role.sql</code> — adds <code>super_admin</code> to the <code>user_organizations.role</code> CHECK constraint; must be applied before deploying v1.1.0-beta</li>
+            </ul>
+            <div class="callout warning">
+                Always run migrations <strong>before</strong> deploying a new version of the Worker code that depends on them.
+            </div>
+        </section>
+
+        <section>
+            <h2>4. Deployment</h2>
+            <pre><code># Deploy Worker + static assets
+npx wrangler deploy --env=""
+
+# Or via npm script
+npm run deploy</code></pre>
+            <p>The Cloudflare CI/CD pipeline (configured in the Cloudflare Workers dashboard) runs <code>npx wrangler deploy</code> automatically on push to <code>main</code>.</p>
+        </section>
+
+        <section>
+            <h2>5. Local Development</h2>
+            <pre><code># Start local dev server (Worker + static assets)
+npm run dev
+# or
+wrangler dev</code></pre>
+            <p><code>wrangler dev</code> simulates D1, R2, and KV locally. Set local secrets in <code>.dev.vars</code>. Use the Turnstile test site key <code>1x0000000000000000000000000000000AA</code> in <code>.dev.vars</code> — it always passes validation.</p>
+        </section>
+
+        <section>
+            <h2>6. Running Tests</h2>
+            <pre><code># Requires Node.js 20+
+nvm use 23
+npm test</code></pre>
+            <p>The test suite covers:</p>
+            <ul>
+                <li>Backend: all API handlers (auth, vaults, organisations, middleware, utilities)</li>
+                <li>Frontend: API call functions, vault list rendering, org card rendering, crypto encrypt/decrypt roundtrip, password utilities</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>7. Audit Logs</h2>
+            <p>Every sensitive action is recorded in the <code>audit_logs</code> D1 table:</p>
+            <pre><code>-- View recent activity
+SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100;
+
+-- Failed logins in the last 24 hours
+SELECT * FROM audit_logs
+WHERE action LIKE '%FAILURE%'
+  AND timestamp > datetime('now', '-1 day')
+ORDER BY timestamp DESC;
+
+-- All actions by a specific user
+SELECT * FROM audit_logs WHERE user_id = 42 ORDER BY timestamp DESC;</code></pre>
+            <p>Logged actions include: REGISTER, LOGIN, GET_SALT, UPDATE_PASSWORD, DELETE_ACCOUNT, VAULT_CREATE, VAULT_LIST, VAULT_UPLOAD, VAULT_DOWNLOAD, VAULT_DELETE, ORG_CREATE, ORG_LIST, ORG_GET_MEMBERS, ORG_ADD_MEMBER, ORG_UPDATE_ROLE, ORG_REMOVE_MEMBER, ORG_DELETE, AUTH_FAILURE, VAULT_ACCESS_DENIED.</p>
+        </section>
+
+        <section>
+            <h2>8. Security Best Practices</h2>
+            <ul>
+                <li>Rotate <code>JWT_SECRET</code> periodically. All existing sessions will be invalidated — users will need to log in again.</li>
+                <li>Monitor audit logs for unusual patterns: repeated AUTH_FAILURE from the same IP, unexpected VAULT_DELETE events, etc.</li>
+                <li>D1 and R2 are Cloudflare-managed. Keep the KV namespace ID, D1 database ID, and R2 bucket name confidential — they are in <code>wrangler.toml</code> but not security-sensitive on their own since access requires a valid Cloudflare API token.</li>
+                <li>The rate limiter blocks IPs after 5 failed login attempts for 15 minutes. Failed attempts are stored in KV with TTL. KV entries are cleared on successful login and on account deletion.</li>
+                <li>The Turnstile Permissions-Policy and CSP warnings you may see in browser console are from Cloudflare's own challenge infrastructure, not from app code — they are harmless.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>9. Account Deletion — Admin Notes</h2>
+            <p>When a user deletes their account:</p>
+            <ul>
+                <li>All personal vault R2 objects are deleted.</li>
+                <li>All personal vault D1 records are deleted (cascade removes access controls).</li>
+                <li>The user's shared vault access control entries are removed.</li>
+                <li>Organisation memberships are removed (cascade).</li>
+                <li>Audit log entries are retained but the <code>user_id</code> column is set to NULL.</li>
+                <li>Organisation-owned vaults are <strong>not</strong> deleted.</li>
+            </ul>
+            <p>If a deleted user was the sole Owner of an organisation, the organisation still exists but has no Owner — it will remain until a database admin manually assigns a new Owner or deletes the org.</p>
         </section>
 
     </main>

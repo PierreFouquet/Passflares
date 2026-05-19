@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vaults Guide — Passflares</title>
+    <link rel="stylesheet" href="css/docs.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+</head>
+<body>
+    <header>
+        <h1>Vaults Guide</h1>
+        <nav>
+            <ul>
+                <li><a href="../index.html">App</a></li>
+                <li><a href="docs.html">Docs Home</a></li>
+                <li><a href="user-guide.html">Getting Started</a></li>
+                <li><a href="organisations-guide.html">Organisations</a></li>
+                <li><a href="admin-guide.html">Admin</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+
+        <section>
+            <h2>1. What Is a Vault?</h2>
+            <p>A vault is an encrypted container for password entries. Each vault is independently encrypted with your master password before being stored on the server. You can have multiple vaults — for example, one for personal accounts and one for work credentials.</p>
+            <p>Vaults appear in two sections on the <strong>My Vaults</strong> tab:</p>
+            <ul>
+                <li><strong>Personal Vaults</strong> — owned by you alone.</li>
+                <li><strong>Organisation Vaults</strong> — owned by an organisation you belong to, shared with other members. The organisation name appears in the vault's badge.</li>
+            </ul>
+            <p>Each vault card shows a <strong>permission badge</strong> indicating your access level:</p>
+            <ul>
+                <li><strong>read</strong> — view and copy entries only.</li>
+                <li><strong>write</strong> — add, edit, and delete entries.</li>
+                <li><strong>manage</strong> — full control including deleting the vault.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>2. Creating a Vault</h2>
+            <ol>
+                <li>On the <strong>My Vaults</strong> tab, enter a vault name and optional description.</li>
+                <li>Choose the owner:
+                    <ul>
+                        <li><strong>Me (Personal)</strong> — only you can access it.</li>
+                        <li><strong>Organisation</strong> — shared with members of an organisation. Select the organisation from the dropdown, or create a new one. You must be an Admin or Owner of the chosen organisation.</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Vault</strong>.</li>
+            </ol>
+            <p>The vault is created and immediately encrypted with your master password. An empty initial payload is saved to the server.</p>
+        </section>
+
+        <section>
+            <h2>3. Loading a Vault</h2>
+            <p>Click the <strong>Load</strong> button on any vault card. The encrypted data is downloaded and decrypted locally using your master password. The vault's entries are displayed in the vault detail view.</p>
+            <p>If the vault is new or empty, you will see a message prompting you to add entries.</p>
+        </section>
+
+        <section>
+            <h2>4. Adding Password Entries</h2>
+            <ol>
+                <li>In the vault detail view, fill in the <strong>Add Entry</strong> form:
+                    <ul>
+                        <li><strong>Name</strong> — e.g. "GitHub" or "Work Email" (required).</li>
+                        <li><strong>Username</strong> — the login name or email (required).</li>
+                        <li><strong>Password</strong> — paste or generate one (required).</li>
+                        <li><strong>URL</strong> — the website address (optional).</li>
+                        <li><strong>Notes</strong> — any extra information (optional).</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Add Entry</strong>.</li>
+                <li><strong>Click Save Vault Data.</strong></li>
+            </ol>
+            <div class="callout warning">
+                <strong>Always save before leaving.</strong> Entries only exist in memory until you click <strong>Save Vault Data</strong>. If you close the tab, switch vaults, or are logged out by inactivity before saving, unsaved entries are lost.
+            </div>
+        </section>
+
+        <section>
+            <h2>5. Using the Password Generator</h2>
+            <p>Click <strong>Generate</strong> next to the password field when adding an entry. A strong 16-character password containing uppercase, lowercase, numbers, and symbols is filled in automatically. You can generate again as many times as you like before saving.</p>
+        </section>
+
+        <section>
+            <h2>6. Copying Credentials</h2>
+            <p>Inside a loaded vault, each entry has two copy actions:</p>
+            <ul>
+                <li><strong>Copy Username</strong> — copies the username to your clipboard immediately. The button briefly reads "Copied!".</li>
+                <li><strong>Show/Copy Password</strong> — briefly reveals the password on screen and copies it to your clipboard, then re-masks it after 2 seconds.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>7. Searching Entries</h2>
+            <p>Use the <strong>Search</strong> box inside a loaded vault to filter entries by name, username, URL, or notes. The filter is case-insensitive. Click <strong>Clear Search</strong> to show all entries again.</p>
+        </section>
+
+        <section>
+            <h2>8. Saving Vault Data</h2>
+            <p>Click <strong>Save Vault Data</strong> after any change (adding, editing, or deleting an entry). This encrypts the full entry list and uploads it to the server. You will see a success confirmation when the save is complete.</p>
+        </section>
+
+        <section>
+            <h2>9. Deleting an Entry</h2>
+            <ol>
+                <li>Find the entry in the loaded vault and click <strong>Delete Entry</strong>.</li>
+                <li>Confirm the prompt.</li>
+                <li>Click <strong>Save Vault Data</strong> to make the deletion permanent.</li>
+            </ol>
+            <p>If you do not save, the entry will reappear the next time you load the vault.</p>
+        </section>
+
+        <section>
+            <h2>10. Deleting a Vault</h2>
+            <div class="callout warning">
+                <strong>This permanently deletes the vault and all entries inside it. It cannot be undone.</strong>
+            </div>
+            <p>You need <strong>manage</strong> permission to delete a vault. Click the <strong>Delete</strong> button on the vault card in the My Vaults list, or the <strong>Delete Current Vault</strong> button inside the vault detail view. Confirm the prompt when asked.</p>
+        </section>
+
+        <section>
+            <h2>11. Switching Vaults</h2>
+            <p>Click <strong>Load Another Vault</strong> from the vault detail view to return to the vault list. Any unsaved changes are discarded — save first if needed.</p>
+        </section>
+
+        <section>
+            <h2>12. Frequently Asked Questions</h2>
+
+            <h3>I added entries but they disappeared. What happened?</h3>
+            <p>You likely closed the tab or were logged out before clicking <strong>Save Vault Data</strong>. Entries are only persisted when you save explicitly.</p>
+
+            <h3>How many vaults can I have?</h3>
+            <p>There is no hard limit on the number of vaults. Each vault is a separate encrypted file in storage.</p>
+
+            <h3>Can I rename a vault?</h3>
+            <p>Vault renaming is not yet supported. As a workaround, create a new vault with the desired name, move your entries manually, and delete the old vault.</p>
+
+            <h3>Can I share a vault with a specific person without creating an organisation?</h3>
+            <p>Not directly — vault sharing is done through organisations. Create an organisation, add the person as a member, and create an organisation-owned vault.</p>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Passflares. All rights reserved.</p>
+    </footer>
+</body>
+</html>

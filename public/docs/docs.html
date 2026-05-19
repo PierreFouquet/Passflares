@@ -13,8 +13,10 @@
         <nav>
             <ul>
                 <li><a href="../index.html">App</a></li>
-                <li><a href="user-guide.html">User Guide</a></li>
-                <li><a href="admin-guide.html">Admin Guide</a></li>
+                <li><a href="user-guide.html">Getting Started</a></li>
+                <li><a href="vaults-guide.html">Vaults</a></li>
+                <li><a href="organisations-guide.html">Organisations</a></li>
+                <li><a href="admin-guide.html">Admin</a></li>
             </ul>
         </nav>
     </header>
@@ -27,13 +29,23 @@
 
         <section class="guide-links">
             <div class="card">
-                <h3>User Guide</h3>
-                <p>Learn how to create an account, manage vaults, add password entries, share with organisations, and keep your data safe.</p>
-                <a href="user-guide.html" class="button">User Guide &rarr;</a>
+                <h3>Getting Started</h3>
+                <p>Create your account, log in, manage your session and master password, and keep your account secure.</p>
+                <a href="user-guide.html" class="button">Getting Started &rarr;</a>
             </div>
             <div class="card">
-                <h3>Admin Guide</h3>
-                <p>Covers organisation management, adding members, vault sharing, security best practices, and account administration.</p>
+                <h3>Vaults</h3>
+                <p>Create vaults, add and manage password entries, search, copy credentials, and save your data.</p>
+                <a href="vaults-guide.html" class="button">Vaults Guide &rarr;</a>
+            </div>
+            <div class="card">
+                <h3>Organisations</h3>
+                <p>Create organisations, manage members and roles (Member / Admin / Owner), and share vaults with your team.</p>
+                <a href="organisations-guide.html" class="button">Organisations Guide &rarr;</a>
+            </div>
+            <div class="card">
+                <h3>Admin Reference</h3>
+                <p>Infrastructure, secrets setup, database migrations, audit logs, and security best practices.</p>
                 <a href="admin-guide.html" class="button">Admin Guide &rarr;</a>
             </div>
         </section>
@@ -41,23 +53,13 @@
         <section>
             <h2>How Passflares Keeps You Safe</h2>
             <ul>
-                <li><strong>Client-side encryption</strong> — Your vault data is encrypted with AES-256-GCM using a key derived from your master password before it ever leaves your browser.</li>
+                <li><strong>Client-side encryption</strong> — Vault data is encrypted with AES-256-GCM using a key derived from your master password before it leaves your browser.</li>
                 <li><strong>Zero-knowledge server</strong> — The server stores only encrypted blobs. It cannot read your passwords.</li>
-                <li><strong>Scrypt password hashing</strong> — Your master password is hashed with Scrypt on the server for authentication, keeping the derivation key separate from the auth credential.</li>
-                <li><strong>Short-lived sessions</strong> — You are automatically logged out after 5 minutes of inactivity.</li>
-                <li><strong>Audit logging</strong> — Every login, vault access, and account change is logged for your security.</li>
+                <li><strong>Scrypt password hashing</strong> — Your master password is hashed server-side for authentication, keeping the derivation key separate from the auth credential.</li>
+                <li><strong>Short-lived sessions</strong> — You are logged out automatically after 5 minutes of inactivity.</li>
                 <li><strong>Rate limiting</strong> — Failed login attempts are rate-limited to prevent brute-force attacks.</li>
+                <li><strong>Audit logging</strong> — Every sensitive action is logged for your security review.</li>
             </ul>
-        </section>
-
-        <section>
-            <h2>Quick Start</h2>
-            <ol>
-                <li><a href="../index.html">Create an account</a> with a strong master password.</li>
-                <li>Create your first vault from the dashboard.</li>
-                <li>Add password entries to the vault.</li>
-                <li>Click <strong>Save Vault Data</strong> after making changes.</li>
-            </ol>
         </section>
     </main>
 

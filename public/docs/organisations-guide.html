@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organisations Guide — Passflares</title>
+    <link rel="stylesheet" href="css/docs.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+</head>
+<body>
+    <header>
+        <h1>Organisations Guide</h1>
+        <nav>
+            <ul>
+                <li><a href="../index.html">App</a></li>
+                <li><a href="docs.html">Docs Home</a></li>
+                <li><a href="user-guide.html">Getting Started</a></li>
+                <li><a href="vaults-guide.html">Vaults</a></li>
+                <li><a href="admin-guide.html">Admin</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+
+        <section>
+            <h2>1. What Is an Organisation?</h2>
+            <p>Organisations let teams share password vaults. Any registered user can create an organisation and becomes its first <strong>Owner</strong>. Owners can invite members, assign roles, and manage the organisation's vaults.</p>
+            <p>Organisation management is on the <strong>Organisations</strong> tab in the app.</p>
+        </section>
+
+        <section>
+            <h2>2. Roles</h2>
+            <p>Every member of an organisation has one of three roles:</p>
+            <table>
+                <thead>
+                    <tr><th>Role</th><th>Badge colour</th><th>What they can do</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Member</strong></td>
+                        <td>Grey</td>
+                        <td>Access shared vaults at their vault permission level (read / write / manage)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Admin</strong></td>
+                        <td>Blue</td>
+                        <td>Everything a Member can do, plus: add new members, remove Members and other Admins</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Owner</strong></td>
+                        <td>Purple</td>
+                        <td>Everything an Admin can do, plus: change any member's role, remove other Owners, delete the organisation</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="callout info">
+                An organisation must always have at least one Owner. You cannot demote or remove the last Owner.
+            </div>
+        </section>
+
+        <section>
+            <h2>3. Creating an Organisation</h2>
+            <ol>
+                <li>Go to the <strong>Organisations</strong> tab.</li>
+                <li>Click <strong>Create New Organisation</strong>.</li>
+                <li>Enter a name and optional description.</li>
+                <li>Click <strong>Create</strong>.</li>
+            </ol>
+            <p>You are automatically added as the <strong>Owner</strong> of the new organisation. The org card appears immediately on the Organisations tab.</p>
+            <p>You can also create an organisation during vault creation by selecting <em>Organisation</em> as the vault owner and choosing <em>Create New Organisation…</em> from the dropdown.</p>
+        </section>
+
+        <section>
+            <h2>4. Managing an Organisation</h2>
+            <p>Find the organisation's card on the <strong>Organisations</strong> tab and click <strong>Manage</strong> to expand the management panel. From here you can:</p>
+            <ul>
+                <li>See all members and their roles</li>
+                <li>Add new members</li>
+                <li>Change member roles (Owners only)</li>
+                <li>Remove members (Admins and Owners)</li>
+                <li>Delete the organisation (Owners only)</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>5. Adding Members</h2>
+            <div class="callout info">
+                The person must already have a Passflares account before they can be added.
+            </div>
+            <ol>
+                <li>Open the org management panel and click <strong>Add Member</strong>.</li>
+                <li>Enter the member's email address.</li>
+                <li>Select their role: <strong>Member</strong> or <strong>Admin</strong>. (Owner can only be assigned via the role-change flow.)</li>
+                <li>Click <strong>Add Member</strong>.</li>
+            </ol>
+        </section>
+
+        <section>
+            <h2>6. Changing a Member's Role</h2>
+            <p>Only <strong>Owners</strong> can change roles.</p>
+            <ol>
+                <li>Open the org management panel.</li>
+                <li>Find the member's row. Owners see a role dropdown next to each member (except themselves).</li>
+                <li>Select the new role from the dropdown.</li>
+                <li>Click <strong>Apply</strong>.</li>
+            </ol>
+            <div class="callout warning">
+                You cannot change your own role. You cannot demote the last Owner.
+            </div>
+        </section>
+
+        <section>
+            <h2>7. Removing a Member</h2>
+            <p><strong>Admins</strong> and <strong>Owners</strong> can remove members, with the following restrictions:</p>
+            <ul>
+                <li>You cannot remove yourself.</li>
+                <li>An Admin cannot remove an Owner — only another Owner can do that.</li>
+                <li>The last Owner cannot be removed.</li>
+            </ul>
+            <ol>
+                <li>Open the org management panel.</li>
+                <li>Click <strong>Remove</strong> next to the member's name.</li>
+                <li>Confirm the prompt.</li>
+            </ol>
+            <p>The member loses access to all organisation-owned vaults immediately.</p>
+        </section>
+
+        <section>
+            <h2>8. Organisation-Owned Vaults</h2>
+            <p>Vaults owned by an organisation appear in the <strong>Organisation Vaults</strong> section of the <strong>My Vaults</strong> tab for all members. The vault card shows the organisation's name in a green badge.</p>
+            <p>To create an org-owned vault:</p>
+            <ol>
+                <li>On the <strong>My Vaults</strong> tab, set <strong>Owner Type</strong> to <em>Organisation</em>.</li>
+                <li>Select the organisation from the dropdown.</li>
+                <li>Enter a name and optional description.</li>
+                <li>Click <strong>Create Vault</strong>.</li>
+            </ol>
+            <div class="callout warning">
+                You must be an <strong>Admin</strong> or <strong>Owner</strong> of the organisation to create a vault on its behalf.
+            </div>
+            <p>Each member's access level (read / write / manage) is set when the vault is created and applies to the whole organisation.</p>
+        </section>
+
+        <section>
+            <h2>9. Deleting an Organisation</h2>
+            <div class="callout warning">
+                <strong>This is permanent and cannot be undone.</strong> Deleting an organisation removes all organisation-owned vaults and their entries from the server. Members lose access immediately.
+            </div>
+            <p>Only <strong>Owners</strong> can delete an organisation.</p>
+            <ol>
+                <li>Open the org management panel.</li>
+                <li>Click <strong>Delete Organisation</strong> at the bottom of the panel.</li>
+                <li>Confirm the prompt.</li>
+            </ol>
+            <div class="callout info">
+                Before deleting, assign another Owner or reassign important credentials from org vaults to personal vaults so they are not lost.
+            </div>
+        </section>
+
+        <section>
+            <h2>10. Frequently Asked Questions</h2>
+
+            <h3>Can I be a member of multiple organisations?</h3>
+            <p>Yes — you can belong to as many organisations as you like, each with an independent role.</p>
+
+            <h3>What happens to org vaults when I leave an organisation?</h3>
+            <p>You lose access to all org-owned vaults immediately. The vaults and their data remain intact for other members.</p>
+
+            <h3>Can I transfer ownership of an organisation?</h3>
+            <p>Yes — as an Owner, promote another member to Owner and then have yourself removed, or simply add them as Owner and leave it with multiple Owners.</p>
+
+            <h3>Can members see each other's personal vaults?</h3>
+            <p>No. Personal vaults are never shared. Only vaults explicitly owned by an organisation and accessible to its members are shared.</p>
+
+            <h3>What happens to org vaults if the last Owner deletes their account?</h3>
+            <p>The org vaults remain. However, no one will be able to manage or delete the organisation. Assign at least one other Owner before deleting your account.</p>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Passflares. All rights reserved.</p>
+    </footer>
+</body>
+</html>
