@@ -5,6 +5,7 @@ import {
     saveEncryptedVaultData, loadEncryptedVaultData, deleteVault,
     getUserEncryptionSalt, updateMasterPassword,
     createOrganization, getOrganizations, addMemberToOrganization,
+    getOrgMembers, updateMemberRole, removeMember, deleteOrganization,
     deleteAccount
 } from './api.js';
 import { deriveKey, encryptData, decryptData } from './crypto.js';
@@ -26,11 +27,13 @@ import {
     changeMasterPasswordButton, changeMasterPasswordModal, changeMasterPasswordForm,
     oldMasterPasswordInput, newMasterPasswordInput, confirmNewMasterPasswordInput, newPasswordStrengthText, changePasswordMessage,
     exportVaultDataButton,
-    populateVaultsList, populateEntriesList, populateOrganizationDropdown, showLoading, hideLoading, showModal, hideModal,
+    populateVaultsList, populateEntriesList, populateOrganizationDropdown,
+    populateOrganisationsScreen, showLoading, hideLoading, showModal, hideModal,
     newVaultOwnerTypeSelect, organizationSelectionDiv, selectOrganizationDropdown, createOrganizationButton,
     createOrganizationModal, orgNameInput, orgDescriptionInput, submitCreateOrgButton, orgModalMessage,
     addOrgMemberModal, addMemberOrgName, memberEmailInput, memberRoleSelect, submitAddMemberButton, addMemberModalMessage,
     deleteAccountButton, deleteAccountModal, deleteAccountForm, deleteAccountPasswordInput, deleteAccountMessage,
+    vaultsScreen, organisationsScreen, createOrgFromScreenButton, orgScreenMessage,
     vaultsSection, loadingText
 } from './ui.js';
 import { checkPasswordStrength, generateSalt, generateRandomPassword, searchVaultEntries, copyToClipboard, uint8ArrayToHexString } from './utils.js';
@@ -155,6 +158,16 @@ function setupEventListeners() {
     // Delete Account
     deleteAccountButton.addEventListener('click', () => showModal(deleteAccountModal));
     deleteAccountForm.addEventListener('submit', handleDeleteAccount);
+
+    // App tab navigation
+    document.querySelector('.app-tab-buttons').addEventListener('click', (event) => {
+        if (event.target.classList.contains('app-tab-button')) {
+            switchAppTab(event.target.dataset.appTab);
+        }
+    });
+
+    // Create org from the Organisations tab
+    createOrgFromScreenButton.addEventListener('click', () => showModal(createOrganizationModal));
 
     // Organization Handling
     newVaultOwnerTypeSelect.addEventListener('change', handleOwnerTypeChange);
@@ -388,7 +401,7 @@ export async function loadVaults() {
 
         const vaults = await getVaults();
         loadedVaults = vaults;
-        populateVaultsList(vaults, handleLoadVault, handleManageOrganizationVault, handleDeleteVault);
+        populateVaultsList(vaults, organizations, handleLoadVault, handleDeleteVault);
         hideVaultDetails();
         showMessage(vaultMessage, `Loaded ${vaults.length} vaults.`, 'success');
     } catch (error) {
@@ -453,22 +466,6 @@ async function handleCreateVault(event) {
     }
 }
 
-async function handleManageOrganizationVault(vaultId, vaultName) {
-    const vault = loadedVaults.find(v => v.id === vaultId);
-    if (!vault || vault.owner_type !== 'organization') {
-        alert("This vault is not owned by an organization.");
-        return;
-    }
-    const orgId = parseInt(vault.owner_id.split('_')[1]);
-    const selectedOrg = organizations.find(org => org.id === orgId);
-    if (!selectedOrg) {
-        alert("Organization details are missing. Please reload the page.");
-        return;
-    }
-    addMemberOrgName.textContent = `Organization: ${selectedOrg.name}`;
-    addOrgMemberModal.dataset.orgId = String(selectedOrg.id);
-    showModal(addOrgMemberModal);
-}
 
 async function handleLoadVault(vaultId, vaultName, vaultDescription, r2ObjectKey) {
     showLoading(`Loading vault '${vaultName}'...`);
@@ -650,6 +647,99 @@ function handleClearSearch() {
     }
 }
 
+// --- App Tab Navigation ---
+function switchAppTab(tabName) {
+    document.querySelectorAll('.app-tab-button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.appTab === tabName);
+    });
+    if (tabName === 'vaults') {
+        showElement(vaultsScreen);
+        hideElement(organisationsScreen);
+    } else if (tabName === 'organisations') {
+        hideElement(vaultsScreen);
+        showElement(organisationsScreen);
+        loadOrganisationsScreen();
+    }
+}
+
+async function loadOrganisationsScreen() {
+    showLoading("Loading organisations...");
+    orgScreenMessage.textContent = '';
+    try {
+        organizations = await getOrganizations();
+        populateOrganizationDropdown(organizations);
+
+        const orgsWithMembers = await Promise.all(
+            organizations.map(async org => {
+                const members = await getOrgMembers(org.id);
+                return { org, members };
+            })
+        );
+
+        const userInfo = getUserInfo();
+        populateOrganisationsScreen(orgsWithMembers, userInfo.userId, {
+            onAddMember: (org) => {
+                addMemberOrgName.textContent = `Organisation: ${org.name}`;
+                addOrgMemberModal.dataset.orgId = String(org.id);
+                showModal(addOrgMemberModal);
+            },
+            onUpdateRole: handleUpdateMemberRole,
+            onRemoveMember: handleRemoveMember,
+            onDeleteOrg: handleDeleteOrganisation
+        });
+    } catch (error) {
+        console.error('Error loading organisations screen:', error);
+        showMessage(orgScreenMessage, error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function handleUpdateMemberRole(orgId, userId, role) {
+    showLoading("Updating role...");
+    try {
+        await updateMemberRole(orgId, userId, role);
+        await loadOrganisationsScreen();
+    } catch (error) {
+        console.error('Error updating role:', error);
+        showMessage(orgScreenMessage, error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function handleRemoveMember(orgId, userId) {
+    if (!confirm('Remove this member from the organisation?')) return;
+    showLoading("Removing member...");
+    try {
+        await removeMember(orgId, userId);
+        await loadOrganisationsScreen();
+    } catch (error) {
+        console.error('Error removing member:', error);
+        showMessage(orgScreenMessage, error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function handleDeleteOrganisation(orgId, orgName) {
+    if (!confirm(`Permanently delete organisation "${orgName}" and ALL its vaults? This cannot be undone.`)) return;
+    showLoading("Deleting organisation...");
+    try {
+        await deleteOrganization(orgId);
+        organizations = organizations.filter(o => o.id !== orgId);
+        loadedVaults = loadedVaults.filter(v => v.owner_id !== `org_${orgId}`);
+        populateOrganizationDropdown(organizations);
+        await loadOrganisationsScreen();
+        showMessage(orgScreenMessage, `Organisation "${orgName}" deleted.`, 'success');
+    } catch (error) {
+        console.error('Error deleting organisation:', error);
+        showMessage(orgScreenMessage, error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
 // --- Organization Handlers ---
 async function handleOwnerTypeChange() {
     if (newVaultOwnerTypeSelect.value === 'organization') {
@@ -689,7 +779,10 @@ async function handleCreateOrganization() {
         showMessage(orgModalMessage, `Organization '${newOrg.name}' created!`, 'success');
         clearForm(orgNameInput.closest('form'));
         hideModal(createOrganizationModal);
-        await loadOrganizationsForDropdown(); // Reload dropdown in vault creation form
+        await loadOrganizationsForDropdown();
+        if (!organisationsScreen.classList.contains('hidden')) {
+            await loadOrganisationsScreen();
+        }
     } catch (error) {
         console.error('Error creating organization:', error);
         showMessage(orgModalMessage, error.message, 'error');
@@ -713,6 +806,10 @@ async function handleAddMemberToOrganization() {
         await addMemberToOrganization(orgId, memberEmail, role);
         showMessage(addMemberModalMessage, `Member ${memberEmail} added as ${role}!`, 'success');
         clearForm(memberEmailInput.closest('form'));
+        hideModal(addOrgMemberModal);
+        if (!organisationsScreen.classList.contains('hidden')) {
+            await loadOrganisationsScreen();
+        }
     } catch (error) {
         console.error('Error adding member:', error);
         showMessage(addMemberModalMessage, error.message, 'error');

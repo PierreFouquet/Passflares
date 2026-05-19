@@ -66,6 +66,13 @@ export const deleteAccountForm = document.getElementById('delete-account-form');
 export const deleteAccountPasswordInput = document.getElementById('delete-account-password');
 export const deleteAccountMessage = document.getElementById('delete-account-message');
 
+// App tab navigation
+export const vaultsScreen = document.getElementById('vaults-screen');
+export const organisationsScreen = document.getElementById('organisations-screen');
+export const createOrgFromScreenButton = document.getElementById('create-org-from-screen-button');
+export const organisationsListDiv = document.getElementById('organisations-list');
+export const orgScreenMessage = document.getElementById('org-screen-message');
+
 // Organization Modals
 export const createOrganizationModal = document.getElementById('create-organization-modal');
 export const orgNameInput = document.getElementById('org-name-input');
@@ -122,52 +129,83 @@ export function clearForm(formElement) {
     }
 }
 
-export function populateVaultsList(vaults, onVaultLoad, onVaultManage, onVaultDelete) {
+export function populateVaultsList(vaults, organizations, onVaultLoad, onVaultDelete) {
     vaultsListDiv.innerHTML = '';
     if (vaults.length === 0) {
         vaultsListDiv.innerHTML = '<p class="no-entries-message">No vaults found. Create one above!</p>';
         return;
     }
 
-    vaults.forEach(vault => {
-        const vaultItem = document.createElement('div');
-        vaultItem.className = 'vault-item';
-        vaultItem.innerHTML = `
-            <h3>${escapeHTML(vault.name)}</h3>
+    const personalVaults = vaults.filter(v => v.owner_type === 'user');
+    const orgVaults = vaults.filter(v => v.owner_type === 'organization');
+
+    function resolveOrgName(ownerId) {
+        const orgId = parseInt(ownerId.split('_')[1]);
+        const org = organizations.find(o => o.id === orgId);
+        return org ? org.name : `Org #${orgId}`;
+    }
+
+    function renderVaultCard(vault) {
+        const isPersonal = vault.owner_type === 'user';
+        const typeBadgeClass = isPersonal ? 'badge-personal' : 'badge-org';
+        const typeBadgeText = isPersonal ? 'Personal' : escapeHTML(resolveOrgName(vault.owner_id));
+        const permClass = vault.permission_level === 'manage' ? 'badge-permission-manage' : '';
+
+        const item = document.createElement('div');
+        item.className = 'vault-item';
+        item.innerHTML = `
+            <div>
+                <span class="vault-badge ${typeBadgeClass}">${typeBadgeText}</span>
+                <span class="vault-badge badge-permission ${permClass}">${escapeHTML(vault.permission_level)}</span>
+                <strong style="margin-left:4px;">${escapeHTML(vault.name)}</strong>
+            </div>
             <p>${escapeHTML(vault.description || 'No description.')}</p>
-            <p class="small-text">Owner: ${vault.owner_type === 'user' ? 'You' : `Organization ID: ${vault.owner_id.split('_')[1]}`}</p>
-            <p class="small-text">Your Access: <strong>${vault.permission_level}</strong></p>
             <div class="buttons">
-                <button class="load-vault-btn" data-vault-id="${vault.id}" data-vault-name="${escapeHTML(vault.name)}" data-vault-description="${escapeHTML(vault.description || '')}" data-r2-key="${escapeHTML(vault.r2_object_key)}">Load</button>
-                ${vault.permission_level === 'manage' ? `<button class="manage-vault-btn" data-vault-id="${vault.id}" data-vault-name="${escapeHTML(vault.name)}" data-r2-key="${escapeHTML(vault.r2_object_key)}">Manage Org</button>` : ''}
-                ${vault.permission_level === 'manage' ? `<button class="delete-vault-btn danger-button" data-vault-id="${vault.id}">Delete</button>` : ''}
+                <button class="load-vault-btn"
+                    data-vault-id="${vault.id}"
+                    data-vault-name="${escapeHTML(vault.name)}"
+                    data-vault-description="${escapeHTML(vault.description || '')}"
+                    data-r2-key="${escapeHTML(vault.r2_object_key)}">Load</button>
+                ${vault.permission_level === 'manage'
+                    ? `<button class="delete-vault-btn danger-button" data-vault-id="${vault.id}">Delete</button>`
+                    : ''}
             </div>
         `;
-        vaultsListDiv.appendChild(vaultItem);
-    });
+        return item;
+    }
 
-    vaultsListDiv.querySelectorAll('.load-vault-btn').forEach(button => {
-        button.addEventListener('click', (event) => {
-            const vaultId = parseInt(event.target.dataset.vaultId);
-            const vaultName = event.target.dataset.vaultName;
-            const vaultDescription = event.target.dataset.vaultDescription;
-            const r2Key = event.target.dataset.r2Key;
-            onVaultLoad(vaultId, vaultName, vaultDescription, r2Key);
+    if (personalVaults.length > 0) {
+        const hdr = document.createElement('p');
+        hdr.className = 'vault-section-header';
+        hdr.textContent = 'Personal Vaults';
+        vaultsListDiv.appendChild(hdr);
+        personalVaults.forEach(v => vaultsListDiv.appendChild(renderVaultCard(v)));
+    }
+
+    if (orgVaults.length > 0) {
+        const hdr = document.createElement('p');
+        hdr.className = 'vault-section-header';
+        hdr.textContent = 'Organisation Vaults';
+        vaultsListDiv.appendChild(hdr);
+        orgVaults.forEach(v => vaultsListDiv.appendChild(renderVaultCard(v)));
+    }
+
+    vaultsListDiv.querySelectorAll('.load-vault-btn').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            const t = event.target;
+            onVaultLoad(
+                parseInt(t.dataset.vaultId),
+                t.dataset.vaultName,
+                t.dataset.vaultDescription,
+                t.dataset.r2Key
+            );
         });
     });
 
-    vaultsListDiv.querySelectorAll('.manage-vault-btn').forEach(button => {
-        button.addEventListener('click', (event) => {
+    vaultsListDiv.querySelectorAll('.delete-vault-btn').forEach(btn => {
+        btn.addEventListener('click', (event) => {
             const vaultId = parseInt(event.target.dataset.vaultId);
-            const vaultName = event.target.dataset.vaultName;
-            onVaultManage(vaultId, vaultName);
-        });
-    });
-
-    vaultsListDiv.querySelectorAll('.delete-vault-btn').forEach(button => {
-        button.addEventListener('click', (event) => {
-            const vaultId = parseInt(event.target.dataset.vaultId);
-            if (confirm('Are you sure you want to delete this vault and ALL its entries? This action cannot be undone.')) {
+            if (confirm('Are you sure you want to delete this vault and ALL its entries? This cannot be undone.')) {
                 onVaultDelete(vaultId);
             }
         });
@@ -263,6 +301,97 @@ export function populateOrganizationDropdown(organizations, currentOrgId = null)
     selectOrganizationDropdown.appendChild(newOrgOption);
 }
 
+
+export function renderOrgCard(org, members, currentUserId, callbacks) {
+    const myMembership = members.find(m => m.userId === currentUserId);
+    const myRole = myMembership?.role ?? 'member';
+    const isSuperAdmin = myRole === 'super_admin';
+    const isAdminOrAbove = myRole === 'admin' || isSuperAdmin;
+
+    const roleBadgeClass = { member: 'role-member', admin: 'role-admin', super_admin: 'role-super-admin' }[myRole] ?? 'role-member';
+    const roleBadgeText = { member: 'Member', admin: 'Admin', super_admin: 'Owner' }[myRole] ?? myRole;
+
+    const membersHTML = members.map(m => {
+        const mRoleBadgeClass = { member: 'role-member', admin: 'role-admin', super_admin: 'role-super-admin' }[m.role] ?? 'role-member';
+        const mRoleLabel = { member: 'Member', admin: 'Admin', super_admin: 'Owner' }[m.role] ?? m.role;
+        const isSelf = m.userId === currentUserId;
+
+        const roleControl = isSuperAdmin && !isSelf
+            ? `<select class="change-role-select" data-member-id="${m.userId}">
+                   <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
+                   <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option>
+                   <option value="super_admin" ${m.role === 'super_admin' ? 'selected' : ''}>Owner</option>
+               </select>
+               <button class="apply-role-btn" data-member-id="${m.userId}">Apply</button>`
+            : `<span class="org-role-badge ${mRoleBadgeClass}">${mRoleLabel}</span>`;
+
+        const removeBtn = isAdminOrAbove && !isSelf
+            ? `<button class="remove-member-btn danger-button" data-member-id="${m.userId}">Remove</button>`
+            : '';
+
+        return `<div class="org-member-row">
+            <span class="org-member-email">${escapeHTML(m.email)}${isSelf ? ' <em>(you)</em>' : ''}</span>
+            <div class="org-member-actions">${roleControl}${removeBtn}</div>
+        </div>`;
+    }).join('');
+
+    const card = document.createElement('div');
+    card.className = 'org-card';
+    card.dataset.orgId = String(org.id);
+    card.innerHTML = `
+        <div class="org-card-header">
+            <h3>${escapeHTML(org.name)}</h3>
+            <span class="org-role-badge ${roleBadgeClass}">${roleBadgeText}</span>
+        </div>
+        <p class="org-card-description">${escapeHTML(org.description || 'No description.')}</p>
+        <div class="org-card-actions">
+            <button class="toggle-manage-btn">Manage</button>
+        </div>
+        <div class="org-management-panel hidden">
+            <h4>Members</h4>
+            <div class="org-members-list">${membersHTML || '<p class="small-text">No members found.</p>'}</div>
+            <div class="org-management-actions">
+                <button class="add-member-btn" data-org-id="${org.id}">Add Member</button>
+            </div>
+            ${isSuperAdmin ? `<div class="org-danger-zone">
+                <button class="delete-org-btn danger-button" data-org-id="${org.id}">Delete Organisation</button>
+            </div>` : ''}
+        </div>
+    `;
+
+    card.querySelector('.toggle-manage-btn').addEventListener('click', () => {
+        card.querySelector('.org-management-panel').classList.toggle('hidden');
+    });
+
+    card.querySelector('.add-member-btn')?.addEventListener('click', () => callbacks.onAddMember(org));
+
+    card.querySelectorAll('.apply-role-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const memberId = parseInt(btn.dataset.memberId);
+            const sel = card.querySelector(`.change-role-select[data-member-id="${memberId}"]`);
+            callbacks.onUpdateRole(org.id, memberId, sel.value);
+        });
+    });
+
+    card.querySelectorAll('.remove-member-btn').forEach(btn => {
+        btn.addEventListener('click', () => callbacks.onRemoveMember(org.id, parseInt(btn.dataset.memberId)));
+    });
+
+    card.querySelector('.delete-org-btn')?.addEventListener('click', () => callbacks.onDeleteOrg(org.id, org.name));
+
+    return card;
+}
+
+export function populateOrganisationsScreen(orgsWithMembers, currentUserId, callbacks) {
+    organisationsListDiv.innerHTML = '';
+    if (orgsWithMembers.length === 0) {
+        organisationsListDiv.innerHTML = '<p class="no-entries-message">No organisations yet. Create one above!</p>';
+        return;
+    }
+    orgsWithMembers.forEach(({ org, members }) => {
+        organisationsListDiv.appendChild(renderOrgCard(org, members, currentUserId, callbacks));
+    });
+}
 
 // Helper for escaping HTML to prevent XSS when displaying user-controlled content
 function escapeHTML(str) {

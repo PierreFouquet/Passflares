@@ -123,3 +123,19 @@ export async function getOrganizations() {
 export async function addMemberToOrganization(orgId, memberEmail, role) {
     return apiCall(`/organizations/${orgId}/members`, 'POST', { memberEmail, role });
 }
+
+export async function getOrgMembers(orgId) {
+    return apiCall(`/organizations/${orgId}/members`, 'GET');
+}
+
+export async function updateMemberRole(orgId, userId, role) {
+    return apiCall(`/organizations/${orgId}/members/${userId}`, 'PUT', { role });
+}
+
+export async function removeMember(orgId, userId) {
+    return apiCall(`/organizations/${orgId}/members/${userId}`, 'DELETE');
+}
+
+export async function deleteOrganization(orgId) {
+    return apiCall(`/organizations/${orgId}`, 'DELETE');
+}
