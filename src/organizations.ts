@@ -20,8 +20,6 @@ export async function handleCreateOrganization(request: CustomRequest, env: Env,
     }
 
     try {
-        // Start a transaction for creating org and adding creator as admin
-        await env.DB.exec('BEGIN;');
         const orgInsertResult = await env.DB.prepare(
             `INSERT INTO organizations (name, description, created_by) VALUES (?, ?, ?)`
         )
@@ -37,18 +35,21 @@ export async function handleCreateOrganization(request: CustomRequest, env: Env,
             throw new Error("Could not retrieve new organization ID.");
         }
 
-        await env.DB.prepare(
+        // Add creator as admin; compensate by removing the org if this fails
+        const memberResult = await env.DB.prepare(
             `INSERT INTO user_organizations (user_id, organization_id, role) VALUES (?, ?, 'admin')`
         )
             .bind(user.userId, organizationId)
             .run();
 
-        await env.DB.exec('COMMIT;');
+        if (!memberResult.success) {
+            await env.DB.prepare("DELETE FROM organizations WHERE id = ?").bind(organizationId).run();
+            throw new Error("Failed to add creator as organization admin.");
+        }
 
         logAudit(env, ctx, user.userId, 'ORG_CREATE_SUCCESS', { orgId: organizationId, name }, ipAddress, userAgent);
         return jsonResponse({ id: organizationId, name, description: description || null, created_by: user.userId }, 201);
     } catch (error: any) {
-        await env.DB.exec('ROLLBACK;');
         console.error("Create organization error:", error);
         logAudit(env, ctx, user.userId, 'ORG_CREATE_FAILURE', { name, error: error.message }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while creating organization." }, 500);
