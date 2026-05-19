@@ -1,0 +1,6 @@
+# Copy this file to .dev.vars for local development.
+# .dev.vars is gitignored and read automatically by `wrangler dev`.
+
+JWT_SECRET="local-dev-secret-change-me"
+# Turnstile test key — always passes validation, safe for local dev only.
+TURNSTILE_KEY="1x0000000000000000000000000000000AA"
