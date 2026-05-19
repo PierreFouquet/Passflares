@@ -3,73 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Guide</title>
+    <title>User Guide — Passflares</title>
     <link rel="stylesheet" href="css/docs.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>ðŸ”‘</text></svg>">
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" defer></script>
-    <script src="../js/turnstyle.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
 </head>
 <body>
     <header>
         <h1>User Guide</h1>
         <nav>
             <ul>
-                <li><a href="user-guide.html">User Guide</a></li>
+                <li><a href="../index.html">App</a></li>
+                <li><a href="docs.html">Docs Home</a></li>
                 <li><a href="admin-guide.html">Admin Guide</a></li>
             </ul>
         </nav>
     </header>
 
     <main>
+
         <section>
-            <h2>Welcome to Our System!</h2>
-            <p>This guide will help you understand how to use our system effectively. Please navigate through the sections below to find the information you need.</p>
-            <p><div id="pf-turnstyle"></div></p>
+            <h2>1. Creating Your Account</h2>
+            <p>Click the <strong>Register</strong> tab on the login page and fill in:</p>
+            <ul>
+                <li><strong>Email address</strong> — used to identify your account.</li>
+                <li><strong>Master Password</strong> — this is the key to all your data. Choose something long and unique. The strength indicator must reach <em>Moderate</em> or higher before you can register.</li>
+                <li><strong>Confirm Master Password</strong> — must match exactly.</li>
+            </ul>
+            <div class="callout warning">
+                <strong>Important:</strong> Your master password cannot be reset by Passflares staff. If you forget it, your encrypted data cannot be recovered. Store it somewhere safe.
+            </div>
+
+            <h3>What makes a strong master password?</h3>
+            <ul>
+                <li>At least 12 characters</li>
+                <li>A mix of uppercase and lowercase letters</li>
+                <li>At least one number and one symbol</li>
+                <li>Not a word found in a dictionary</li>
+            </ul>
+            <p>Use the built-in password generator to create a strong random password if you need inspiration.</p>
         </section>
 
         <section>
-            <h3>1. Getting Started</h3>
-            <p>Learn how to log in, navigate the dashboard, and understand the basic layout of the system.</p>
+            <h2>2. Logging In</h2>
+            <ol>
+                <li>Enter your email and master password on the <strong>Login</strong> tab.</li>
+                <li>Click <strong>Log In</strong>.</li>
+                <li>Your encryption key is derived locally from your master password — it never leaves your browser.</li>
+            </ol>
+            <div class="callout info">
+                <strong>Session timeout:</strong> You will be logged out automatically after <strong>5 minutes of inactivity</strong> for security. Any activity (mouse movement, typing) resets the timer.
+            </div>
+            <div class="callout warning">
+                <strong>Too many failed attempts?</strong> After 5 failed logins from the same IP address, you will be locked out for 15 minutes.
+            </div>
+        </section>
+
+        <section>
+            <h2>3. Creating a Vault</h2>
+            <p>Vaults are encrypted containers for your passwords. You can have multiple vaults — for example, one for personal accounts and one for work.</p>
+            <ol>
+                <li>In the <strong>Vaults</strong> section, enter a name and optional description.</li>
+                <li>Choose the owner:
+                    <ul>
+                        <li><strong>Personal</strong> — only you can access it.</li>
+                        <li><strong>Organisation</strong> — shared with members of an organisation you admin (see <a href="admin-guide.html">Admin Guide</a>).</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Vault</strong>.</li>
+            </ol>
+            <p>The vault is immediately encrypted with your master password and saved to the server.</p>
+        </section>
+
+        <section>
+            <h2>4. Adding Password Entries</h2>
+            <ol>
+                <li>Click <strong>Load</strong> next to the vault you want to open.</li>
+                <li>Fill in the <strong>Add Entry</strong> form:
+                    <ul>
+                        <li><strong>Name</strong> — e.g. "GitHub" or "Work Email" (required).</li>
+                        <li><strong>Username</strong> — the login name or email (required).</li>
+                        <li><strong>Password</strong> — paste or generate one (required).</li>
+                        <li><strong>URL</strong> — the website address (optional).</li>
+                        <li><strong>Notes</strong> — any extra information (optional).</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Add Entry</strong>.</li>
+                <li><strong>Click Save Vault Data</strong> — entries are only written to the server when you explicitly save. Don't close the tab before saving.</li>
+            </ol>
+            <div class="callout warning">
+                <strong>Always save before leaving.</strong> Unsaved entries exist only in memory and will be lost if you close the tab, change vaults, or are logged out by inactivity.
+            </div>
+        </section>
+
+        <section>
+            <h2>5. Using the Password Generator</h2>
+            <p>When adding an entry, click <strong>Generate Password</strong> next to the password field. A strong 16-character password containing uppercase, lowercase, numbers, and symbols will be filled in automatically.</p>
+        </section>
+
+        <section>
+            <h2>6. Copying Credentials</h2>
+            <p>Inside a loaded vault, each entry has two copy buttons:</p>
             <ul>
-                <li>Creating Your Account</li>
-                <li>Logging In and Out</li>
-                <li>Navigating the Dashboard</li>
+                <li><strong>Copy Username</strong> — copies the username to your clipboard immediately.</li>
+                <li><strong>Show/Copy Password</strong> — briefly reveals the password on screen and copies it to your clipboard, then re-masks it after 2 seconds.</li>
             </ul>
         </section>
 
         <section>
-            <h3>2. Basic Operations</h3>
-            <p>Instructions for performing common tasks within the system.</p>
-            <ul>
-                <li>Creating New Records</li>
-                <li>Viewing and Editing Data</li>
-                <li>Searching for Information</li>
-            </ul>
+            <h2>7. Searching Entries</h2>
+            <p>Use the <strong>Search</strong> box inside a loaded vault to filter entries by name, username, URL, or notes. Click <strong>Clear</strong> to reset the filter and show all entries.</p>
         </section>
 
         <section>
-            <h3>3. Managing Your Profile</h3>
-            <p>How to update your personal information and preferences.</p>
-            <ul>
-                <li>Changing Your Password</li>
-                <li>Updating Personal Details</li>
-                <li>Setting Preferences</li>
-            </ul>
+            <h2>8. Deleting an Entry</h2>
+            <ol>
+                <li>Find the entry inside the loaded vault.</li>
+                <li>Click <strong>Delete Entry</strong> and confirm.</li>
+                <li>Click <strong>Save Vault Data</strong> to make the deletion permanent.</li>
+            </ol>
         </section>
 
         <section>
-            <h3>4. Frequently Asked Questions (FAQ)</h3>
-            <p>Answers to common questions users might have.</p>
-            <ul>
-                <li>What if I forget my password?</li>
-                <li>How do I contact support?</li>
-                <li>Can I access the system on mobile?</li>
-            </ul>
+            <h2>9. Deleting a Vault</h2>
+            <div class="callout warning">
+                <strong>This cannot be undone.</strong> Deleting a vault permanently removes all entries inside it from the server.
+            </div>
+            <p>You can delete a vault from the vault list (click <strong>Delete</strong>) or from inside a loaded vault (click <strong>Delete This Vault</strong>). You need <strong>manage</strong> permission on the vault to delete it.</p>
         </section>
+
+        <section>
+            <h2>10. Changing Your Master Password</h2>
+            <p>Changing your master password re-encrypts <em>all</em> your vaults with the new key. This may take a moment if you have many entries.</p>
+            <ol>
+                <li>Click <strong>Change Master Password</strong> in the app header.</li>
+                <li>Enter your current master password.</li>
+                <li>Enter and confirm your new master password.</li>
+                <li>Click <strong>Change Password</strong> and wait — do <strong>not</strong> close the window during this process.</li>
+            </ol>
+            <div class="callout info">
+                All vaults are downloaded, decrypted with your old key, re-encrypted with your new key, and uploaded. Your session is updated automatically — you do not need to log in again.
+            </div>
+        </section>
+
+        <section>
+            <h2>11. Exporting Your Data</h2>
+            <p>Click <strong>Export All Data</strong> to download a JSON file containing all your vaults in their <em>encrypted</em> form. This file is useless without your master password — store both the export file and your master password safely.</p>
+            <p>This export is useful as a backup. You cannot currently import the file back into Passflares.</p>
+        </section>
+
+        <section>
+            <h2>12. Frequently Asked Questions</h2>
+
+            <h3>What happens if I forget my master password?</h3>
+            <p>Your data cannot be recovered. There is no password reset. This is a deliberate security feature — because the server never knows your master password, it cannot help you recover it.</p>
+
+            <h3>Is my data backed up?</h3>
+            <p>Vault data is stored in Cloudflare R2. Use the <strong>Export All Data</strong> feature to keep your own offline backup.</p>
+
+            <h3>Can I use Passflares on my phone?</h3>
+            <p>Yes — Passflares works in any modern mobile browser. The UI is responsive and adapts to smaller screens.</p>
+
+            <h3>Why does it log me out so quickly?</h3>
+            <p>The 5-minute inactivity timeout protects you if you walk away from a shared computer. Any interaction (click, keystroke, scroll) resets the timer.</p>
+
+            <h3>Can someone else see my passwords?</h3>
+            <p>No. The server only stores encrypted ciphertext. Even if the server were compromised, an attacker would need your master password to decrypt anything.</p>
+        </section>
+
     </main>
 
     <footer>
-        <p>&copy; 2025 Passflares. All rights reserved.</p>
+        <p>&copy; 2026 Passflares. All rights reserved.</p>
     </footer>
 </body>
 </html>

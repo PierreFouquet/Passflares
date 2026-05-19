@@ -3,73 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Guide</title>
+    <title>Admin Guide — Passflares</title>
     <link rel="stylesheet" href="css/docs.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>ðŸ”‘</text></svg>">
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" defer></script>
-    <script src="../js/turnstyle.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
 </head>
 <body>
     <header>
-        <h1>Administrator Guide</h1>
+        <h1>Admin Guide</h1>
         <nav>
             <ul>
+                <li><a href="../index.html">App</a></li>
+                <li><a href="docs.html">Docs Home</a></li>
                 <li><a href="user-guide.html">User Guide</a></li>
-                <li><a href="admin-guide.html">Admin Guide</a></li>
             </ul>
         </nav>
     </header>
 
     <main>
-        <section>
-            <h2>Welcome, Administrator!</h2>
-            <p>This guide provides detailed instructions for managing and configuring the system. Below are some key sections to help you get started.</p>
-            <p><div id="pf-turnstyle"></div></p>
-        </section>
 
         <section>
-            <h3>1. System Setup and Configuration</h3>
-            <p>Learn how to install and configure core system components, including database connections and server settings.</p>
+            <h2>1. Organisations Overview</h2>
+            <p>Organisations allow a team to share vaults. Any registered user can create an organisation and becomes its first <strong>admin</strong>. Admins can invite members and create organisation-owned vaults.</p>
+            <p>Vault access is controlled per-vault with three permission levels:</p>
             <ul>
-                <li>Initial Installation Steps</li>
-                <li>Database Configuration</li>
-                <li>Environment Variables Setup</li>
+                <li><strong>read</strong> — can view and copy entries.</li>
+                <li><strong>write</strong> — can add, edit, and delete entries.</li>
+                <li><strong>manage</strong> — full control including deleting the vault and managing access.</li>
             </ul>
         </section>
 
         <section>
-            <h3>2. User Management</h3>
-            <p>Manage user accounts, roles, and permissions within the system.</p>
+            <h2>2. Creating an Organisation</h2>
+            <ol>
+                <li>In the vault creation form, set <strong>Owner</strong> to <em>Organisation</em>.</li>
+                <li>In the organisation dropdown, choose <strong>Create New Organisation…</strong></li>
+                <li>Enter a name and optional description in the modal that appears.</li>
+                <li>Click <strong>Create Organisation</strong>.</li>
+            </ol>
+            <p>You are automatically added as an admin of the new organisation.</p>
+        </section>
+
+        <section>
+            <h2>3. Adding Members to an Organisation</h2>
+            <div class="callout info">
+                Only organisation admins can add members.
+            </div>
+            <ol>
+                <li>From the vault list, find a vault owned by the organisation.</li>
+                <li>Click <strong>Manage Org</strong> on that vault.</li>
+                <li>In the modal, enter the member's email address. They must already have a Passflares account.</li>
+                <li>Select their role: <strong>member</strong> or <strong>admin</strong>.</li>
+                <li>Click <strong>Add Member</strong>.</li>
+            </ol>
+            <p>Members gain access to all vaults assigned to the organisation according to the vault's permission level.</p>
+        </section>
+
+        <section>
+            <h2>4. Creating an Organisation-Owned Vault</h2>
+            <ol>
+                <li>In the vault creation form, set <strong>Owner</strong> to <em>Organisation</em>.</li>
+                <li>Select the organisation from the dropdown.</li>
+                <li>Enter a vault name and optional description.</li>
+                <li>Click <strong>Create Vault</strong>.</li>
+            </ol>
+            <div class="callout warning">
+                You must be an <strong>admin</strong> of the organisation to create a vault on its behalf.
+            </div>
+            <p>The vault is created with <strong>manage</strong> access for the organisation. All organisation members can access it at their respective permission level.</p>
+        </section>
+
+        <section>
+            <h2>5. Vault Permission Levels in Detail</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>read</th>
+                        <th>write</th>
+                        <th>manage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>View entries</td><td>✓</td><td>✓</td><td>✓</td></tr>
+                    <tr><td>Copy credentials</td><td>✓</td><td>✓</td><td>✓</td></tr>
+                    <tr><td>Add entries</td><td></td><td>✓</td><td>✓</td></tr>
+                    <tr><td>Delete entries</td><td></td><td>✓</td><td>✓</td></tr>
+                    <tr><td>Save vault data</td><td></td><td>✓</td><td>✓</td></tr>
+                    <tr><td>Delete vault</td><td></td><td></td><td>✓</td></tr>
+                    <tr><td>Manage org members</td><td></td><td></td><td>✓ (org admin)</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>6. Security Best Practices</h2>
+            <h3>For admins</h3>
             <ul>
-                <li>Creating New User Accounts</li>
-                <li>Modifying User Roles and Permissions</li>
-                <li>Deactivating or Deleting Users</li>
+                <li>Use a different master password for Passflares than any other service.</li>
+                <li>Grant the <strong>minimum permission needed</strong> — most team members only need <em>read</em> or <em>write</em>, not <em>manage</em>.</li>
+                <li>Regularly review who has access to shared vaults.</li>
+                <li>Remove members promptly when they leave the organisation.</li>
+                <li>Use separate vaults for different sensitivity levels (e.g. one for shared team credentials, one for admin-only credentials).</li>
+            </ul>
+
+            <h3>For all users</h3>
+            <ul>
+                <li>Never share your master password with anyone, including other admins.</li>
+                <li>Log out when using a shared computer — or let the inactivity timer handle it.</li>
+                <li>Export your data regularly as a backup.</li>
+                <li>Report suspicious activity (unexpected logins, entries you didn't create) immediately.</li>
             </ul>
         </section>
 
         <section>
-            <h3>3. Data Backup and Restore</h3>
-            <p>Procedures for regularly backing up your data and restoring it in case of an issue.</p>
+            <h2>7. Audit Logs</h2>
+            <p>Every sensitive action is recorded in the audit log, including:</p>
             <ul>
-                <li>Scheduling Automatic Backups</li>
-                <li>Performing Manual Backups</li>
-                <li>Restoring Data from Backup</li>
+                <li>Successful and failed login attempts (with IP address)</li>
+                <li>Account registration</li>
+                <li>Vault creation, access, data upload, and deletion</li>
+                <li>Organisation creation and member additions</li>
+                <li>Master password changes</li>
             </ul>
+            <p>Audit logs are accessible to Passflares administrators via the Cloudflare D1 database. Query example:</p>
+            <pre><code>SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100;</code></pre>
         </section>
 
         <section>
-            <h3>4. Troubleshooting Common Issues</h3>
-            <p>Solutions to frequently encountered problems.</p>
+            <h2>8. Account Management</h2>
+            <h3>Deleting an account</h3>
+            <p>Users can delete their own account from the app settings. This permanently removes:</p>
             <ul>
-                <li>Resolving Login Problems</li>
-                <li>Addressing Performance Lags</li>
-                <li>Debugging Error Messages</li>
+                <li>All personal vaults and their encrypted data from R2</li>
+                <li>Their user record and credentials from D1</li>
+                <li>Their organisation memberships</li>
+                <li>All audit log entries linked to their account</li>
             </ul>
+            <div class="callout warning">
+                Deleting an account does <strong>not</strong> delete organisation-owned vaults. If the user was the sole admin of an organisation, that organisation's vaults will still exist but may become unmanageable. Assign another admin before deleting your account.
+            </div>
         </section>
+
+        <section>
+            <h2>9. Infrastructure Reference</h2>
+            <p>Passflares runs on the following Cloudflare services:</p>
+            <table>
+                <thead>
+                    <tr><th>Service</th><th>Purpose</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Workers</td><td>API routing and request handling</td></tr>
+                    <tr><td>D1 (SQLite)</td><td>User accounts, vault metadata, organisations, audit logs</td></tr>
+                    <tr><td>R2</td><td>Encrypted vault blobs (the actual password data)</td></tr>
+                    <tr><td>KV</td><td>Rate limiting counters for login attempts</td></tr>
+                    <tr><td>Turnstile</td><td>Bot protection on auth forms</td></tr>
+                    <tr><td>Assets</td><td>Static frontend files (HTML, CSS, JS)</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Secrets</h3>
+            <p>Two secrets must be set in Cloudflare Workers (via <code>wrangler secret put</code>):</p>
+            <ul>
+                <li><code>JWT_SECRET</code> — signs and verifies auth tokens. Must be at least 32 characters, randomly generated.</li>
+                <li><code>TURNSTILE_KEY</code> — the Turnstile secret key from the Cloudflare dashboard.</li>
+            </ul>
+
+            <h3>Database migrations</h3>
+            <p>To initialise or reset the database schema:</p>
+            <pre><code>wrangler d1 execute secure-password-db \
+  --file=./migrations/0001_init.sql \
+  --remote</code></pre>
+        </section>
+
     </main>
 
     <footer>
-        <p>&copy; 2025 Passflares. All rights reserved.</p>
+        <p>&copy; 2026 Passflares. All rights reserved.</p>
     </footer>
 </body>
 </html>

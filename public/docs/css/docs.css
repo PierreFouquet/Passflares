@@ -172,6 +172,71 @@ footer {
     background-color: #0056b3;
 }
 
+/* Callout boxes */
+.callout {
+    border-left: 4px solid #007bff;
+    background-color: #e8f4fd;
+    padding: 12px 16px;
+    border-radius: 0 6px 6px 0;
+    margin: 16px 0;
+    font-size: 0.95rem;
+}
+
+.callout.warning {
+    border-color: #e67e00;
+    background-color: #fff4e5;
+}
+
+.callout.info {
+    border-color: #0078c8;
+    background-color: #e8f4fd;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.95rem;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 10px 14px;
+    text-align: left;
+}
+
+th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #333;
+}
+
+tr:nth-child(even) {
+    background-color: #fafafa;
+}
+
+/* Code blocks */
+pre {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+code {
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Ordered lists in steps */
+ol li {
+    margin-bottom: 8px;
+}
+
 /* Responsive adjustments for smaller screens */
 @media (max-width: 768px) {
     .guide-links {
