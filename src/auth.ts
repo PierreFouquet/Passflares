@@ -1,4 +1,5 @@
 import { sign } from 'jsonwebtoken';
+import { VaultMetadata } from './types.js';
 import { deriveScryptHash } from './utils.js';
 import { logAudit } from './auditLog.js';
 import { CustomRequest, Env, User } from './types.js';
@@ -189,5 +190,77 @@ export async function handleUpdateMasterPassword(request: CustomRequest, env: En
         console.error("Update master password error:", error);
         logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { error: error.message }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error during password update." }, 500);
+    }
+}
+
+export async function handleDeleteAccount(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const userIdParam = request.params?.userId;
+    const { masterPassword } = await request.json() as { masterPassword: string };
+    const ipAddress = request.headers.get('CF-Connecting-IP');
+    const userAgent = request.headers.get('User-Agent');
+
+    if (!request.user || request.user.userId !== parseInt(userIdParam || '0')) {
+        return jsonResponse({ message: "Unauthorized: User ID mismatch." }, 403);
+    }
+
+    if (!masterPassword) {
+        return jsonResponse({ message: "Master password is required to confirm account deletion." }, 400);
+    }
+
+    const userId = request.user.userId;
+
+    try {
+        // Verify master password before deleting anything
+        const user: User | null = await env.DB.prepare(
+            "SELECT id, password_hash, password_salt FROM users WHERE id = ?"
+        ).bind(userId).first();
+
+        if (!user) {
+            return jsonResponse({ message: "User not found." }, 404);
+        }
+
+        const { hash: verifiedHash } = await deriveScryptHash(masterPassword, user.password_salt);
+        if (verifiedHash !== user.password_hash) {
+            logAudit(env, ctx, userId, 'DELETE_ACCOUNT_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
+            return jsonResponse({ message: "Master password is incorrect." }, 401);
+        }
+
+        // 1. Find all personal vaults owned by this user
+        const ownedVaults = await env.DB.prepare(
+            "SELECT id, r2_object_key FROM vaults WHERE owner_id = ? AND owner_type = 'user'"
+        ).bind(`user_${userId}`).all().then(r => r.results as unknown as Pick<VaultMetadata, 'id' | 'r2_object_key'>[]);
+
+        // 2. Delete R2 objects for each vault
+        for (const vault of ownedVaults) {
+            await env.VAULTS.delete(vault.r2_object_key);
+        }
+
+        // 3. Delete owned vault records (FK cascade removes vault_access_controls)
+        if (ownedVaults.length > 0) {
+            const placeholders = ownedVaults.map(() => '?').join(', ');
+            await env.DB.prepare(
+                `DELETE FROM vaults WHERE id IN (${placeholders})`
+            ).bind(...ownedVaults.map(v => v.id)).run();
+        }
+
+        // 4. Remove user from shared vault access controls
+        await env.DB.prepare(
+            "DELETE FROM vault_access_controls WHERE entity_id = ? AND entity_type = 'user'"
+        ).bind(`user_${userId}`).run();
+
+        // 5. Delete user record (FK cascade removes user_organizations; audit_logs.user_id set to NULL)
+        await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();
+
+        // 6. Clear any rate limit entries for this user's recent IPs (best-effort)
+        if (ipAddress) {
+            await env.RATE_LIMIT.delete(`rate_limit:${ipAddress}`);
+        }
+
+        logAudit(env, ctx, null, 'DELETE_ACCOUNT_SUCCESS', { userId }, ipAddress, userAgent);
+        return new Response(null, { status: 204 });
+    } catch (error: any) {
+        console.error("Delete account error:", error);
+        logAudit(env, ctx, userId, 'DELETE_ACCOUNT_FAILURE', { error: error.message }, ipAddress, userAgent);
+        return jsonResponse({ message: "Internal Server Error during account deletion." }, 500);
     }
 }

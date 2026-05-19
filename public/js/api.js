@@ -107,6 +107,10 @@ export async function deleteVault(vaultId) {
     return apiCall(`/vaults/${vaultId}`, 'DELETE');
 }
 
+export async function deleteAccount(userId, masterPassword) {
+    return apiCall(`/users/${userId}`, 'DELETE', { masterPassword });
+}
+
 // --- Organization Endpoints ---
 export async function createOrganization(name, description) {
     return apiCall('/organizations', 'POST', { name, description });

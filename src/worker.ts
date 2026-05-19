@@ -6,7 +6,8 @@ import {
     handleRegister,
     handleLogin,
     handleGetUserEncryptionSalt,
-    handleUpdateMasterPassword
+    handleUpdateMasterPassword,
+    handleDeleteAccount
 } from './auth.js';
 import {
     handleCreateVault,
@@ -93,6 +94,7 @@ router.post('/api/login', handleLogin);
 // --- Authenticated user routes ---
 router.get('/api/users/:userId/encryption-salt', withAuth, handleGetUserEncryptionSalt);
 router.put('/api/users/:userId/update-password', withAuth, handleUpdateMasterPassword);
+router.delete('/api/users/:userId', withAuth, handleDeleteAccount);
 
 // --- Vault routes ---
 router.post('/api/vaults', withAuth, handleCreateVault);

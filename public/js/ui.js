@@ -60,6 +60,11 @@ export const confirmNewMasterPasswordInput = document.getElementById('confirm-ne
 export const newPasswordStrengthText = document.getElementById('new-password-strength-text');
 export const changePasswordMessage = document.getElementById('change-password-message');
 export const exportVaultDataButton = document.getElementById('export-vault-data-button');
+export const deleteAccountButton = document.getElementById('delete-account-button');
+export const deleteAccountModal = document.getElementById('delete-account-modal');
+export const deleteAccountForm = document.getElementById('delete-account-form');
+export const deleteAccountPasswordInput = document.getElementById('delete-account-password');
+export const deleteAccountMessage = document.getElementById('delete-account-message');
 
 // Organization Modals
 export const createOrganizationModal = document.getElementById('create-organization-modal');
