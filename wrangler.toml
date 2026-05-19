@@ -15,8 +15,8 @@ binding = "ASSETS"
 
 # ========================
 # PRODUCTION ENVIRONMENT
-# Secrets (JWT_SECRET, TURNSTILE_KEY) are stored in Cloudflare and must
-# be set via: wrangler secret put JWT_SECRET
+# JWT_SECRET and TURNSTILE_KEY are stored as Cloudflare secrets.
+# To update: wrangler secret put JWT_SECRET
 # ========================
 
 [[r2_buckets]]
