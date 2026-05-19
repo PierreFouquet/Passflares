@@ -4,7 +4,8 @@ import {
     registerUser, loginUser, createVault, getVaults,
     saveEncryptedVaultData, loadEncryptedVaultData, deleteVault,
     getUserEncryptionSalt, updateMasterPassword,
-    createOrganization, getOrganizations, addMemberToOrganization
+    createOrganization, getOrganizations, addMemberToOrganization,
+    deleteAccount
 } from './api.js';
 import { deriveKey, encryptData, decryptData } from './crypto.js';
 import {
@@ -29,6 +30,7 @@ import {
     newVaultOwnerTypeSelect, organizationSelectionDiv, selectOrganizationDropdown, createOrganizationButton,
     createOrganizationModal, orgNameInput, orgDescriptionInput, submitCreateOrgButton, orgModalMessage,
     addOrgMemberModal, addMemberOrgName, memberEmailInput, memberRoleSelect, submitAddMemberButton, addMemberModalMessage,
+    deleteAccountButton, deleteAccountModal, deleteAccountForm, deleteAccountPasswordInput, deleteAccountMessage,
     vaultsSection, loadingText
 } from './ui.js';
 import { checkPasswordStrength, generateSalt, generateRandomPassword, searchVaultEntries, copyToClipboard, uint8ArrayToHexString } from './utils.js';
@@ -149,6 +151,10 @@ function setupEventListeners() {
 
     // Export Data
     exportVaultDataButton.addEventListener('click', handleExportAllVaultData);
+
+    // Delete Account
+    deleteAccountButton.addEventListener('click', () => showModal(deleteAccountModal));
+    deleteAccountForm.addEventListener('submit', handleDeleteAccount);
 
     // Organization Handling
     newVaultOwnerTypeSelect.addEventListener('change', handleOwnerTypeChange);
@@ -287,6 +293,31 @@ async function handleChangeMasterPassword(event) {
     } catch (error) {
         console.error('Master Password change failed:', error);
         showMessage(changePasswordMessage, error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function handleDeleteAccount(event) {
+    event.preventDefault();
+    const masterPassword = deleteAccountPasswordInput.value;
+    const userInfo = getUserInfo();
+
+    if (!userInfo?.userId) {
+        showMessage(deleteAccountMessage, 'User information not found. Please re-login.', 'error');
+        return;
+    }
+
+    showLoading("Deleting account and all vault data...");
+    try {
+        await deleteAccount(userInfo.userId, masterPassword);
+        hideModal(deleteAccountModal);
+        clearSession();
+        alert('Your account has been permanently deleted.');
+        window.location.reload();
+    } catch (error) {
+        console.error('Account deletion failed:', error);
+        showMessage(deleteAccountMessage, error.message, 'error');
     } finally {
         hideLoading();
     }

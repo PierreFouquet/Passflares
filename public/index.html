@@ -60,6 +60,7 @@
             <div class="actions">
                 <button id="change-master-password-button">Change Master Password</button>
                 <button id="export-vault-data-button">Export All Vault Data</button>
+                <button id="delete-account-button" class="danger-button">Delete Account</button>
             </div>
 
             <div id="vaults-section" class="card">
@@ -148,6 +149,20 @@
                 </div>
                 <button id="save-vault-data-button">Save Vault Data</button>
                 <p id="entry-message" class="message"></p>
+            </div>
+
+            <div id="delete-account-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h2>Delete Account</h2>
+                    <p class="danger-text">This will permanently delete your account and <strong>all your personal vault data</strong>. This cannot be undone.</p>
+                    <p class="small-text">Organisation-owned vaults will not be deleted. If you are the sole admin of an organisation, assign another admin before proceeding.</p>
+                    <form id="delete-account-form">
+                        <input type="password" id="delete-account-password" placeholder="Enter your Master Password to confirm" required autocomplete="current-password">
+                        <button type="submit" class="danger-button">Permanently Delete My Account</button>
+                    </form>
+                    <button class="close-modal">Cancel</button>
+                    <p id="delete-account-message" class="message"></p>
+                </div>
             </div>
 
             <div id="change-master-password-modal" class="modal hidden">
