@@ -55,11 +55,8 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
             }
         }
 
-        const r2ObjectKey = `${ownerId}_${crypto.randomUUID()}`; // Generate a unique key for R2
-        const currentKeyVersion = 'v1'; // Default version
-
-        // Start a transaction to ensure both vault and access control are recorded
-        await env.DB.exec('BEGIN;');
+        const r2ObjectKey = `${ownerId}_${crypto.randomUUID()}`;
+        const currentKeyVersion = 'v1';
 
         const vaultInsertResult = await env.DB.prepare(
             `INSERT INTO vaults (name, description, owner_id, owner_type, r2_object_key, current_key_version)
@@ -74,15 +71,18 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
 
         const vaultId = vaultInsertResult.meta.last_row_id;
 
-        // Record initial access control for the owner
-        await env.DB.prepare(
+        // Record initial access control; if this fails, compensate by removing the vault
+        const aclResult = await env.DB.prepare(
             `INSERT INTO vault_access_controls (vault_id, entity_id, entity_type, permission_level)
              VALUES (?, ?, ?, ?)`
         )
             .bind(vaultId, ownerId, ownerType, initialPermissionLevel)
             .run();
 
-        await env.DB.exec('COMMIT;');
+        if (!aclResult.success) {
+            await env.DB.prepare("DELETE FROM vaults WHERE id = ?").bind(vaultId).run();
+            throw new Error("Failed to insert vault access control.");
+        }
 
         logAudit(env, ctx, user.userId, 'VAULT_CREATE_SUCCESS', { vaultId, name, ownerId, ownerType }, ipAddress, userAgent);
         return jsonResponse({
@@ -95,7 +95,6 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
             current_key_version: currentKeyVersion
         }, 201);
     } catch (error: any) {
-        await env.DB.exec('ROLLBACK;');
         console.error("Create vault error:", error);
         logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { name, ownerId, ownerType, error: error.message }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while creating vault." }, 500);
@@ -284,28 +283,18 @@ export async function handleDeleteVault(request: CustomRequest, env: Env, ctx: E
         // The middleware `checkVaultPermission` for 'manage' should have already run.
         // This handler assumes permission is already verified.
 
-        // Start a transaction to ensure all related data is deleted
-        await env.DB.exec('BEGIN;');
+        // D1 batch() ensures these two deletes are atomic
+        await env.DB.batch([
+            env.DB.prepare("DELETE FROM vault_access_controls WHERE vault_id = ?").bind(vaultId),
+            env.DB.prepare("DELETE FROM vaults WHERE id = ?").bind(vaultId)
+        ]);
 
-        // 1. Delete R2 object
+        // Delete R2 object after DB records are removed
         await env.VAULTS.delete(vaultToDelete.r2_object_key);
 
-        // 2. Delete vault access controls
-        await env.DB.prepare("DELETE FROM vault_access_controls WHERE vault_id = ?").bind(vaultId).run();
-
-        // 3. Delete vault metadata from D1
-        const { success } = await env.DB.prepare("DELETE FROM vaults WHERE id = ?").bind(vaultId).run();
-
-        if (!success) {
-            throw new Error("Failed to delete vault metadata from database.");
-        }
-
-        await env.DB.exec('COMMIT;');
-
         logAudit(env, ctx, user.userId, 'VAULT_DELETE_SUCCESS', { vaultId }, ipAddress, userAgent);
-        return new Response(null, { status: 204 }); // No Content
+        return new Response(null, { status: 204 });
     } catch (error: any) {
-        await env.DB.exec('ROLLBACK;');
         console.error("Delete vault error:", error);
         logAudit(env, ctx, user.userId, 'VAULT_DELETE_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while deleting vault." }, 500);
