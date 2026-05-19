@@ -126,7 +126,7 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
         )
             .bind(`user_${user.userId}`, `user_${user.userId}`, `user_${user.userId}`)
             .all()
-            .then(res => res.results as VaultMetadata[]);
+            .then(res => res.results as unknown as VaultMetadata[]);
 
         // Get vaults accessible via organizations the user is a member of
         const orgVaults: VaultMetadata[] = await env.DB.prepare(
@@ -139,7 +139,7 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
         )
             .bind(user.userId)
             .all()
-            .then(res => res.results as VaultMetadata[]);
+            .then(res => res.results as unknown as VaultMetadata[]);
 
         // Combine and deduplicate vaults (a vault might be accessible directly and via an org)
         const allVaultsMap = new Map<number, VaultMetadata>();

@@ -1,8 +1,12 @@
 name = "passflares"
 main = "src/worker.ts"
-compatibility_date = "2025-07-19"
+compatibility_date = "2026-05-19"
 compatibility_flags = [ "nodejs_compat" ]
 tsconfig = "tsconfig.json"
+
+routes = [
+    { pattern = "*pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
+]
 
 [assets]
 directory = "./public"
@@ -15,26 +19,18 @@ binding = "ASSETS"
 JWT_SECRET = "{{ JWT_SECRET }}"
 TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
 
-[[routes]]
-pattern = "passflares.pierrefouquet.co.uk"
-custom_domain = true
-
-[[routes]]
-pattern = "*passflares.pierrefouquet.co.uk/*"
-zone_name = "pierrefouquet.co.uk"
-
 [[r2_buckets]]
 binding = "VAULTS"
 bucket_name = "secure-vaults-r2"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "912ffecc0a27412ba662c890c9f9d4e2"
+id = "RATE_LIMIT_PROD_ID"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "secure-password-db"
-database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
+database_id = "PROD_D1_DATABASE_ID"
 
 # ========================
 # PRERELEASE ENVIRONMENT
@@ -42,11 +38,8 @@ database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
 [env.prerelease]
 name = "passflares"
 workers_dev = true
-
-[vars.prerelease]
-ENVIRONMENT = "prerelease"
-JWT_SECRET = "{{ JWT_SECRET }}"
-TURNSTILE_KEY = "{{ TURNSTILE_KEY }}"
+vars = { ENVIRONMENT = "prerelease", JWT_SECRET = "{{ JWT_SECRET }}", TURNSTILE_KEY = "{{ TURNSTILE_KEY }}" }
+routes = [{ pattern = "*passflares-prerelease.pierrefouquet93.workers.dev/*", zone_name = "pierrefouquet93.workers.dev" }]
 
 [[env.prerelease.r2_buckets]]
 binding = "VAULTS"
@@ -54,19 +47,19 @@ bucket_name = "secure-vaults-r2"
 
 [[env.prerelease.kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "912ffecc0a27412ba662c890c9f9d4e2"
+id = "RATE_LIMIT_PREVIEW_ID"
 
 [[env.prerelease.d1_databases]]
 binding = "DB"
 database_name = "secure-password-db"
-database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
+database_id = "PREVIEW_D1_DATABASE_ID"
 
 # ========================
 # LOCAL DEVELOPMENT
 # ========================
 [env.local]
 name = "passflares-local"
-vars = { ENVIRONMENT = "local", JWT_SECRET = "{{ JWT_SECRET }}", TURNSTILE_KEY = "{{ TURNSTILE_KEY }}", routes = "*localhost*"}
+vars = { ENVIRONMENT = "local", JWT_SECRET = "local-dev-secret-change-me", TURNSTILE_KEY = "1x0000000000000000000000000000000AA" }
 
 [[env.local.r2_buckets]]
 binding = "VAULTS"

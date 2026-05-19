@@ -25,13 +25,13 @@ import {
     changeMasterPasswordButton, changeMasterPasswordModal, changeMasterPasswordForm,
     oldMasterPasswordInput, newMasterPasswordInput, confirmNewMasterPasswordInput, newPasswordStrengthText, changePasswordMessage,
     exportVaultDataButton,
-    populateVaultsList, populateEntriesList, showLoading, hideLoading, showModal, hideModal,
+    populateVaultsList, populateEntriesList, populateOrganizationDropdown, showLoading, hideLoading, showModal, hideModal,
     newVaultOwnerTypeSelect, organizationSelectionDiv, selectOrganizationDropdown, createOrganizationButton,
     createOrganizationModal, orgNameInput, orgDescriptionInput, submitCreateOrgButton, orgModalMessage,
     addOrgMemberModal, addMemberOrgName, memberEmailInput, memberRoleSelect, submitAddMemberButton, addMemberModalMessage,
-    loadingText
+    vaultsSection, loadingText
 } from './ui.js';
-import { checkPasswordStrength, generateSalt, generateRandomPassword, searchVaultEntries, copyToClipboard } from './utils.js';
+import { checkPasswordStrength, generateSalt, generateRandomPassword, searchVaultEntries, copyToClipboard, uint8ArrayToHexString } from './utils.js';
 import { DEFAULT_MASTER_PASSWORD_CHANGE_LOADING_MESSAGE } from './constants.js';
 
 
@@ -39,6 +39,7 @@ let currentEncryptionKey = null;
 let currentVaultData = null; // Array of password entries
 let currentVaultMetadata = null; // { id, name, description, r2_object_key, ... }
 let organizations = []; // Stores user's organizations
+let loadedVaults = []; // Cache of all vaults returned by last getVaults() call
 
 
 // --- Initialization ---
@@ -355,6 +356,7 @@ export async function loadVaults() {
         populateOrganizationDropdown(organizations);
 
         const vaults = await getVaults();
+        loadedVaults = vaults;
         populateVaultsList(vaults, handleLoadVault, handleManageOrganizationVault, handleDeleteVault);
         hideVaultDetails();
         showMessage(vaultMessage, `Loaded ${vaults.length} vaults.`, 'success');
@@ -421,17 +423,19 @@ async function handleCreateVault(event) {
 }
 
 async function handleManageOrganizationVault(vaultId, vaultName) {
-    // Extract org ID from owner_id (format: "org_123")
-    const orgId = currentVaultMetadata.owner_id.split('_')[1];
-    const selectedOrg = organizations.find(org => org.id === parseInt(orgId));
-    
-    if (!selectedOrg) {
-        alert("Organization details are missing.");
+    const vault = loadedVaults.find(v => v.id === vaultId);
+    if (!vault || vault.owner_type !== 'organization') {
+        alert("This vault is not owned by an organization.");
         return;
     }
-
+    const orgId = parseInt(vault.owner_id.split('_')[1]);
+    const selectedOrg = organizations.find(org => org.id === orgId);
+    if (!selectedOrg) {
+        alert("Organization details are missing. Please reload the page.");
+        return;
+    }
     addMemberOrgName.textContent = `Organization: ${selectedOrg.name}`;
-    addOrgMemberModal.dataset.orgId = selectedOrg.id;
+    addOrgMemberModal.dataset.orgId = String(selectedOrg.id);
     showModal(addOrgMemberModal);
 }
 
@@ -494,6 +498,12 @@ async function handleDeleteVault(vaultId) {
     } finally {
         hideLoading();
     }
+}
+
+async function handleDeleteCurrentVault() {
+    if (!currentVaultMetadata) return;
+    if (!confirm(`Are you sure you want to delete vault '${currentVaultMetadata.name}' and ALL its entries? This cannot be undone.`)) return;
+    await handleDeleteVault(currentVaultMetadata.id);
 }
 
 function handleLoadAnotherVault() {
@@ -655,19 +665,6 @@ async function handleCreateOrganization() {
     } finally {
         hideLoading();
     }
-}
-
-async function handleManageOrganizationVault(vaultId, vaultName) {
-    const selectedOrg = organizations.find(org => org.id === currentVaultMetadata.owner_id);
-
-    if (currentVaultMetadata.owner_type !== 'organization' || !selectedOrg) {
-        alert("This vault is not owned by an organization, or organization details are missing.");
-        return;
-    }
-
-    addMemberOrgName.textContent = `Organization: ${selectedOrg.name}`;
-    addOrgMemberModal.dataset.orgId = selectedOrg.id;
-    showModal(addOrgMemberModal);
 }
 
 async function handleAddMemberToOrganization() {

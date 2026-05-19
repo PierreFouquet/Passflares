@@ -1,5 +1,4 @@
-
-=// public/js/crypto.js
+// public/js/crypto.js
 
 import {
     AES_IV_LENGTH,

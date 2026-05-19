@@ -23,7 +23,10 @@ export interface CustomRequest extends Request {
 export interface Env {
     DB: D1Database;
     VAULTS: R2Bucket;
+    RATE_LIMIT: KVNamespace;
+    ASSETS: Fetcher;
     JWT_SECRET: string;
+    TURNSTILE_KEY: string;
 }
 
 // Interfaces for database entities (optional but good practice)
@@ -31,6 +34,7 @@ export interface User {
     id: number;
     email: string;
     password_hash: string;
+    password_salt: string;
     encryption_salt: string; // client-side encryption salt
     created_at: string;
 }

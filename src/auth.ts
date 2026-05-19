@@ -1,3 +1,4 @@
+import { sign } from 'jsonwebtoken';
 import { deriveScryptHash } from './utils.js';
 import { logAudit } from './auditLog.js';
 import { CustomRequest, Env, User } from './types.js';

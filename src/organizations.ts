@@ -1,8 +1,8 @@
 // src/organizations.ts
 
-import { CustomRequest, Env, Organization, UserOrganization } from './types.js'; // Ensure correct path and .js extension
-import { logAudit } from './auditLog.js'; // Ensure correct path and .js extension
-import { jsonResponse } from './utils.js'; // Ensure correct path and .js extension
+import { CustomRequest, Env, Organization, UserOrganization, User } from './types.js';
+import { logAudit } from './auditLog.js';
+import { jsonResponse } from './utils.js';
 
 export async function handleCreateOrganization(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { name, description } = await request.json() as { name: string; description?: string };
@@ -28,13 +28,13 @@ export async function handleCreateOrganization(request: CustomRequest, env: Env,
             .bind(name, description || null, user.userId)
             .run();
 
-        if (!orgInsertResult.success || orgInsertResult.results?.length === 0) {
+        if (!orgInsertResult.success) {
             throw new Error("Failed to insert organization.");
         }
 
-        const organizationId = orgInsertResult.results?.[0]?.id || orgInsertResult.meta?.last_row_id;
+        const organizationId = orgInsertResult.meta?.last_row_id;
         if (!organizationId) {
-             throw new Error("Could not retrieve new organization ID.");
+            throw new Error("Could not retrieve new organization ID.");
         }
 
         await env.DB.prepare(
@@ -71,7 +71,7 @@ export async function handleGetOrganizations(request: CustomRequest, env: Env, c
              FROM organizations o
              JOIN user_organizations uo ON o.id = uo.organization_id
              WHERE uo.user_id = ?`
-        ).bind(user.userId).all().then(res => res.results as Organization[]);
+        ).bind(user.userId).all().then(res => res.results as unknown as Organization[]);
 
         logAudit(env, ctx, user.userId, 'ORG_LIST_SUCCESS', { count: organizations.length }, ipAddress, userAgent);
         return jsonResponse(organizations);
