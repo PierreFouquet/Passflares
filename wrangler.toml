@@ -25,7 +25,7 @@ bucket_name = "secure-vaults-r2"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "RATE_LIMIT_PROD_ID"
+id = "912ffecc0a27412ba662c890c9f9d4e2"
 
 [[d1_databases]]
 binding = "DB"
@@ -47,7 +47,7 @@ bucket_name = "secure-vaults-r2"
 
 [[env.prerelease.kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "RATE_LIMIT_PREVIEW_ID"
+id = "912ffecc0a27412ba662c890c9f9d4e2"
 
 [[env.prerelease.d1_databases]]
 binding = "DB"
