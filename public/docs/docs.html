@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Our System Documentation</title>
+    <title>Passflares Documentation</title>
     <link rel="stylesheet" href="css/docs.css">
-	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>ðŸ”‘</text></svg>">
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" defer></script></head>
-    <script src="../js/turnstyle.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+</head>
 <body>
     <header>
-        <h1>Welcome to Our System Documentation!</h1>
+        <h1>Passflares</h1>
         <nav>
             <ul>
-                <li><a href="../index.html">Home</a></li>
+                <li><a href="../index.html">App</a></li>
                 <li><a href="user-guide.html">User Guide</a></li>
                 <li><a href="admin-guide.html">Admin Guide</a></li>
             </ul>
@@ -22,29 +21,48 @@
 
     <main>
         <section class="welcome-section">
-            <h2>Find the Information You Need</h2>
-            <p>Welcome to the comprehensive documentation for our system. Whether you're a new user looking to get started or an administrator seeking in-depth configuration details, you'll find everything you need here.</p>
-            <p><div id="pf-turnstyle"></div></p>
-            <p>Please select one of the guides below to proceed:</p>
+            <h2>Documentation</h2>
+            <p>Passflares is a secure, client-side encrypted password manager built on the Cloudflare stack. Your master password never leaves your device — all encryption and decryption happens in your browser.</p>
         </section>
 
         <section class="guide-links">
             <div class="card">
                 <h3>User Guide</h3>
-                <p>This guide provides step-by-step instructions and helpful tips for everyday users. Learn how to navigate the system, perform basic operations, and manage your account.</p>
-                <a href="user-guide.html" class="button">Go to User Guide</a>
+                <p>Learn how to create an account, manage vaults, add password entries, share with organisations, and keep your data safe.</p>
+                <a href="user-guide.html" class="button">User Guide &rarr;</a>
             </div>
-
             <div class="card">
                 <h3>Admin Guide</h3>
-                <p>Designed for system administrators, this guide covers advanced topics such as system setup, user management, data backup, and troubleshooting common issues.</p>
-                <a href="admin-guide.html" class="button">Go to Admin Guide</a>
+                <p>Covers organisation management, adding members, vault sharing, security best practices, and account administration.</p>
+                <a href="admin-guide.html" class="button">Admin Guide &rarr;</a>
             </div>
+        </section>
+
+        <section>
+            <h2>How Passflares Keeps You Safe</h2>
+            <ul>
+                <li><strong>Client-side encryption</strong> — Your vault data is encrypted with AES-256-GCM using a key derived from your master password before it ever leaves your browser.</li>
+                <li><strong>Zero-knowledge server</strong> — The server stores only encrypted blobs. It cannot read your passwords.</li>
+                <li><strong>Scrypt password hashing</strong> — Your master password is hashed with Scrypt on the server for authentication, keeping the derivation key separate from the auth credential.</li>
+                <li><strong>Short-lived sessions</strong> — You are automatically logged out after 5 minutes of inactivity.</li>
+                <li><strong>Audit logging</strong> — Every login, vault access, and account change is logged for your security.</li>
+                <li><strong>Rate limiting</strong> — Failed login attempts are rate-limited to prevent brute-force attacks.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>Quick Start</h2>
+            <ol>
+                <li><a href="../index.html">Create an account</a> with a strong master password.</li>
+                <li>Create your first vault from the dashboard.</li>
+                <li>Add password entries to the vault.</li>
+                <li>Click <strong>Save Vault Data</strong> after making changes.</li>
+            </ol>
         </section>
     </main>
 
     <footer>
-        <p>&copy; 2025 Passflares. All rights reserved.</p>
+        <p>&copy; 2026 Passflares. All rights reserved.</p>
     </footer>
 </body>
 </html>
