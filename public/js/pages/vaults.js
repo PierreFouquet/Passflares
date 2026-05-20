@@ -25,10 +25,6 @@ export async function renderVaultsPage({ mount }) {
     newBtn.addEventListener('click', toggleCreator);
 
     await loadVaultsAndRender(mount);
-
-    if (location.hash.includes('?generator=1')) {
-        snack.info('Generator is available inside any vault\'s entry composer.');
-    }
 }
 
 export async function loadVaultsAndRender(root) {
