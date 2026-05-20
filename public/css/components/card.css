@@ -1,0 +1,78 @@
+/* Card surfaces: elevated, tonal, outlined. */
+
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+    box-shadow: var(--elev-1);
+    transition: box-shadow var(--motion-fast) var(--ease-standard),
+                transform var(--motion-fast) var(--ease-standard);
+}
+
+.card--tonal {
+    background: var(--color-surface-2);
+    box-shadow: none;
+}
+
+.card--outlined {
+    background: transparent;
+    box-shadow: none;
+}
+
+.card--interactive {
+    cursor: pointer;
+}
+.card--interactive:hover {
+    box-shadow: var(--elev-2);
+    transform: translateY(-1px);
+}
+
+.card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.card__title {
+    font-size: var(--text-headline);
+    font-weight: var(--weight-semibold);
+}
+
+.card__description {
+    font-size: var(--text-body);
+    color: var(--color-text-muted);
+}
+
+/* Tile — a card-like surface used on the dashboard */
+.tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-5);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    min-height: 140px;
+}
+.tile__icon {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary-container);
+    color: var(--color-primary-on-container);
+    border-radius: var(--radius-md);
+}
+.tile__label { font-size: var(--text-label); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.tile__value { font-size: var(--text-display); font-weight: var(--weight-bold); }
+.tile__sub   { font-size: var(--text-caption); color: var(--color-text-muted); }
+
+.tile-grid {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}

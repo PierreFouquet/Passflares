@@ -1,0 +1,120 @@
+/* Reset + base typography + font loading + utility classes. */
+
+@font-face {
+    font-family: 'Inter';
+    src: url('../fonts/inter/InterVariable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Material Symbols Rounded';
+    src: url('../fonts/material-symbols/MaterialSymbolsRounded.woff2') format('woff2-variations');
+    font-weight: 100 700;
+    font-style: normal;
+    font-display: block;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: var(--line-normal);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+html {
+    height: 100%;
+    /* Force vertical scrollbar to stay so layout doesn't shift between pages */
+    overflow-y: scroll;
+}
+
+body { min-height: 100%; }
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+    font-weight: var(--weight-semibold);
+    line-height: var(--line-snug);
+    letter-spacing: -0.01em;
+}
+
+h1 { font-size: var(--text-display); }
+h2 { font-size: var(--text-title); }
+h3 { font-size: var(--text-headline); }
+h4 { font-size: var(--text-body); font-weight: var(--weight-semibold); }
+
+p { margin: 0; }
+a { color: var(--color-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+::selection { background: var(--color-primary-container); color: var(--color-primary-on-container); }
+
+:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus-ring);
+    border-radius: inherit;
+}
+
+.hidden { display: none !important; }
+
+/* Material Symbols utility class */
+.icon {
+    font-family: var(--font-icon);
+    font-weight: normal;
+    font-style: normal;
+    font-size: 22px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.icon--filled { font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
+.icon--sm     { font-size: 18px; }
+.icon--lg     { font-size: 28px; }
+
+/* Visually-hidden helper for screen-reader-only labels */
+.sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+/* Density-aware utility classes */
+.text-muted  { color: var(--color-text-muted); }
+.text-faint  { color: var(--color-text-faint); }
+.text-caption { font-size: var(--text-caption); color: var(--color-text-muted); }
+.text-label   { font-size: var(--text-label); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: var(--weight-semibold); }
+.text-mono    { font-family: var(--font-mono); }
+
+/* Layout utilities */
+.stack > * + * { margin-top: var(--space-3); }
+.stack-sm > * + * { margin-top: var(--space-2); }
+.stack-lg > * + * { margin-top: var(--space-5); }
+.row { display: flex; gap: var(--space-3); align-items: center; }
+.row-between { display: flex; gap: var(--space-3); align-items: center; justify-content: space-between; }
+.row-end { display: flex; gap: var(--space-2); align-items: center; justify-content: flex-end; }
+.row-wrap { flex-wrap: wrap; }
+.spacer { flex: 1 1 auto; }

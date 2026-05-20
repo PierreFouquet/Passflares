@@ -2,3 +2,23 @@
 .dev.vars.local
 node_modules
 .wrangler
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Build / temp
+dist/
+.cache/

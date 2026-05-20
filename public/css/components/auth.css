@@ -1,0 +1,109 @@
+/* Centered authentication screen — gradient/mesh background, single card. */
+
+.auth-screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+    background:
+        radial-gradient(ellipse 80% 55% at 18% 12%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 60%),
+        radial-gradient(ellipse 60% 50% at 88% 92%, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 110%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 60%),
+        var(--color-bg);
+}
+
+.auth-screen__brand {
+    color: var(--color-primary);
+    height: 44px;
+    margin-bottom: var(--space-6);
+}
+.auth-screen__brand svg { height: 100%; width: auto; }
+
+.auth-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elev-3);
+    padding: var(--space-7);
+    width: 100%;
+    max-width: 420px;
+}
+
+.auth-card h2 {
+    text-align: center;
+    margin-bottom: var(--space-2);
+}
+
+.auth-card__subtitle {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: var(--text-body);
+    margin-bottom: var(--space-6);
+}
+
+.auth-tabs {
+    display: flex;
+    background: var(--color-surface-2);
+    border-radius: var(--radius-button);
+    padding: 4px;
+    margin-bottom: var(--space-5);
+    gap: 2px;
+}
+
+.auth-tabs button {
+    flex: 1;
+    padding: var(--space-2) var(--space-3);
+    background: transparent;
+    color: var(--color-text-muted);
+    border: none;
+    border-radius: calc(var(--radius-button) - 2px);
+    font: inherit;
+    font-size: var(--text-body);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition: background var(--motion-fast) var(--ease-standard),
+                color var(--motion-fast) var(--ease-standard);
+}
+.auth-tabs button.is-active {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    box-shadow: var(--elev-1);
+}
+
+.auth-form { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.auth-footer {
+    margin-top: var(--space-6);
+    font-size: var(--text-caption);
+    color: var(--color-text-muted);
+    text-align: center;
+}
+
+/* Password strength meter */
+.password-meter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-caption);
+}
+.password-meter__bar {
+    flex: 1;
+    height: 4px;
+    background: var(--color-surface-3);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+}
+.password-meter__fill {
+    height: 100%;
+    width: 0%;
+    background: var(--color-text-muted);
+    transition: width var(--motion-normal) var(--ease-standard),
+                background var(--motion-fast) var(--ease-standard);
+}
+.password-meter[data-score='0'] .password-meter__fill { width: 10%;  background: var(--color-danger); }
+.password-meter[data-score='1'] .password-meter__fill { width: 30%;  background: var(--color-danger); }
+.password-meter[data-score='2'] .password-meter__fill { width: 55%;  background: var(--color-warning); }
+.password-meter[data-score='3'] .password-meter__fill { width: 80%;  background: var(--color-success); }
+.password-meter[data-score='4'] .password-meter__fill { width: 100%; background: var(--color-success); }

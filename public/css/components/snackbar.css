@@ -1,0 +1,57 @@
+/* Snackbar / toast notifications — replaces the old .message elements. */
+
+.snackbar-host {
+    position: fixed;
+    top: calc(var(--app-bar-height) + var(--space-3));
+    right: var(--space-4);
+    z-index: var(--z-snackbar);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    max-width: min(420px, calc(100vw - 2 * var(--space-4)));
+    pointer-events: none;
+}
+
+.snackbar {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    box-shadow: var(--elev-3);
+    color: var(--color-text);
+    pointer-events: auto;
+    transform: translateY(-12px);
+    opacity: 0;
+    animation: snackbar-slide-in var(--motion-normal) var(--ease-decelerate) forwards;
+}
+
+.snackbar.is-closing {
+    animation: snackbar-slide-out var(--motion-fast) var(--ease-standard) forwards;
+}
+
+.snackbar__icon { color: var(--color-primary); flex-shrink: 0; }
+.snackbar__body { flex: 1 1 auto; font-size: var(--text-body); line-height: var(--line-snug); }
+.snackbar__close { color: var(--color-text-muted); }
+
+.snackbar--success { border-left-color: var(--color-success); }
+.snackbar--success .snackbar__icon { color: var(--color-success); }
+
+.snackbar--error { border-left-color: var(--color-danger); }
+.snackbar--error .snackbar__icon { color: var(--color-danger); }
+
+.snackbar--warning { border-left-color: var(--color-warning); }
+.snackbar--warning .snackbar__icon { color: var(--color-warning); }
+
+.snackbar--info { border-left-color: var(--color-info); }
+.snackbar--info .snackbar__icon { color: var(--color-info); }
+
+@keyframes snackbar-slide-in  { to   { transform: none; opacity: 1; } }
+@keyframes snackbar-slide-out { from { transform: none; opacity: 1; } to { transform: translateY(-8px); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .snackbar { animation-duration: 0ms; transform: none; opacity: 1; }
+}

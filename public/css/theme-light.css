@@ -1,0 +1,45 @@
+/* Light theme override. Applied when [data-theme="light"]
+   or [data-theme="system"] with prefers-color-scheme: light. */
+
+[data-theme='light'] {
+    --color-bg:             #f6f7fa;
+    --color-bg-2:           #eef0f4;
+    --color-surface:        #ffffff;
+    --color-surface-2:      #f3f5f8;
+    --color-surface-3:      #e7ebf1;
+    --color-surface-tint:   rgba(0, 0, 0, 0.02);
+    --color-text:           #0f1419;
+    --color-text-muted:     #4a5563;
+    --color-text-faint:     #7d8794;
+    --color-border:         rgba(15, 20, 25, 0.10);
+    --color-border-strong:  rgba(15, 20, 25, 0.20);
+    --color-scrim:          rgba(15, 20, 25, 0.40);
+
+    /* Softer shadows in light mode */
+    --elev-1: 0 1px 2px rgba(15, 20, 25, 0.06), 0 1px 3px rgba(15, 20, 25, 0.05);
+    --elev-2: 0 2px 4px rgba(15, 20, 25, 0.08), 0 4px 10px rgba(15, 20, 25, 0.06);
+    --elev-3: 0 4px 8px rgba(15, 20, 25, 0.10), 0 8px 20px rgba(15, 20, 25, 0.08);
+    --elev-4: 0 8px 16px rgba(15, 20, 25, 0.14), 0 16px 36px rgba(15, 20, 25, 0.10);
+}
+
+@media (prefers-color-scheme: light) {
+    [data-theme='system'] {
+        --color-bg:             #f6f7fa;
+        --color-bg-2:           #eef0f4;
+        --color-surface:        #ffffff;
+        --color-surface-2:      #f3f5f8;
+        --color-surface-3:      #e7ebf1;
+        --color-surface-tint:   rgba(0, 0, 0, 0.02);
+        --color-text:           #0f1419;
+        --color-text-muted:     #4a5563;
+        --color-text-faint:     #7d8794;
+        --color-border:         rgba(15, 20, 25, 0.10);
+        --color-border-strong:  rgba(15, 20, 25, 0.20);
+        --color-scrim:          rgba(15, 20, 25, 0.40);
+
+        --elev-1: 0 1px 2px rgba(15, 20, 25, 0.06), 0 1px 3px rgba(15, 20, 25, 0.05);
+        --elev-2: 0 2px 4px rgba(15, 20, 25, 0.08), 0 4px 10px rgba(15, 20, 25, 0.06);
+        --elev-3: 0 4px 8px rgba(15, 20, 25, 0.10), 0 8px 20px rgba(15, 20, 25, 0.08);
+        --elev-4: 0 8px 16px rgba(15, 20, 25, 0.14), 0 16px 36px rgba(15, 20, 25, 0.10);
+    }
+}

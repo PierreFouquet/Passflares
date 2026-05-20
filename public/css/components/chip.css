@@ -1,0 +1,56 @@
+/* Chip / badge / pill — used for vault type, permission level, role. */
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 4px 10px;
+    background: var(--color-surface-2);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-chip);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.chip .icon { font-size: 14px; }
+
+.chip--primary {
+    background: var(--color-primary-container);
+    color: var(--color-primary-on-container);
+    border-color: transparent;
+}
+
+.chip--neutral { /* default */ }
+
+.chip--success {
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
+    color: var(--color-success);
+    border-color: transparent;
+}
+
+.chip--warning {
+    background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+    color: var(--color-warning);
+    border-color: transparent;
+}
+
+.chip--danger {
+    background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+    color: var(--color-danger);
+    border-color: transparent;
+}
+
+.chip--info {
+    background: color-mix(in srgb, var(--color-info) 18%, transparent);
+    color: var(--color-info);
+    border-color: transparent;
+}
+
+.chip--purple {
+    background: color-mix(in srgb, #7b5cff 18%, transparent);
+    color: #b9a8ff;
+    border-color: transparent;
+}

@@ -25,6 +25,7 @@ import {
     handleRemoveMember,
     handleDeleteOrganization
 } from './organizations.js';
+import { handleGetPreferences, handleUpdatePreferences } from './preferences.js';
 import { CustomRequest, Env } from './types.js';
 import { jsonResponse } from './utils.js';
 
@@ -38,7 +39,7 @@ const SECURITY_HEADERS = {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com"
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com; manifest-src 'self'"
 };
 
 const ALLOWED_ORIGINS = [
@@ -99,6 +100,10 @@ router.post('/api/login', handleLogin);
 router.get('/api/users/:userId/encryption-salt', withAuth, handleGetUserEncryptionSalt);
 router.put('/api/users/:userId/update-password', withAuth, handleUpdateMasterPassword);
 router.delete('/api/users/:userId', withAuth, handleDeleteAccount);
+
+// --- User preferences (synced UI prefs) ---
+router.get('/api/users/me/preferences', withAuth, handleGetPreferences);
+router.put('/api/users/me/preferences', withAuth, handleUpdatePreferences);
 
 // --- Vault routes ---
 router.post('/api/vaults', withAuth, handleCreateVault);

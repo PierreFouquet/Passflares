@@ -1,7 +1,6 @@
 // public/js/session.js
 
 import { JWT_TOKEN_KEY, USER_INFO_KEY, SESSION_TIMEOUT_MINUTES } from './constants.js';
-import { showMessage, hideElement, showElement } from './ui.js';
 
 let sessionTimeoutTimer = null;
 let inactivityTimer = null;
