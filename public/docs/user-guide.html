@@ -1,31 +1,86 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system" data-density="comfortable" data-shape="rounded" data-accent="emerald">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Getting Started — Passflares</title>
+    <meta name="theme-color" content="#00a86b">
+    <title>Getting started — Passflares</title>
+
+    <link rel="icon" type="image/svg+xml" href="../img/mark.svg">
+
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-light.css">
+    <link rel="stylesheet" href="../css/density.css">
+    <link rel="stylesheet" href="../css/shape.css">
+    <link rel="stylesheet" href="../css/accent.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components/button.css">
     <link rel="stylesheet" href="css/docs.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+
+    <script>
+        (function () {
+            try {
+                const raw = localStorage.getItem('passflares.prefs');
+                if (!raw) return;
+                const p = JSON.parse(raw);
+                const html = document.documentElement;
+                if (p.theme)   html.dataset.theme   = p.theme;
+                if (p.density) html.dataset.density = p.density;
+                if (p.shape)   html.dataset.shape   = p.shape;
+                if (p.accent)  html.dataset.accent  = p.accent;
+            } catch {}
+        })();
+    </script>
 </head>
 <body>
-    <header>
-        <h1>Getting Started</h1>
-        <nav>
-            <ul>
-                <li><a href="../index.html">App</a></li>
-                <li><a href="docs.html">Docs Home</a></li>
-                <li><a href="vaults-guide.html">Vaults</a></li>
-                <li><a href="organisations-guide.html">Organisations</a></li>
-                <li><a href="admin-guide.html">Admin</a></li>
-            </ul>
+<div class="docs-shell">
+
+    <header class="docs-bar">
+        <a class="docs-bar__brand" href="../index.html" aria-label="Passflares home">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <defs>
+                    <linearGradient id="pf-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="currentColor" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="currentColor" stop-opacity="0.78"/>
+                    </linearGradient>
+                </defs>
+                <path d="M32 4 L56 14 V32 C56 46 44 56.4 32 60 C20 56.4 8 46 8 32 V14 Z" fill="url(#pf-grad)"/>
+                <circle cx="32" cy="28" r="6.5" fill="#fff"/>
+                <rect x="29.25" y="32" width="5.5" height="11" rx="2.4" fill="#fff"/>
+            </svg>
+            <span class="docs-bar__brand-text">Passflares<span class="docs-bar__brand-kicker">Docs</span></span>
+        </a>
+
+        <nav class="docs-bar__nav" aria-label="Documentation sections">
+            <a href="docs.html"><span class="icon">menu_book</span>Overview</a>
+            <a href="user-guide.html"><span class="icon">rocket_launch</span>Getting started</a>
+            <a href="vaults-guide.html"><span class="icon">lock</span>Vaults</a>
+            <a href="organisations-guide.html"><span class="icon">groups</span>Organisations</a>
+            <a href="admin-guide.html"><span class="icon">shield</span>Admin</a>
         </nav>
+
+        <div class="docs-bar__actions">
+            <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle theme">
+                <span class="icon" id="theme-toggle-icon">dark_mode</span>
+            </button>
+            <a href="../index.html" class="btn btn--tonal btn--sm">
+                <span class="icon">open_in_new</span>Open app
+            </a>
+        </div>
     </header>
 
-    <main>
+    <main class="docs-main">
 
-        <section>
-            <h2>1. Creating Your Account</h2>
-            <p>Click the <strong>Register</strong> tab and fill in your email and a master password.</p>
+        <div class="docs-hero">
+            <span class="docs-hero__eyebrow"><span class="icon">rocket_launch</span>User guide</span>
+            <h1>Getting started</h1>
+            <p>Create your account, sign in, manage your session and master password, and keep your account safe.</p>
+        </div>
+
+        <section class="docs-section">
+            <h2>1. Creating your account</h2>
+            <p>Click the <strong>Create account</strong> tab and fill in your email and a master password.</p>
 
             <h3>What makes a strong master password?</h3>
             <ul>
@@ -33,76 +88,78 @@
                 <li>A mix of uppercase and lowercase letters, numbers, and symbols</li>
                 <li>Nothing from a dictionary or easily guessable</li>
             </ul>
-            <p>The strength indicator must reach at least <em>Moderate</em> before you can register. Use the <strong>Generate Password</strong> button on any entry form for inspiration.</p>
+            <p>The strength indicator must reach at least <em>Moderate</em> before you can register. Use the <strong>Generate password</strong> button on any entry form for inspiration.</p>
             <div class="callout warning">
-                <strong>Important:</strong> Your master password cannot be reset. If you forget it, your encrypted data is permanently inaccessible. Store it somewhere safe.
+                <span><strong>Important.</strong> Your master password cannot be reset. If you forget it, your encrypted data is permanently inaccessible. Store it somewhere safe.</span>
             </div>
         </section>
 
-        <section>
-            <h2>2. Logging In</h2>
+        <section class="docs-section">
+            <h2>2. Signing in</h2>
             <ol>
-                <li>Enter your email and master password on the <strong>Login</strong> tab.</li>
-                <li>Click <strong>Login</strong>.</li>
+                <li>Enter your email and master password on the <strong>Sign in</strong> tab.</li>
+                <li>Click <strong>Sign in</strong>.</li>
                 <li>Your encryption key is derived locally — your master password never leaves your device.</li>
             </ol>
             <div class="callout info">
-                <strong>Session timeout:</strong> You are logged out automatically after <strong>5 minutes of inactivity</strong>. Any mouse movement, keystroke, click, or scroll resets the timer.
+                <span><strong>Session timeout.</strong> You are logged out automatically after <strong>5 minutes of inactivity</strong>. Any mouse movement, keystroke, click, or scroll resets the timer.</span>
             </div>
             <div class="callout warning">
-                <strong>Too many failed attempts?</strong> After 5 failed logins from the same IP address you will be locked out for 15 minutes.
+                <span><strong>Too many failed attempts?</strong> After 5 failed logins from the same IP address you will be locked out for 15 minutes.</span>
             </div>
         </section>
 
-        <section>
-            <h2>3. Navigating the App</h2>
-            <p>Once logged in you will see two tabs:</p>
+        <section class="docs-section">
+            <h2>3. Navigating the app</h2>
+            <p>Once signed in you will see four sections in the navigation rail:</p>
             <ul>
-                <li><strong>My Vaults</strong> — your personal and shared password vaults. See the <a href="vaults-guide.html">Vaults Guide</a>.</li>
-                <li><strong>Organisations</strong> — create and manage teams with shared vault access. See the <a href="organisations-guide.html">Organisations Guide</a>.</li>
+                <li><strong>Home</strong> — security overview and recent vaults.</li>
+                <li><strong>Vaults</strong> — your personal and shared password vaults. See the <a href="vaults-guide.html">Vaults guide</a>.</li>
+                <li><strong>Organisations</strong> — create and manage teams with shared vault access. See the <a href="organisations-guide.html">Organisations guide</a>.</li>
+                <li><strong>Settings</strong> — appearance preferences (theme, density, shape, accent) and account actions.</li>
             </ul>
-            <p>Account-level actions (Change Master Password, Export, Delete Account) appear in the action bar above the tabs.</p>
+            <p>Account-level actions (change master password, export, delete account) live in the user menu in the top right of the app bar.</p>
         </section>
 
-        <section>
-            <h2>4. Changing Your Master Password</h2>
+        <section class="docs-section">
+            <h2>4. Changing your master password</h2>
             <p>Changing your master password re-encrypts <em>all</em> your vaults with the new key. This may take a moment if you have many entries.</p>
             <ol>
-                <li>Click <strong>Change Master Password</strong> in the action bar.</li>
+                <li>Open the user menu and click <strong>Change master password</strong>.</li>
                 <li>Enter your current master password, then your new master password (twice).</li>
-                <li>Click <strong>Change Password</strong> and wait — do <strong>not</strong> close the window during this process.</li>
+                <li>Click <strong>Change password</strong> and wait — do <strong>not</strong> close the window during this process.</li>
             </ol>
             <div class="callout info">
-                All vaults are downloaded, decrypted with your old key, re-encrypted with the new key, and re-uploaded. Your session updates automatically.
+                <span>All vaults are downloaded, decrypted with your old key, re-encrypted with the new key, and re-uploaded. Your session updates automatically.</span>
             </div>
         </section>
 
-        <section>
-            <h2>5. Exporting Your Data</h2>
-            <p>Click <strong>Export All Vault Data</strong> to download a JSON file containing all your vaults in their <em>encrypted</em> form. The file is useless without your master password — store both safely. This is useful as an offline backup.</p>
+        <section class="docs-section">
+            <h2>5. Exporting your data</h2>
+            <p>Click <strong>Export vault data</strong> in the user menu to download a JSON file containing all your vaults in their <em>encrypted</em> form. The file is useless without your master password — store both safely. This is useful as an offline backup.</p>
         </section>
 
-        <section>
-            <h2>6. Deleting Your Account</h2>
+        <section class="docs-section">
+            <h2>6. Deleting your account</h2>
             <div class="callout warning">
-                <strong>This is permanent and cannot be undone.</strong>
+                <span><strong>This is permanent and cannot be undone.</strong></span>
             </div>
             <ol>
-                <li>Click <strong>Delete Account</strong> in the action bar.</li>
+                <li>Open the user menu and click <strong>Delete account</strong>.</li>
                 <li>Enter your master password to confirm.</li>
-                <li>Click <strong>Permanently Delete My Account</strong>.</li>
+                <li>Click <strong>Permanently delete my account</strong>.</li>
             </ol>
             <p>This removes: all personal vaults and their R2 data, your user record, and your organisation memberships. Organisation-owned vaults are not deleted. If you are the sole Owner of an organisation, assign another Owner before deleting your account.</p>
         </section>
 
-        <section>
-            <h2>7. Frequently Asked Questions</h2>
+        <section class="docs-section">
+            <h2>7. Frequently asked questions</h2>
 
             <h3>What if I forget my master password?</h3>
             <p>Your data cannot be recovered. There is no reset mechanism — this is deliberate, as the server never knows your master password.</p>
 
             <h3>Is my data backed up?</h3>
-            <p>Vault data is stored in Cloudflare R2. Use <strong>Export All Vault Data</strong> regularly to keep your own offline backup.</p>
+            <p>Vault data is stored in Cloudflare R2. Use <strong>Export vault data</strong> regularly to keep your own offline backup.</p>
 
             <h3>Can I use Passflares on my phone?</h3>
             <p>Yes — Passflares works in any modern mobile browser.</p>
@@ -116,8 +173,11 @@
 
     </main>
 
-    <footer>
-        <p>&copy; 2026 Passflares. All rights reserved.</p>
+    <footer class="docs-footer">
+        <p>&copy; 2026 Passflares. <a href="../index.html">Back to the app</a>.</p>
     </footer>
+</div>
+
+<script src="js/docs.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 {
   "name": "passflares",
-  "version": "2.0.0-beta",
+  "version": "2.0.1-beta",
   "description": "A modern and secure password manager built on the Cloudflare Stack.",
   "main": "src/worker.ts",
   "scripts": {

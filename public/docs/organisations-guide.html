@@ -1,35 +1,90 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system" data-density="comfortable" data-shape="rounded" data-accent="emerald">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organisations Guide — Passflares</title>
+    <meta name="theme-color" content="#00a86b">
+    <title>Organisations guide — Passflares</title>
+
+    <link rel="icon" type="image/svg+xml" href="../img/mark.svg">
+
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-light.css">
+    <link rel="stylesheet" href="../css/density.css">
+    <link rel="stylesheet" href="../css/shape.css">
+    <link rel="stylesheet" href="../css/accent.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components/button.css">
     <link rel="stylesheet" href="css/docs.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+
+    <script>
+        (function () {
+            try {
+                const raw = localStorage.getItem('passflares.prefs');
+                if (!raw) return;
+                const p = JSON.parse(raw);
+                const html = document.documentElement;
+                if (p.theme)   html.dataset.theme   = p.theme;
+                if (p.density) html.dataset.density = p.density;
+                if (p.shape)   html.dataset.shape   = p.shape;
+                if (p.accent)  html.dataset.accent  = p.accent;
+            } catch {}
+        })();
+    </script>
 </head>
 <body>
-    <header>
-        <h1>Organisations Guide</h1>
-        <nav>
-            <ul>
-                <li><a href="../index.html">App</a></li>
-                <li><a href="docs.html">Docs Home</a></li>
-                <li><a href="user-guide.html">Getting Started</a></li>
-                <li><a href="vaults-guide.html">Vaults</a></li>
-                <li><a href="admin-guide.html">Admin</a></li>
-            </ul>
+<div class="docs-shell">
+
+    <header class="docs-bar">
+        <a class="docs-bar__brand" href="../index.html" aria-label="Passflares home">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <defs>
+                    <linearGradient id="pf-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="currentColor" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="currentColor" stop-opacity="0.78"/>
+                    </linearGradient>
+                </defs>
+                <path d="M32 4 L56 14 V32 C56 46 44 56.4 32 60 C20 56.4 8 46 8 32 V14 Z" fill="url(#pf-grad)"/>
+                <circle cx="32" cy="28" r="6.5" fill="#fff"/>
+                <rect x="29.25" y="32" width="5.5" height="11" rx="2.4" fill="#fff"/>
+            </svg>
+            <span class="docs-bar__brand-text">Passflares<span class="docs-bar__brand-kicker">Docs</span></span>
+        </a>
+
+        <nav class="docs-bar__nav" aria-label="Documentation sections">
+            <a href="docs.html"><span class="icon">menu_book</span>Overview</a>
+            <a href="user-guide.html"><span class="icon">rocket_launch</span>Getting started</a>
+            <a href="vaults-guide.html"><span class="icon">lock</span>Vaults</a>
+            <a href="organisations-guide.html"><span class="icon">groups</span>Organisations</a>
+            <a href="admin-guide.html"><span class="icon">shield</span>Admin</a>
         </nav>
+
+        <div class="docs-bar__actions">
+            <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle theme">
+                <span class="icon" id="theme-toggle-icon">dark_mode</span>
+            </button>
+            <a href="../index.html" class="btn btn--tonal btn--sm">
+                <span class="icon">open_in_new</span>Open app
+            </a>
+        </div>
     </header>
 
-    <main>
+    <main class="docs-main">
 
-        <section>
-            <h2>1. What Is an Organisation?</h2>
+        <div class="docs-hero">
+            <span class="docs-hero__eyebrow"><span class="icon">groups</span>Teams</span>
+            <h1>Organisations guide</h1>
+            <p>Share password vaults with your team. Manage members and roles (Member / Admin / Owner) with fine-grained control.</p>
+        </div>
+
+        <section class="docs-section">
+            <h2>1. What is an organisation?</h2>
             <p>Organisations let teams share password vaults. Any registered user can create an organisation and becomes its first <strong>Owner</strong>. Owners can invite members, assign roles, and manage the organisation's vaults.</p>
-            <p>Organisation management is on the <strong>Organisations</strong> tab in the app.</p>
+            <p>Organisation management is on the <strong>Organisations</strong> page in the app.</p>
         </section>
 
-        <section>
+        <section class="docs-section">
             <h2>2. Roles</h2>
             <p>Every member of an organisation has one of three roles:</p>
             <table>
@@ -55,25 +110,25 @@
                 </tbody>
             </table>
             <div class="callout info">
-                An organisation must always have at least one Owner. You cannot demote or remove the last Owner.
+                <span>An organisation must always have at least one Owner. You cannot demote or remove the last Owner.</span>
             </div>
         </section>
 
-        <section>
-            <h2>3. Creating an Organisation</h2>
+        <section class="docs-section">
+            <h2>3. Creating an organisation</h2>
             <ol>
-                <li>Go to the <strong>Organisations</strong> tab.</li>
-                <li>Click <strong>Create New Organisation</strong>.</li>
+                <li>Go to the <strong>Organisations</strong> page.</li>
+                <li>Click <strong>New organisation</strong>.</li>
                 <li>Enter a name and optional description.</li>
                 <li>Click <strong>Create</strong>.</li>
             </ol>
-            <p>You are automatically added as the <strong>Owner</strong> of the new organisation. The org card appears immediately on the Organisations tab.</p>
-            <p>You can also create an organisation during vault creation by selecting <em>Organisation</em> as the vault owner and choosing <em>Create New Organisation…</em> from the dropdown.</p>
+            <p>You are automatically added as the <strong>Owner</strong> of the new organisation. The org card appears immediately on the Organisations page.</p>
+            <p>You can also create an organisation during vault creation by selecting <em>Organisation</em> as the vault owner and choosing <em>Create new organisation…</em> from the dropdown.</p>
         </section>
 
-        <section>
-            <h2>4. Managing an Organisation</h2>
-            <p>Find the organisation's card on the <strong>Organisations</strong> tab and click <strong>Manage</strong> to expand the management panel. From here you can:</p>
+        <section class="docs-section">
+            <h2>4. Managing an organisation</h2>
+            <p>Find the organisation's card on the <strong>Organisations</strong> page and click <strong>Manage</strong> to open the management panel. From here you can:</p>
             <ul>
                 <li>See all members and their roles</li>
                 <li>Add new members</li>
@@ -83,21 +138,21 @@
             </ul>
         </section>
 
-        <section>
-            <h2>5. Adding Members</h2>
+        <section class="docs-section">
+            <h2>5. Adding members</h2>
             <div class="callout info">
-                The person must already have a Passflares account before they can be added.
+                <span>The person must already have a Passflares account before they can be added.</span>
             </div>
             <ol>
-                <li>Open the org management panel and click <strong>Add Member</strong>.</li>
+                <li>Open the org management panel and click <strong>Add member</strong>.</li>
                 <li>Enter the member's email address.</li>
                 <li>Select their role: <strong>Member</strong> or <strong>Admin</strong>. (Owner can only be assigned via the role-change flow.)</li>
-                <li>Click <strong>Add Member</strong>.</li>
+                <li>Click <strong>Add member</strong>.</li>
             </ol>
         </section>
 
-        <section>
-            <h2>6. Changing a Member's Role</h2>
+        <section class="docs-section">
+            <h2>6. Changing a member's role</h2>
             <p>Only <strong>Owners</strong> can change roles.</p>
             <ol>
                 <li>Open the org management panel.</li>
@@ -106,12 +161,12 @@
                 <li>Click <strong>Apply</strong>.</li>
             </ol>
             <div class="callout warning">
-                You cannot change your own role. You cannot demote the last Owner.
+                <span>You cannot change your own role. You cannot demote the last Owner.</span>
             </div>
         </section>
 
-        <section>
-            <h2>7. Removing a Member</h2>
+        <section class="docs-section">
+            <h2>7. Removing a member</h2>
             <p><strong>Admins</strong> and <strong>Owners</strong> can remove members, with the following restrictions:</p>
             <ul>
                 <li>You cannot remove yourself.</li>
@@ -126,40 +181,40 @@
             <p>The member loses access to all organisation-owned vaults immediately.</p>
         </section>
 
-        <section>
-            <h2>8. Organisation-Owned Vaults</h2>
-            <p>Vaults owned by an organisation appear in the <strong>Organisation Vaults</strong> section of the <strong>My Vaults</strong> tab for all members. The vault card shows the organisation's name in a green badge.</p>
+        <section class="docs-section">
+            <h2>8. Organisation-owned vaults</h2>
+            <p>Vaults owned by an organisation appear in the <strong>Organisation vaults</strong> section of the <strong>Vaults</strong> page for all members. The vault card shows the organisation's name in a coloured badge.</p>
             <p>To create an org-owned vault:</p>
             <ol>
-                <li>On the <strong>My Vaults</strong> tab, set <strong>Owner Type</strong> to <em>Organisation</em>.</li>
+                <li>On the <strong>Vaults</strong> page, click <strong>New vault</strong> and set <strong>Owner</strong> to <em>Organisation</em>.</li>
                 <li>Select the organisation from the dropdown.</li>
                 <li>Enter a name and optional description.</li>
-                <li>Click <strong>Create Vault</strong>.</li>
+                <li>Click <strong>Create vault</strong>.</li>
             </ol>
             <div class="callout warning">
-                You must be an <strong>Admin</strong> or <strong>Owner</strong> of the organisation to create a vault on its behalf.
+                <span>You must be an <strong>Admin</strong> or <strong>Owner</strong> of the organisation to create a vault on its behalf.</span>
             </div>
             <p>Each member's access level (read / write / manage) is set when the vault is created and applies to the whole organisation.</p>
         </section>
 
-        <section>
-            <h2>9. Deleting an Organisation</h2>
+        <section class="docs-section">
+            <h2>9. Deleting an organisation</h2>
             <div class="callout warning">
-                <strong>This is permanent and cannot be undone.</strong> Deleting an organisation removes all organisation-owned vaults and their entries from the server. Members lose access immediately.
+                <span><strong>This is permanent and cannot be undone.</strong> Deleting an organisation removes all organisation-owned vaults and their entries from the server. Members lose access immediately.</span>
             </div>
             <p>Only <strong>Owners</strong> can delete an organisation.</p>
             <ol>
                 <li>Open the org management panel.</li>
-                <li>Click <strong>Delete Organisation</strong> at the bottom of the panel.</li>
+                <li>Click <strong>Delete organisation</strong> at the bottom of the panel.</li>
                 <li>Confirm the prompt.</li>
             </ol>
             <div class="callout info">
-                Before deleting, assign another Owner or reassign important credentials from org vaults to personal vaults so they are not lost.
+                <span>Before deleting, assign another Owner or reassign important credentials from org vaults to personal vaults so they are not lost.</span>
             </div>
         </section>
 
-        <section>
-            <h2>10. Frequently Asked Questions</h2>
+        <section class="docs-section">
+            <h2>10. Frequently asked questions</h2>
 
             <h3>Can I be a member of multiple organisations?</h3>
             <p>Yes — you can belong to as many organisations as you like, each with an independent role.</p>
@@ -179,8 +234,11 @@
 
     </main>
 
-    <footer>
-        <p>&copy; 2026 Passflares. All rights reserved.</p>
+    <footer class="docs-footer">
+        <p>&copy; 2026 Passflares. <a href="../index.html">Back to the app</a>.</p>
     </footer>
+</div>
+
+<script src="js/docs.js"></script>
 </body>
 </html>

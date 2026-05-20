@@ -1,35 +1,90 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system" data-density="comfortable" data-shape="rounded" data-accent="emerald">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vaults Guide — Passflares</title>
+    <meta name="theme-color" content="#00a86b">
+    <title>Vaults guide — Passflares</title>
+
+    <link rel="icon" type="image/svg+xml" href="../img/mark.svg">
+
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-light.css">
+    <link rel="stylesheet" href="../css/density.css">
+    <link rel="stylesheet" href="../css/shape.css">
+    <link rel="stylesheet" href="../css/accent.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components/button.css">
     <link rel="stylesheet" href="css/docs.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+
+    <script>
+        (function () {
+            try {
+                const raw = localStorage.getItem('passflares.prefs');
+                if (!raw) return;
+                const p = JSON.parse(raw);
+                const html = document.documentElement;
+                if (p.theme)   html.dataset.theme   = p.theme;
+                if (p.density) html.dataset.density = p.density;
+                if (p.shape)   html.dataset.shape   = p.shape;
+                if (p.accent)  html.dataset.accent  = p.accent;
+            } catch {}
+        })();
+    </script>
 </head>
 <body>
-    <header>
-        <h1>Vaults Guide</h1>
-        <nav>
-            <ul>
-                <li><a href="../index.html">App</a></li>
-                <li><a href="docs.html">Docs Home</a></li>
-                <li><a href="user-guide.html">Getting Started</a></li>
-                <li><a href="organisations-guide.html">Organisations</a></li>
-                <li><a href="admin-guide.html">Admin</a></li>
-            </ul>
+<div class="docs-shell">
+
+    <header class="docs-bar">
+        <a class="docs-bar__brand" href="../index.html" aria-label="Passflares home">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <defs>
+                    <linearGradient id="pf-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="currentColor" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="currentColor" stop-opacity="0.78"/>
+                    </linearGradient>
+                </defs>
+                <path d="M32 4 L56 14 V32 C56 46 44 56.4 32 60 C20 56.4 8 46 8 32 V14 Z" fill="url(#pf-grad)"/>
+                <circle cx="32" cy="28" r="6.5" fill="#fff"/>
+                <rect x="29.25" y="32" width="5.5" height="11" rx="2.4" fill="#fff"/>
+            </svg>
+            <span class="docs-bar__brand-text">Passflares<span class="docs-bar__brand-kicker">Docs</span></span>
+        </a>
+
+        <nav class="docs-bar__nav" aria-label="Documentation sections">
+            <a href="docs.html"><span class="icon">menu_book</span>Overview</a>
+            <a href="user-guide.html"><span class="icon">rocket_launch</span>Getting started</a>
+            <a href="vaults-guide.html"><span class="icon">lock</span>Vaults</a>
+            <a href="organisations-guide.html"><span class="icon">groups</span>Organisations</a>
+            <a href="admin-guide.html"><span class="icon">shield</span>Admin</a>
         </nav>
+
+        <div class="docs-bar__actions">
+            <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle theme">
+                <span class="icon" id="theme-toggle-icon">dark_mode</span>
+            </button>
+            <a href="../index.html" class="btn btn--tonal btn--sm">
+                <span class="icon">open_in_new</span>Open app
+            </a>
+        </div>
     </header>
 
-    <main>
+    <main class="docs-main">
 
-        <section>
-            <h2>1. What Is a Vault?</h2>
+        <div class="docs-hero">
+            <span class="docs-hero__eyebrow"><span class="icon">lock</span>Vaults</span>
+            <h1>Vaults guide</h1>
+            <p>Create vaults, add and manage password entries, search, copy credentials, and save your data securely.</p>
+        </div>
+
+        <section class="docs-section">
+            <h2>1. What is a vault?</h2>
             <p>A vault is an encrypted container for password entries. Each vault is independently encrypted with your master password before being stored on the server. You can have multiple vaults — for example, one for personal accounts and one for work credentials.</p>
-            <p>Vaults appear in two sections on the <strong>My Vaults</strong> tab:</p>
+            <p>Vaults appear in two sections on the <strong>Vaults</strong> page:</p>
             <ul>
-                <li><strong>Personal Vaults</strong> — owned by you alone.</li>
-                <li><strong>Organisation Vaults</strong> — owned by an organisation you belong to, shared with other members. The organisation name appears in the vault's badge.</li>
+                <li><strong>Personal vaults</strong> — owned by you alone.</li>
+                <li><strong>Organisation vaults</strong> — owned by an organisation you belong to, shared with other members. The organisation name appears in the vault's badge.</li>
             </ul>
             <p>Each vault card shows a <strong>permission badge</strong> indicating your access level:</p>
             <ul>
@@ -39,99 +94,99 @@
             </ul>
         </section>
 
-        <section>
-            <h2>2. Creating a Vault</h2>
+        <section class="docs-section">
+            <h2>2. Creating a vault</h2>
             <ol>
-                <li>On the <strong>My Vaults</strong> tab, enter a vault name and optional description.</li>
+                <li>On the <strong>Vaults</strong> page, click <strong>New vault</strong> and enter a name and optional description.</li>
                 <li>Choose the owner:
                     <ul>
-                        <li><strong>Me (Personal)</strong> — only you can access it.</li>
-                        <li><strong>Organisation</strong> — shared with members of an organisation. Select the organisation from the dropdown, or create a new one. You must be an Admin or Owner of the chosen organisation.</li>
+                        <li><strong>Personal</strong> — only you can access it.</li>
+                        <li><strong>Organisation</strong> — shared with members of an organisation. Select the organisation from the dropdown. You must be an Admin or Owner of the chosen organisation.</li>
                     </ul>
                 </li>
-                <li>Click <strong>Create Vault</strong>.</li>
+                <li>Click <strong>Create vault</strong>.</li>
             </ol>
             <p>The vault is created and immediately encrypted with your master password. An empty initial payload is saved to the server.</p>
         </section>
 
-        <section>
-            <h2>3. Loading a Vault</h2>
-            <p>Click the <strong>Load</strong> button on any vault card. The encrypted data is downloaded and decrypted locally using your master password. The vault's entries are displayed in the vault detail view.</p>
+        <section class="docs-section">
+            <h2>3. Loading a vault</h2>
+            <p>Click any vault row in the list. The encrypted data is downloaded and decrypted locally using your master password. The vault's entries are displayed in the vault detail view.</p>
             <p>If the vault is new or empty, you will see a message prompting you to add entries.</p>
         </section>
 
-        <section>
-            <h2>4. Adding Password Entries</h2>
+        <section class="docs-section">
+            <h2>4. Adding password entries</h2>
             <ol>
-                <li>In the vault detail view, fill in the <strong>Add Entry</strong> form:
+                <li>In the vault detail view, fill in the <strong>Add entry</strong> form:
                     <ul>
-                        <li><strong>Name</strong> — e.g. "GitHub" or "Work Email" (required).</li>
+                        <li><strong>Name</strong> — e.g. "GitHub" or "Work email" (required).</li>
                         <li><strong>Username</strong> — the login name or email (required).</li>
                         <li><strong>Password</strong> — paste or generate one (required).</li>
                         <li><strong>URL</strong> — the website address (optional).</li>
                         <li><strong>Notes</strong> — any extra information (optional).</li>
                     </ul>
                 </li>
-                <li>Click <strong>Add Entry</strong>.</li>
-                <li><strong>Click Save Vault Data.</strong></li>
+                <li>Click <strong>Add entry</strong>.</li>
+                <li><strong>Click Save vault data.</strong></li>
             </ol>
             <div class="callout warning">
-                <strong>Always save before leaving.</strong> Entries only exist in memory until you click <strong>Save Vault Data</strong>. If you close the tab, switch vaults, or are logged out by inactivity before saving, unsaved entries are lost.
+                <span><strong>Always save before leaving.</strong> Entries only exist in memory until you click <strong>Save vault data</strong>. If you close the tab, switch vaults, or are logged out by inactivity before saving, unsaved entries are lost.</span>
             </div>
         </section>
 
-        <section>
-            <h2>5. Using the Password Generator</h2>
-            <p>Click <strong>Generate</strong> next to the password field when adding an entry. A strong 16-character password containing uppercase, lowercase, numbers, and symbols is filled in automatically. You can generate again as many times as you like before saving.</p>
+        <section class="docs-section">
+            <h2>5. Using the password generator</h2>
+            <p>Click <strong>Generate</strong> next to the password field when adding an entry, or use the <strong>Generate password</strong> shortcut on the Home page. A strong 16-character password containing uppercase, lowercase, numbers, and symbols is filled in automatically. You can generate again as many times as you like before saving.</p>
         </section>
 
-        <section>
-            <h2>6. Copying Credentials</h2>
+        <section class="docs-section">
+            <h2>6. Copying credentials</h2>
             <p>Inside a loaded vault, each entry has two copy actions:</p>
             <ul>
-                <li><strong>Copy Username</strong> — copies the username to your clipboard immediately. The button briefly reads "Copied!".</li>
-                <li><strong>Show/Copy Password</strong> — briefly reveals the password on screen and copies it to your clipboard, then re-masks it after 2 seconds.</li>
+                <li><strong>Copy username</strong> — copies the username to your clipboard immediately.</li>
+                <li><strong>Show / copy password</strong> — opens the entry drawer, reveals the password on demand, and copies it to your clipboard. The clipboard contents are cleared automatically after 60 seconds.</li>
             </ul>
         </section>
 
-        <section>
-            <h2>7. Searching Entries</h2>
-            <p>Use the <strong>Search</strong> box inside a loaded vault to filter entries by name, username, URL, or notes. The filter is case-insensitive. Click <strong>Clear Search</strong> to show all entries again.</p>
+        <section class="docs-section">
+            <h2>7. Searching entries</h2>
+            <p>Use the global search in the app bar (or press <kbd>Ctrl</kbd> + <kbd>K</kbd>) to filter vaults and entries by name, username, URL, or notes. The filter is case-insensitive.</p>
         </section>
 
-        <section>
-            <h2>8. Saving Vault Data</h2>
-            <p>Click <strong>Save Vault Data</strong> after any change (adding, editing, or deleting an entry). This encrypts the full entry list and uploads it to the server. You will see a success confirmation when the save is complete.</p>
+        <section class="docs-section">
+            <h2>8. Saving vault data</h2>
+            <p>Click <strong>Save vault data</strong> after any change (adding, editing, or deleting an entry). This encrypts the full entry list and uploads it to the server. You will see a snackbar confirmation when the save is complete.</p>
         </section>
 
-        <section>
-            <h2>9. Deleting an Entry</h2>
+        <section class="docs-section">
+            <h2>9. Deleting an entry</h2>
             <ol>
-                <li>Find the entry in the loaded vault and click <strong>Delete Entry</strong>.</li>
+                <li>Open the entry from the loaded vault and click <strong>Delete entry</strong> in the drawer footer.</li>
                 <li>Confirm the prompt.</li>
-                <li>Click <strong>Save Vault Data</strong> to make the deletion permanent.</li>
+                <li>Click <strong>Save vault data</strong> to make the deletion permanent.</li>
             </ol>
             <p>If you do not save, the entry will reappear the next time you load the vault.</p>
         </section>
 
-        <section>
-            <h2>10. Deleting a Vault</h2>
+        <section class="docs-section">
+            <h2>10. Deleting a vault</h2>
             <div class="callout warning">
-                <strong>This permanently deletes the vault and all entries inside it. It cannot be undone.</strong>
+                <span><strong>This permanently deletes the vault and all entries inside it. It cannot be undone.</strong></span>
             </div>
-            <p>You need <strong>manage</strong> permission to delete a vault. Click the <strong>Delete</strong> button on the vault card in the My Vaults list, or the <strong>Delete Current Vault</strong> button inside the vault detail view. Confirm the prompt when asked.</p>
+            <p>You need <strong>manage</strong> permission to delete a vault. Click the <strong>delete</strong> icon on the vault card in the Vaults list, or the <strong>Delete current vault</strong> button inside the vault detail view. Confirm the prompt when asked.</p>
         </section>
 
-        <section>
-            <h2>11. Switching Vaults</h2>
-            <p>Click <strong>Load Another Vault</strong> from the vault detail view to return to the vault list. Any unsaved changes are discarded — save first if needed.</p>
+        <section class="docs-section">
+            <h2>11. Switching vaults</h2>
+            <p>Click <strong>Back to vaults</strong> from the vault detail view to return to the vault list. Any unsaved changes are discarded — save first if needed.</p>
         </section>
 
-        <section>
-            <h2>12. Frequently Asked Questions</h2>
+        <section class="docs-section">
+            <h2>12. Frequently asked questions</h2>
 
             <h3>I added entries but they disappeared. What happened?</h3>
-            <p>You likely closed the tab or were logged out before clicking <strong>Save Vault Data</strong>. Entries are only persisted when you save explicitly.</p>
+            <p>You likely closed the tab or were logged out before clicking <strong>Save vault data</strong>. Entries are only persisted when you save explicitly.</p>
 
             <h3>How many vaults can I have?</h3>
             <p>There is no hard limit on the number of vaults. Each vault is a separate encrypted file in storage.</p>
@@ -145,8 +200,11 @@
 
     </main>
 
-    <footer>
-        <p>&copy; 2026 Passflares. All rights reserved.</p>
+    <footer class="docs-footer">
+        <p>&copy; 2026 Passflares. <a href="../index.html">Back to the app</a>.</p>
     </footer>
+</div>
+
+<script src="js/docs.js"></script>
 </body>
 </html>

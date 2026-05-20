@@ -1,29 +1,84 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system" data-density="comfortable" data-shape="rounded" data-accent="emerald">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Guide — Passflares</title>
+    <meta name="theme-color" content="#00a86b">
+    <title>Admin guide — Passflares</title>
+
+    <link rel="icon" type="image/svg+xml" href="../img/mark.svg">
+
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-light.css">
+    <link rel="stylesheet" href="../css/density.css">
+    <link rel="stylesheet" href="../css/shape.css">
+    <link rel="stylesheet" href="../css/accent.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components/button.css">
     <link rel="stylesheet" href="css/docs.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+
+    <script>
+        (function () {
+            try {
+                const raw = localStorage.getItem('passflares.prefs');
+                if (!raw) return;
+                const p = JSON.parse(raw);
+                const html = document.documentElement;
+                if (p.theme)   html.dataset.theme   = p.theme;
+                if (p.density) html.dataset.density = p.density;
+                if (p.shape)   html.dataset.shape   = p.shape;
+                if (p.accent)  html.dataset.accent  = p.accent;
+            } catch {}
+        })();
+    </script>
 </head>
 <body>
-    <header>
-        <h1>Admin Guide</h1>
-        <nav>
-            <ul>
-                <li><a href="../index.html">App</a></li>
-                <li><a href="docs.html">Docs Home</a></li>
-                <li><a href="user-guide.html">Getting Started</a></li>
-                <li><a href="vaults-guide.html">Vaults</a></li>
-                <li><a href="organisations-guide.html">Organisations</a></li>
-            </ul>
+<div class="docs-shell">
+
+    <header class="docs-bar">
+        <a class="docs-bar__brand" href="../index.html" aria-label="Passflares home">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <defs>
+                    <linearGradient id="pf-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="currentColor" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="currentColor" stop-opacity="0.78"/>
+                    </linearGradient>
+                </defs>
+                <path d="M32 4 L56 14 V32 C56 46 44 56.4 32 60 C20 56.4 8 46 8 32 V14 Z" fill="url(#pf-grad)"/>
+                <circle cx="32" cy="28" r="6.5" fill="#fff"/>
+                <rect x="29.25" y="32" width="5.5" height="11" rx="2.4" fill="#fff"/>
+            </svg>
+            <span class="docs-bar__brand-text">Passflares<span class="docs-bar__brand-kicker">Docs</span></span>
+        </a>
+
+        <nav class="docs-bar__nav" aria-label="Documentation sections">
+            <a href="docs.html"><span class="icon">menu_book</span>Overview</a>
+            <a href="user-guide.html"><span class="icon">rocket_launch</span>Getting started</a>
+            <a href="vaults-guide.html"><span class="icon">lock</span>Vaults</a>
+            <a href="organisations-guide.html"><span class="icon">groups</span>Organisations</a>
+            <a href="admin-guide.html"><span class="icon">shield</span>Admin</a>
         </nav>
+
+        <div class="docs-bar__actions">
+            <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle theme">
+                <span class="icon" id="theme-toggle-icon">dark_mode</span>
+            </button>
+            <a href="../index.html" class="btn btn--tonal btn--sm">
+                <span class="icon">open_in_new</span>Open app
+            </a>
+        </div>
     </header>
 
-    <main>
+    <main class="docs-main">
 
-        <section>
+        <div class="docs-hero">
+            <span class="docs-hero__eyebrow"><span class="icon">shield</span>Admin reference</span>
+            <h1>Admin guide</h1>
+            <p>Infrastructure, secrets setup, database migrations, audit logs, deployment, and security best practices.</p>
+        </div>
+
+        <section class="docs-section">
             <h2>1. Infrastructure</h2>
             <p>Passflares runs entirely on the Cloudflare stack:</p>
             <table>
@@ -41,7 +96,7 @@
             </table>
         </section>
 
-        <section>
+        <section class="docs-section">
             <h2>2. Secrets</h2>
             <p>Two secrets must be set in Cloudflare Workers. Never commit these to the repository.</p>
             <pre><code># Set via Wrangler CLI (prompts for value securely)
@@ -54,8 +109,8 @@ wrangler secret put TURNSTILE_KEY</code></pre>
             <p>For local development, copy <code>.dev.vars.example</code> to <code>.dev.vars</code> and fill in local values. <code>.dev.vars</code> is gitignored and read automatically by <code>wrangler dev</code>.</p>
         </section>
 
-        <section>
-            <h2>3. Database Migrations</h2>
+        <section class="docs-section">
+            <h2>3. Database migrations</h2>
             <p>Migrations live in <code>migrations/</code> and are applied with Wrangler:</p>
             <pre><code># Apply all pending migrations to the live database
 npx wrangler d1 migrations apply secure-password-db --remote
@@ -69,11 +124,11 @@ npx wrangler d1 migrations apply secure-password-db</code></pre>
                 <li><code>0003_user_preferences.sql</code> — adds the <code>user_preferences</code> table for cross-device UI prefs (theme, density, shape, accent); must be applied before deploying v2.0.0-beta</li>
             </ul>
             <div class="callout warning">
-                Always run migrations <strong>before</strong> deploying a new version of the Worker code that depends on them.
+                <span>Always run migrations <strong>before</strong> deploying a new version of the Worker code that depends on them.</span>
             </div>
         </section>
 
-        <section>
+        <section class="docs-section">
             <h2>4. Deployment</h2>
             <pre><code># Deploy Worker + static assets
 npx wrangler deploy --env=""
@@ -83,8 +138,8 @@ npm run deploy</code></pre>
             <p>The Cloudflare CI/CD pipeline (configured in the Cloudflare Workers dashboard) runs <code>npx wrangler deploy</code> automatically on push to <code>main</code>.</p>
         </section>
 
-        <section>
-            <h2>5. Local Development</h2>
+        <section class="docs-section">
+            <h2>5. Local development</h2>
             <pre><code># Start local dev server (Worker + static assets)
 npm run dev
 # or
@@ -92,8 +147,8 @@ wrangler dev</code></pre>
             <p><code>wrangler dev</code> simulates D1, R2, and KV locally. Set local secrets in <code>.dev.vars</code>. Use the Turnstile test site key <code>1x0000000000000000000000000000000AA</code> in <code>.dev.vars</code> — it always passes validation.</p>
         </section>
 
-        <section>
-            <h2>6. Running Tests</h2>
+        <section class="docs-section">
+            <h2>6. Running tests</h2>
             <pre><code># Requires Node.js 20+
 nvm use 23
 npm test</code></pre>
@@ -104,8 +159,8 @@ npm test</code></pre>
             </ul>
         </section>
 
-        <section>
-            <h2>7. Audit Logs</h2>
+        <section class="docs-section">
+            <h2>7. Audit logs</h2>
             <p>Every sensitive action is recorded in the <code>audit_logs</code> D1 table:</p>
             <pre><code>-- View recent activity
 SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100;
@@ -113,7 +168,7 @@ SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100;
 -- Failed logins in the last 24 hours
 SELECT * FROM audit_logs
 WHERE action LIKE '%FAILURE%'
-  AND timestamp > datetime('now', '-1 day')
+  AND timestamp &gt; datetime('now', '-1 day')
 ORDER BY timestamp DESC;
 
 -- All actions by a specific user
@@ -121,8 +176,8 @@ SELECT * FROM audit_logs WHERE user_id = 42 ORDER BY timestamp DESC;</code></pre
             <p>Logged actions include: REGISTER, LOGIN, GET_SALT, UPDATE_PASSWORD, DELETE_ACCOUNT, VAULT_CREATE, VAULT_LIST, VAULT_UPLOAD, VAULT_DOWNLOAD, VAULT_DELETE, ORG_CREATE, ORG_LIST, ORG_GET_MEMBERS, ORG_ADD_MEMBER, ORG_UPDATE_ROLE, ORG_REMOVE_MEMBER, ORG_DELETE, AUTH_FAILURE, VAULT_ACCESS_DENIED.</p>
         </section>
 
-        <section>
-            <h2>8. Security Best Practices</h2>
+        <section class="docs-section">
+            <h2>8. Security best practices</h2>
             <ul>
                 <li>Rotate <code>JWT_SECRET</code> periodically. All existing sessions will be invalidated — users will need to log in again.</li>
                 <li>Monitor audit logs for unusual patterns: repeated AUTH_FAILURE from the same IP, unexpected VAULT_DELETE events, etc.</li>
@@ -132,8 +187,8 @@ SELECT * FROM audit_logs WHERE user_id = 42 ORDER BY timestamp DESC;</code></pre
             </ul>
         </section>
 
-        <section>
-            <h2>9. Account Deletion — Admin Notes</h2>
+        <section class="docs-section">
+            <h2>9. Account deletion — admin notes</h2>
             <p>When a user deletes their account:</p>
             <ul>
                 <li>All personal vault R2 objects are deleted.</li>
@@ -148,8 +203,11 @@ SELECT * FROM audit_logs WHERE user_id = 42 ORDER BY timestamp DESC;</code></pre
 
     </main>
 
-    <footer>
-        <p>&copy; 2026 Passflares. All rights reserved.</p>
+    <footer class="docs-footer">
+        <p>&copy; 2026 Passflares. <a href="../index.html">Back to the app</a>.</p>
     </footer>
+</div>
+
+<script src="js/docs.js"></script>
 </body>
 </html>
