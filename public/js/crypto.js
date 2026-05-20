@@ -48,6 +48,9 @@ export async function deriveKey(masterPassword, saltHex) {
 }
 
 export async function encryptData(data, encryptionKey) {
+    if (!encryptionKey) {
+        throw new Error('Encryption key not available — please sign in again to unlock your vaults.');
+    }
     const iv = crypto.getRandomValues(new Uint8Array(AES_IV_LENGTH));
     const encodedData = new TextEncoder().encode(JSON.stringify(data));
 
@@ -64,6 +67,9 @@ export async function encryptData(data, encryptionKey) {
 }
 
 export async function decryptData(encryptedData, encryptionKey) {
+    if (!encryptionKey) {
+        throw new Error('Encryption key not available — please sign in again to unlock your vaults.');
+    }
     try {
         const iv = hexStringToUint8Array(encryptedData.iv);
         const ciphertext = hexStringToUint8Array(encryptedData.ciphertext);

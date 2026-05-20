@@ -13,6 +13,7 @@ const state = {
 
 export function getKey() { return state.encryptionKey; }
 export function setKey(key) { state.encryptionKey = key; }
+export function hasKey() { return state.encryptionKey !== null; }
 
 export function getVaults() { return state.vaults; }
 export function setVaults(v) { state.vaults = v; }
