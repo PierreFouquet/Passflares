@@ -1,219 +1,472 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system" data-density="comfortable" data-shape="rounded" data-accent="emerald">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" 
-          content="default-src 'self'; 
-          script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; 
-          style-src 'self' 'unsafe-inline'; 
+    <meta name="theme-color" content="#00a86b">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+          script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
+          style-src 'self' 'unsafe-inline';
+          font-src 'self';
           img-src 'self' data:;
           connect-src 'self' https://api.pierrefouquet.co.uk;
           frame-src https://challenges.cloudflare.com;">
-    <title>Passflares Password Manager</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+    <title>Passflares</title>
+
+    <link rel="icon" type="image/svg+xml" href="img/mark.svg">
+
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/theme-dark.css">
+    <link rel="stylesheet" href="css/theme-light.css">
+    <link rel="stylesheet" href="css/density.css">
+    <link rel="stylesheet" href="css/shape.css">
+    <link rel="stylesheet" href="css/accent.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/app-shell.css">
+    <link rel="stylesheet" href="css/components/button.css">
+    <link rel="stylesheet" href="css/components/input.css">
+    <link rel="stylesheet" href="css/components/card.css">
+    <link rel="stylesheet" href="css/components/list.css">
+    <link rel="stylesheet" href="css/components/dialog.css">
+    <link rel="stylesheet" href="css/components/drawer.css">
+    <link rel="stylesheet" href="css/components/snackbar.css">
+    <link rel="stylesheet" href="css/components/chip.css">
+    <link rel="stylesheet" href="css/components/menu.css">
+    <link rel="stylesheet" href="css/components/auth.css">
+    <link rel="stylesheet" href="css/components/pages.css">
+
+    <script>
+        // Read cached preferences from localStorage BEFORE CSS computes,
+        // to avoid a flash of mismatched theme on cold-load.
+        (function () {
+            try {
+                const raw = localStorage.getItem('passflares.prefs');
+                if (!raw) return;
+                const p = JSON.parse(raw);
+                const html = document.documentElement;
+                if (p.theme)   html.dataset.theme   = p.theme;
+                if (p.density) html.dataset.density = p.density;
+                if (p.shape)   html.dataset.shape   = p.shape;
+                if (p.accent)  html.dataset.accent  = p.accent;
+            } catch {}
+        })();
+    </script>
+
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
-<main>
-    <div class="container">
-        <h1>Passflares</h1>
 
-        <div id="auth-section" class="card">
-            <h2>Access Your Vault</h2>
-            <div class="tab-buttons">
-                <button class="tab-button active" data-tab="login">Login</button>
-                <button class="tab-button" data-tab="register">Register</button>
-            </div>
+<!-- ─────────────── AUTH SCREEN ─────────────── -->
+<section id="auth-screen" class="auth-screen">
+    <div class="auth-screen__brand" aria-hidden="true"></div>
 
-            <div id="login-tab" class="tab-content active">
-                <form id="login-form">
-                    <input type="email" id="login-email" placeholder="Email" required autocomplete="username">
-                    <input type="password" id="login-master-password" placeholder="Master Password" required autocomplete="current-password">
-                    <div class="cf-turnstile" data-sitekey="0x4AAAAAABmEkyfvX0lChkqk"></div>
-                    <button type="submit">Login</button>
-                </form>
-            </div>
+    <div class="auth-card">
+        <h2 id="auth-card-title">Access your vault</h2>
+        <p class="auth-card__subtitle">Sign in or create an account to manage your passwords.</p>
 
-            <div id="register-tab" class="tab-content">
-                <form id="register-form">
-                    <input type="email" id="register-email" placeholder="Email" required autocomplete="username">
-                    <input type="password" id="register-master-password" placeholder="Master Password" required autocomplete="new-password">
-                    <div class="password-strength">
-                        Strength: <span id="password-strength-text">N/A</span>
-                    </div>
-                    <input type="password" id="register-confirm-master-password" placeholder="Confirm Master Password" required autocomplete="new-password">
-                    <div class="cf-turnstile" data-sitekey="0x4AAAAAABmEkyfvX0lChkqk"></div>
-                    <button type="submit">Register</button>
-                </form>
-            </div>
-            <p id="auth-message" class="message"></p>
+        <div class="auth-tabs" role="tablist">
+            <button type="button" class="is-active" data-tab="login" role="tab" aria-selected="true">Sign in</button>
+            <button type="button" data-tab="register" role="tab" aria-selected="false">Create account</button>
         </div>
 
-        <div id="app-section" class="hidden">
-            <div class="user-info">
-                <span>Welcome, <span id="user-email-display"></span>!</span>
-                <button id="logout-button">Logout</button>
+        <form id="login-form" class="auth-form" data-tab-panel="login">
+            <div class="field">
+                <input type="email" id="login-email" placeholder=" " required autocomplete="username">
+                <label for="login-email">Email</label>
             </div>
-
-            <div class="app-tab-buttons">
-                <button class="app-tab-button active" id="app-tab-vaults" data-app-tab="vaults">My Vaults</button>
-                <button class="app-tab-button" id="app-tab-organisations" data-app-tab="organisations">Organisations</button>
+            <div class="field password-field">
+                <input type="password" id="login-master-password" placeholder=" " required autocomplete="current-password">
+                <label for="login-master-password">Master password</label>
+                <button type="button" class="icon-btn icon-btn--sm" data-toggle-password aria-label="Show password">
+                    <span class="icon">visibility</span>
+                </button>
             </div>
+            <div class="cf-turnstile" data-sitekey="0x4AAAAAABmEkyfvX0lChkqk"></div>
+            <button type="submit" class="btn btn--filled btn--block btn--lg">
+                <span class="icon">login</span>Sign in
+            </button>
+        </form>
 
-            <div class="actions">
-                <button id="change-master-password-button">Change Master Password</button>
-                <button id="export-vault-data-button">Export All Vault Data</button>
-                <button id="delete-account-button" class="danger-button">Delete Account</button>
+        <form id="register-form" class="auth-form hidden" data-tab-panel="register">
+            <div class="field">
+                <input type="email" id="register-email" placeholder=" " required autocomplete="username">
+                <label for="register-email">Email</label>
             </div>
-
-            <div id="vaults-screen">
-            <div id="vaults-section" class="card">
-                <h2>Your Vaults</h2>
-                <div class="vault-creation">
-                    <input type="text" id="new-vault-name" placeholder="New Vault Name (e.g., 'Personal Passwords')" required>
-                    <textarea id="new-vault-description" placeholder="Optional: Description"></textarea>
-                    <div class="form-group">
-                        <label for="new-vault-owner-type">Owner Type:</label>
-                        <select id="new-vault-owner-type">
-                            <option value="user">Me (Personal)</option>
-                            <option value="organization">Organization</option>
-                        </select>
-                    </div>
-                    <div id="organization-selection" class="hidden form-group">
-                        <label for="select-organization">Select Organization:</label>
-                        <select id="select-organization"></select>
-                        <p class="small-text">No organizations? <button id="create-organization-button" class="inline-button">Create one</button></p>
-                    </div>
-                    <button id="create-vault-button">Create Vault</button>
-                </div>
-                <div id="vaults-list">
-                    </div>
-                <p id="vault-message" class="message"></p>
+            <div class="field password-field">
+                <input type="password" id="register-master-password" placeholder=" " required autocomplete="new-password">
+                <label for="register-master-password">Master password</label>
+                <button type="button" class="icon-btn icon-btn--sm" data-toggle-password aria-label="Show password">
+                    <span class="icon">visibility</span>
+                </button>
             </div>
-            </div><!-- end #vaults-screen -->
-
-            <div id="organisations-screen" class="hidden">
-                <div id="organisations-section" class="card">
-                    <h2>Organisations</h2>
-                    <div class="org-screen-header">
-                        <button id="create-org-from-screen-button">Create New Organisation</button>
-                    </div>
-                    <div id="organisations-list">
-                        <p class="no-entries-message">No organisations yet. Create one above!</p>
-                    </div>
-                    <p id="org-screen-message" class="message"></p>
-                </div>
+            <div class="password-meter" data-score="0">
+                <div class="password-meter__bar"><div class="password-meter__fill"></div></div>
+                <span id="password-strength-text">Enter a strong master password</span>
             </div>
-
-            <div id="create-organization-modal" class="modal hidden">
-                <div class="modal-content">
-                    <h2>Create New Organization</h2>
-                    <input type="text" id="org-name-input" placeholder="Organization Name" required>
-                    <textarea id="org-description-input" placeholder="Organization Description (Optional)"></textarea>
-                    <button id="submit-create-org">Create</button>
-                    <button class="close-modal">Cancel</button>
-                    <p id="org-modal-message" class="message"></p>
-                </div>
+            <div class="field password-field">
+                <input type="password" id="register-confirm-master-password" placeholder=" " required autocomplete="new-password">
+                <label for="register-confirm-master-password">Confirm master password</label>
             </div>
+            <div class="cf-turnstile" data-sitekey="0x4AAAAAABmEkyfvX0lChkqk"></div>
+            <button type="submit" class="btn btn--filled btn--block btn--lg">
+                <span class="icon">person_add</span>Create account
+            </button>
+        </form>
 
-            <div id="add-org-member-modal" class="modal hidden">
-                <div class="modal-content">
-                    <h2>Add Member to Organization</h2>
-                    <h3 id="add-member-org-name"></h3>
-                    <input type="email" id="member-email-input" placeholder="Member Email" required>
-                    <div class="form-group">
-                        <label for="member-role-select">Role:</label>
-                        <select id="member-role-select">
-                            <option value="member">Member</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                    <button id="submit-add-member">Add Member</button>
-                    <button class="close-modal">Cancel</button>
-                    <p id="add-member-modal-message" class="message"></p>
-                </div>
+        <p class="auth-footer">Your data is encrypted on-device. Read the <a href="docs/docs.html" target="_blank" rel="noopener">guides</a>.</p>
+    </div>
+</section>
+
+<!-- ─────────────── MAIN APP SHELL ─────────────── -->
+<div id="app-shell" class="app-shell hidden">
+
+    <header class="app-bar">
+        <button type="button" class="icon-btn app-bar__hamburger" id="hamburger-btn" aria-label="Open navigation">
+            <span class="icon">menu</span>
+        </button>
+
+        <a class="app-bar__brand" href="#/home" aria-label="Passflares home">
+            <span aria-hidden="true" data-logo-slot></span>
+        </a>
+
+        <div class="app-bar__search">
+            <div class="search">
+                <span class="icon">search</span>
+                <input id="global-search" type="search" placeholder="Search vaults, entries… (Ctrl K)" autocomplete="off" aria-label="Global search">
+                <kbd id="search-shortcut-hint">Ctrl K</kbd>
             </div>
+        </div>
 
-
-            <div id="vault-details-section" class="card hidden">
-                <h2 id="current-vault-name"></h2>
-                <p id="current-vault-description"></p>
-                <div class="current-vault-actions">
-                    <button id="delete-current-vault-button" class="danger-button">Delete Current Vault</button>
-                    <button id="load-another-vault-button">Load Another Vault</button>
-                </div>
-
-                <h3>Add New Entry</h3>
-                <form id="add-entry-form">
-                    <input type="text" id="entry-name" placeholder="Entry Name (e.g., Google)" required>
-                    <input type="text" id="entry-username" placeholder="Username/Email" required>
-                    <div class="password-input-group">
-                        <input type="text" id="entry-password" placeholder="Password" required>
-                        <button type="button" id="generate-password-button">Generate</button>
-                    </div>
-                    <input type="url" id="entry-url" placeholder="URL (optional)">
-                    <textarea id="entry-notes" placeholder="Notes (optional)"></textarea>
-                    <button type="submit">Add Entry</button>
-                </form>
-
-                <h3>Password Entry Details</h3>
-                <div class="search-bar">
-                    <input type="text" id="search-entries" placeholder="Search entries...">
-                    <button id="search-button">Search</button>
-                    <button id="clear-search-button">Clear Search</button>
-                </div>
-                <div id="entries-list">
-                    <p class="no-entries-message">No entries yet. Add one above!</p>
-                </div>
-                <button id="save-vault-data-button">Save Vault Data</button>
-                <p id="entry-message" class="message"></p>
-            </div>
-
-            <div id="delete-account-modal" class="modal hidden">
-                <div class="modal-content">
-                    <h2>Delete Account</h2>
-                    <p class="danger-text">This will permanently delete your account and <strong>all your personal vault data</strong>. This cannot be undone.</p>
-                    <p class="small-text">Organisation-owned vaults will not be deleted. If you are the sole admin of an organisation, assign another admin before proceeding.</p>
-                    <form id="delete-account-form">
-                        <input type="password" id="delete-account-password" placeholder="Enter your Master Password to confirm" required autocomplete="current-password">
-                        <button type="submit" class="danger-button">Permanently Delete My Account</button>
-                    </form>
-                    <button class="close-modal">Cancel</button>
-                    <p id="delete-account-message" class="message"></p>
+        <div class="app-bar__actions">
+            <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle theme">
+                <span class="icon" id="theme-toggle-icon">dark_mode</span>
+            </button>
+            <div class="menu-anchor">
+                <button type="button" class="icon-btn" id="user-menu-btn" aria-label="Account menu" aria-haspopup="menu" aria-expanded="false">
+                    <span class="icon">person</span>
+                </button>
+                <div class="menu hidden" id="user-menu" role="menu">
+                    <div class="menu__header" id="user-menu-email"></div>
+                    <div class="menu__divider"></div>
+                    <button type="button" class="menu__item" id="open-change-password" role="menuitem">
+                        <span class="icon">key</span>Change master password
+                    </button>
+                    <button type="button" class="menu__item" id="open-export" role="menuitem">
+                        <span class="icon">download</span>Export vault data
+                    </button>
+                    <div class="menu__divider"></div>
+                    <button type="button" class="menu__item menu__item--danger" id="open-delete-account" role="menuitem">
+                        <span class="icon">delete</span>Delete account
+                    </button>
+                    <button type="button" class="menu__item" id="logout-btn" role="menuitem">
+                        <span class="icon">logout</span>Sign out
+                    </button>
+                    <div class="menu__footer">Passflares v2.0.0-beta</div>
                 </div>
             </div>
+        </div>
+    </header>
 
-            <div id="change-master-password-modal" class="modal hidden">
-                <div class="modal-content">
-                    <h2>Change Master Password</h2>
-                    <form id="change-master-password-form">
-                        <input type="password" id="old-master-password" placeholder="Old Master Password" required>
-                        <input type="password" id="new-master-password" placeholder="New Master Password" required>
-                        <div class="password-strength">
-                            Strength: <span id="new-password-strength-text">N/A</span>
-                        </div>
-                        <input type="password" id="confirm-new-master-password" placeholder="Confirm New Master Password" required>
-                        <button type="submit">Change Password</button>
-                    </form>
-                    <button class="close-modal">Cancel</button>
-                    <p id="change-password-message" class="message"></p>
-                </div>
-            </div>
+    <aside id="nav-rail-scrim" class="nav-rail-scrim"></aside>
+    <nav class="nav-rail" id="nav-rail" aria-label="Primary navigation">
+        <a class="nav-rail__item" data-nav="home" href="#/home">
+            <span class="icon">home</span>
+            <span class="nav-rail__label">Home</span>
+        </a>
+        <a class="nav-rail__item" data-nav="vaults" href="#/vaults">
+            <span class="icon">lock</span>
+            <span class="nav-rail__label">Vaults</span>
+        </a>
+        <a class="nav-rail__item" data-nav="organisations" href="#/organisations">
+            <span class="icon">groups</span>
+            <span class="nav-rail__label">Orgs</span>
+        </a>
+        <a class="nav-rail__item" data-nav="settings" href="#/settings">
+            <span class="icon">settings</span>
+            <span class="nav-rail__label">Settings</span>
+        </a>
+    </nav>
 
+    <main class="app-main">
+        <div id="page-root" class="page-container"></div>
+        <footer class="app-footer">
+            User, vault, organisation, and admin guides live on the <a href="docs/docs.html" target="_blank" rel="noopener">documentation page</a>.
+        </footer>
+    </main>
+</div>
+
+<!-- ─────────────── ENTRY DRAWER (vault entry detail) ─────────────── -->
+<div id="entry-drawer-scrim" class="entry-drawer-scrim"></div>
+<aside id="entry-drawer" class="entry-drawer" aria-hidden="true" aria-label="Entry details"></aside>
+
+<!-- ─────────────── SNACKBAR HOST ─────────────── -->
+<div id="snackbar-host" class="snackbar-host" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ─────────────── DIALOG MOUNT (created on demand) ─────────────── -->
+<div id="dialog-root"></div>
+
+<!-- ─────────────── LOADING OVERLAY ─────────────── -->
+<div id="loading-overlay" class="loading-overlay hidden" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <p id="loading-text">Loading…</p>
+</div>
+
+<!-- ─────────────── TEMPLATES ─────────────── -->
+<template id="tpl-page-home">
+    <div class="dash-hero">
+        <h1>Welcome back<span data-user-name></span></h1>
+        <p>Your encrypted vaults, security overview, and recent activity at a glance.</p>
+        <div class="dash-hero__actions">
+            <button type="button" class="btn btn--filled" data-action="new-vault">
+                <span class="icon">add</span>New vault
+            </button>
+            <button type="button" class="btn btn--tonal" data-action="open-generator">
+                <span class="icon">key</span>Generate password
+            </button>
         </div>
     </div>
 
-    <div id="loading-overlay" class="hidden">
-        <div class="spinner"></div>
-        <p id="loading-text">Loading...</p>
+    <section class="dash-section">
+        <h2>Security overview</h2>
+        <div class="tile-grid" data-security-tiles>
+            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
+            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
+            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
+            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
+        </div>
+    </section>
+
+    <section class="dash-section">
+        <h2>Recent vaults</h2>
+        <div class="list" data-recent-vaults>
+            <div class="skeleton skeleton-row" style="height: 56px;"></div>
+            <div class="skeleton skeleton-row" style="height: 56px; margin-top: 8px;"></div>
+        </div>
+    </section>
+</template>
+
+<template id="tpl-page-vaults">
+    <div class="page-header">
+        <h1>Vaults</h1>
+        <button type="button" class="btn btn--filled" data-action="new-vault">
+            <span class="icon">add</span>New vault
+        </button>
     </div>
 
-    <script type="module" src="js/main.js"></script>
-</main>
-<footer>
-    <p>User, Vaults, Organisations, and Admin guides are available on the <a href="docs/docs.html" target="_blank">Docs Page</a></p>
-</footer>
+    <div id="vault-detail-area" class="hidden"></div>
+
+    <div id="vaults-list-area"></div>
+</template>
+
+<template id="tpl-vault-creator">
+    <div class="composer">
+        <h3>Create a new vault</h3>
+        <div class="stack">
+            <div class="field">
+                <input type="text" id="new-vault-name" placeholder=" " required>
+                <label for="new-vault-name">Vault name</label>
+            </div>
+            <div class="field">
+                <textarea id="new-vault-description" placeholder=" "></textarea>
+                <label for="new-vault-description">Description (optional)</label>
+            </div>
+            <div class="row row-wrap">
+                <div class="toggle-group">
+                    <label>
+                        <input type="radio" name="new-vault-owner-type" value="user" checked>
+                        <span class="toggle-group__chip"><span class="icon">person</span>Personal</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="new-vault-owner-type" value="organization">
+                        <span class="toggle-group__chip"><span class="icon">groups</span>Organisation</span>
+                    </label>
+                </div>
+                <div id="organization-selection" class="hidden field">
+                    <select id="select-organization" aria-label="Organisation"></select>
+                </div>
+                <div class="spacer"></div>
+                <button type="button" class="btn btn--text" data-cancel-create>Cancel</button>
+                <button type="button" class="btn btn--filled" id="create-vault-button">
+                    <span class="icon">add_circle</span>Create vault
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="tpl-page-organisations">
+    <div class="page-header">
+        <h1>Organisations</h1>
+        <button type="button" class="btn btn--filled" data-action="new-org">
+            <span class="icon">add</span>New organisation
+        </button>
+    </div>
+    <div id="organisations-list-area"></div>
+</template>
+
+<template id="tpl-page-settings">
+    <div class="page-header">
+        <h1>Settings</h1>
+    </div>
+
+    <div class="settings-grid">
+        <section class="card">
+            <h2 class="card__title">Appearance</h2>
+            <p class="settings-section__hint">These preferences sync across all your devices.</p>
+
+            <div class="settings-row">
+                <div>
+                    <div class="settings-row__label">Theme</div>
+                    <div class="settings-row__hint">System uses your OS setting.</div>
+                </div>
+                <div class="toggle-group" data-pref-group="theme">
+                    <label><input type="radio" name="pref-theme" value="light"><span class="toggle-group__chip"><span class="icon">light_mode</span>Light</span></label>
+                    <label><input type="radio" name="pref-theme" value="dark"><span class="toggle-group__chip"><span class="icon">dark_mode</span>Dark</span></label>
+                    <label><input type="radio" name="pref-theme" value="system"><span class="toggle-group__chip"><span class="icon">palette</span>System</span></label>
+                </div>
+            </div>
+
+            <div class="settings-row">
+                <div>
+                    <div class="settings-row__label">Density</div>
+                    <div class="settings-row__hint">Padding and row height.</div>
+                </div>
+                <div class="toggle-group" data-pref-group="density">
+                    <label><input type="radio" name="pref-density" value="compact"><span class="toggle-group__chip">Compact</span></label>
+                    <label><input type="radio" name="pref-density" value="comfortable"><span class="toggle-group__chip">Comfortable</span></label>
+                    <label><input type="radio" name="pref-density" value="spacious"><span class="toggle-group__chip">Spacious</span></label>
+                </div>
+            </div>
+
+            <div class="settings-row">
+                <div>
+                    <div class="settings-row__label">Shape</div>
+                    <div class="settings-row__hint">Corner roundness.</div>
+                </div>
+                <div class="toggle-group" data-pref-group="shape">
+                    <label><input type="radio" name="pref-shape" value="sharp"><span class="toggle-group__chip">Sharp</span></label>
+                    <label><input type="radio" name="pref-shape" value="rounded"><span class="toggle-group__chip">Rounded</span></label>
+                    <label><input type="radio" name="pref-shape" value="pill"><span class="toggle-group__chip">Pill</span></label>
+                </div>
+            </div>
+
+            <div class="settings-row">
+                <div>
+                    <div class="settings-row__label">Accent</div>
+                    <div class="settings-row__hint">Brand colour highlight.</div>
+                </div>
+                <div class="accent-swatch-group" data-pref-group="accent">
+                    <button type="button" class="accent-swatch accent-swatch--emerald" data-accent-value="emerald" aria-label="Emerald"></button>
+                    <button type="button" class="accent-swatch accent-swatch--blue" data-accent-value="blue" aria-label="Blue"></button>
+                    <button type="button" class="accent-swatch accent-swatch--purple" data-accent-value="purple" aria-label="Purple"></button>
+                    <button type="button" class="accent-swatch accent-swatch--orange" data-accent-value="orange" aria-label="Orange"></button>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 class="card__title">Account</h2>
+            <p class="settings-section__hint">Signed in as <strong data-account-email></strong>.</p>
+            <div class="row row-wrap">
+                <button type="button" class="btn btn--tonal" data-action="change-password"><span class="icon">key</span>Change master password</button>
+                <button type="button" class="btn btn--tonal" data-action="export"><span class="icon">download</span>Export vault data</button>
+                <button type="button" class="btn btn--danger-text" data-action="delete-account"><span class="icon">delete</span>Delete account</button>
+            </div>
+        </section>
+    </div>
+</template>
+
+<template id="tpl-vault-row">
+    <a class="list-row" href="#" data-vault-row>
+        <span class="list-row__icon"><span class="icon">lock</span></span>
+        <div class="list-row__body">
+            <span class="list-row__title" data-name></span>
+            <span class="list-row__meta">
+                <span class="chip" data-owner-chip></span>
+                <span class="chip" data-perm-chip></span>
+                <span data-description></span>
+            </span>
+        </div>
+        <span class="list-row__actions">
+            <button type="button" class="icon-btn" data-vault-delete title="Delete vault" hidden>
+                <span class="icon">delete</span>
+            </button>
+            <span class="icon" aria-hidden="true">arrow_forward</span>
+        </span>
+    </a>
+</template>
+
+<template id="tpl-entry-row">
+    <a class="list-row" href="#" data-entry-row>
+        <span class="list-row__icon"><span class="icon">key</span></span>
+        <div class="list-row__body">
+            <span class="list-row__title" data-name></span>
+            <span class="list-row__meta">
+                <span data-username></span>
+                <span data-url></span>
+            </span>
+        </div>
+        <span class="list-row__actions">
+            <button type="button" class="icon-btn" data-copy-username title="Copy username">
+                <span class="icon">content_copy</span>
+            </button>
+            <span class="icon" aria-hidden="true">arrow_forward</span>
+        </span>
+    </a>
+</template>
+
+<template id="tpl-entry-drawer-body">
+    <div class="entry-drawer__header">
+        <h3 class="entry-drawer__title" data-name></h3>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+            <span class="icon">close</span>
+        </button>
+    </div>
+    <div class="entry-drawer__body">
+        <div>
+            <div class="entry-drawer__field-label">Username</div>
+            <div class="entry-drawer__field-value">
+                <span data-username class="text-mono"></span>
+                <span class="spacer"></span>
+                <button type="button" class="icon-btn icon-btn--sm" data-copy-username title="Copy">
+                    <span class="icon">content_copy</span>
+                </button>
+            </div>
+        </div>
+        <div>
+            <div class="entry-drawer__field-label">Password</div>
+            <div class="entry-drawer__field-value entry-drawer__field-value--password">
+                <span data-password>••••••••••••</span>
+                <span class="spacer"></span>
+                <button type="button" class="icon-btn icon-btn--sm" data-toggle-password title="Show / hide">
+                    <span class="icon">visibility</span>
+                </button>
+                <button type="button" class="icon-btn icon-btn--sm" data-copy-password title="Copy">
+                    <span class="icon">content_copy</span>
+                </button>
+            </div>
+        </div>
+        <div data-url-section hidden>
+            <div class="entry-drawer__field-label">URL</div>
+            <div class="entry-drawer__field-value">
+                <a data-url target="_blank" rel="noopener noreferrer"></a>
+            </div>
+        </div>
+        <div data-notes-section hidden>
+            <div class="entry-drawer__field-label">Notes</div>
+            <div class="entry-drawer__field-value" data-notes style="font-family: inherit; white-space: pre-wrap;"></div>
+        </div>
+    </div>
+    <div class="entry-drawer__footer">
+        <button type="button" class="btn btn--danger-text" data-delete>
+            <span class="icon">delete</span>Delete entry
+        </button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn--text" data-close>Close</button>
+    </div>
+</template>
+
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

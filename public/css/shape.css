@@ -1,0 +1,42 @@
+/* Shape preference — sets the per-component radius tokens.
+   tokens.css defines these defaults; we override them when a non-default
+   shape is selected. */
+
+[data-shape='sharp'] {
+    --radius-xs: 0px;
+    --radius-sm: 2px;
+    --radius-md: 3px;
+    --radius-lg: 4px;
+    --radius-xl: 6px;
+    --radius-button: 3px;
+    --radius-input:  3px;
+    --radius-card:   4px;
+    --radius-chip:   3px;
+    --radius-dialog: 6px;
+}
+
+[data-shape='rounded'] {
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-button: 10px;
+    --radius-input:  10px;
+    --radius-card:   14px;
+    --radius-chip:   999px;
+    --radius-dialog: 20px;
+}
+
+[data-shape='pill'] {
+    --radius-xs: 6px;
+    --radius-sm: 12px;
+    --radius-md: 20px;
+    --radius-lg: 24px;
+    --radius-xl: 28px;
+    --radius-button: 999px;
+    --radius-input:  999px;
+    --radius-card:   24px;
+    --radius-chip:   999px;
+    --radius-dialog: 28px;
+}

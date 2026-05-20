@@ -1,0 +1,135 @@
+/* Buttons — Material 3 inspired variants: filled, tonal, outlined, text, icon, FAB.
+   Apply variant via class: <button class="btn btn--filled">. Bare <button>s adopt the default `.btn` look via the .btn class. */
+
+.btn {
+    --btn-bg: var(--color-primary);
+    --btn-fg: var(--color-primary-on);
+    --btn-bg-hover: var(--color-primary-strong);
+    --btn-bg-active: var(--color-primary-strong);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: var(--input-height, 44px);
+    padding: 0 var(--space-5);
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    border: 1px solid transparent;
+    border-radius: var(--radius-button);
+    font: inherit;
+    font-size: var(--text-body);
+    font-weight: var(--weight-medium);
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--motion-fast) var(--ease-standard),
+                box-shadow var(--motion-fast) var(--ease-standard),
+                transform var(--motion-fast) var(--ease-standard),
+                border-color var(--motion-fast) var(--ease-standard);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn:hover:not(:disabled)  { background: var(--btn-bg-hover); }
+.btn:active:not(:disabled) { background: var(--btn-bg-active); transform: scale(0.98); }
+.btn:disabled              { opacity: 0.55; cursor: not-allowed; }
+.btn .icon                 { font-size: 18px; }
+
+.btn--filled  { /* default */ }
+
+.btn--tonal {
+    --btn-bg: var(--color-primary-container);
+    --btn-fg: var(--color-primary-on-container);
+    --btn-bg-hover: color-mix(in srgb, var(--color-primary-container) 70%, var(--color-primary));
+    --btn-bg-active: color-mix(in srgb, var(--color-primary-container) 50%, var(--color-primary));
+}
+
+.btn--outlined {
+    --btn-bg: transparent;
+    --btn-fg: var(--color-primary);
+    --btn-bg-hover: var(--color-primary-container);
+    --btn-bg-active: var(--color-primary-container);
+    border-color: var(--color-border-strong);
+}
+
+.btn--text {
+    --btn-bg: transparent;
+    --btn-fg: var(--color-primary);
+    --btn-bg-hover: var(--color-primary-container);
+    --btn-bg-active: var(--color-primary-container);
+    padding: 0 var(--space-3);
+}
+
+.btn--neutral {
+    --btn-bg: var(--color-surface-2);
+    --btn-fg: var(--color-text);
+    --btn-bg-hover: var(--color-surface-3);
+    --btn-bg-active: var(--color-surface-3);
+}
+
+.btn--danger {
+    --btn-bg: var(--color-danger);
+    --btn-fg: var(--color-danger-on);
+    --btn-bg-hover: color-mix(in srgb, var(--color-danger) 80%, black);
+    --btn-bg-active: color-mix(in srgb, var(--color-danger) 70%, black);
+}
+
+.btn--danger-text {
+    --btn-bg: transparent;
+    --btn-fg: var(--color-danger);
+    --btn-bg-hover: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    --btn-bg-active: color-mix(in srgb, var(--color-danger) 20%, transparent);
+}
+
+.btn--sm  { height: 34px; padding: 0 var(--space-3); font-size: var(--text-label); }
+.btn--lg  { height: 52px; padding: 0 var(--space-6); font-size: var(--text-headline); }
+.btn--block { display: flex; width: 100%; }
+
+/* Icon-only buttons */
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--motion-fast) var(--ease-standard),
+                color var(--motion-fast) var(--ease-standard);
+}
+.icon-btn:hover  { background: var(--color-surface-tint); color: var(--color-text); }
+.icon-btn:active { background: var(--color-surface-2); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.icon-btn--sm   { width: 32px; height: 32px; }
+.icon-btn--lg   { width: 48px; height: 48px; }
+.icon-btn--primary { color: var(--color-primary); }
+.icon-btn--danger  { color: var(--color-danger); }
+
+/* Floating action button */
+.fab {
+    position: fixed;
+    bottom: var(--space-6);
+    right: var(--space-6);
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-xl);
+    background: var(--color-primary);
+    color: var(--color-primary-on);
+    border: none;
+    cursor: pointer;
+    box-shadow: var(--elev-3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-drawer);
+    transition: transform var(--motion-fast) var(--ease-standard),
+                box-shadow var(--motion-fast) var(--ease-standard);
+}
+.fab:hover  { transform: translateY(-2px); box-shadow: var(--elev-4); }
+.fab .icon  { font-size: 26px; }

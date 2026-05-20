@@ -66,6 +66,7 @@ npx wrangler d1 migrations apply secure-password-db</code></pre>
             <ul>
                 <li><code>0001_init.sql</code> — initial schema (users, vaults, organisations, audit logs, access controls)</li>
                 <li><code>0002_super_admin_role.sql</code> — adds <code>super_admin</code> to the <code>user_organizations.role</code> CHECK constraint; must be applied before deploying v1.1.0-beta</li>
+                <li><code>0003_user_preferences.sql</code> — adds the <code>user_preferences</code> table for cross-device UI prefs (theme, density, shape, accent); must be applied before deploying v2.0.0-beta</li>
             </ul>
             <div class="callout warning">
                 Always run migrations <strong>before</strong> deploying a new version of the Worker code that depends on them.

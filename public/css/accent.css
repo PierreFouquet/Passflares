@@ -1,0 +1,81 @@
+/* Accent (primary colour) preference. Each accent provides a 4-tone
+   ramp + container tone. Material-flavoured tonal palette. */
+
+[data-accent='emerald'] {
+    --color-primary:               #00a86b;
+    --color-primary-soft:          #1cbc7e;
+    --color-primary-strong:        #038a59;
+    --color-primary-on:            #ffffff;
+    --color-primary-container:     rgba(0, 168, 107, 0.16);
+    --color-primary-on-container:  #6ee0ad;
+}
+
+[data-accent='blue'] {
+    --color-primary:               #2978f0;
+    --color-primary-soft:          #4a8cf5;
+    --color-primary-strong:        #1a5fcc;
+    --color-primary-on:            #ffffff;
+    --color-primary-container:     rgba(41, 120, 240, 0.16);
+    --color-primary-on-container:  #8fb6f7;
+}
+
+[data-accent='purple'] {
+    --color-primary:               #7b5cff;
+    --color-primary-soft:          #9479ff;
+    --color-primary-strong:        #5e3fe0;
+    --color-primary-on:            #ffffff;
+    --color-primary-container:     rgba(123, 92, 255, 0.18);
+    --color-primary-on-container:  #c7b6ff;
+}
+
+[data-accent='orange'] {
+    --color-primary:               #f3801e;
+    --color-primary-soft:          #f99749;
+    --color-primary-strong:        #c9620e;
+    --color-primary-on:            #1a0f04;
+    --color-primary-container:     rgba(243, 128, 30, 0.18);
+    --color-primary-on-container:  #ffc596;
+}
+
+/* Light-theme accent adjustments: containers and on-container tones need
+   to flip so primary stays accessible on light surfaces. */
+[data-theme='light'] [data-accent='emerald'],
+[data-theme='light'][data-accent='emerald'] {
+    --color-primary-container:     #d8f5e7;
+    --color-primary-on-container:  #00553a;
+}
+[data-theme='light'] [data-accent='blue'],
+[data-theme='light'][data-accent='blue'] {
+    --color-primary-container:     #dde9fb;
+    --color-primary-on-container:  #173d80;
+}
+[data-theme='light'] [data-accent='purple'],
+[data-theme='light'][data-accent='purple'] {
+    --color-primary-container:     #ebe5ff;
+    --color-primary-on-container:  #36209b;
+}
+[data-theme='light'] [data-accent='orange'],
+[data-theme='light'][data-accent='orange'] {
+    --color-primary-container:     #ffe5cc;
+    --color-primary-on-container:  #6b3805;
+}
+
+/* Same flip when the user is on theme=system AND the OS prefers light */
+@media (prefers-color-scheme: light) {
+    [data-theme='system'][data-accent='emerald'] {
+        --color-primary-container:     #d8f5e7;
+        --color-primary-on-container:  #00553a;
+    }
+    [data-theme='system'][data-accent='blue'] {
+        --color-primary-container:     #dde9fb;
+        --color-primary-on-container:  #173d80;
+    }
+    [data-theme='system'][data-accent='purple'] {
+        --color-primary-container:     #ebe5ff;
+        --color-primary-on-container:  #36209b;
+    }
+    [data-theme='system'][data-accent='orange'] {
+        --color-primary-container:     #ffe5cc;
+        --color-primary-on-container:  #6b3805;
+    }
+}

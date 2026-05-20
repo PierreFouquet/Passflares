@@ -93,3 +93,29 @@ export interface EncryptedVaultBlob {
     iv: string;         // Hex string of IV
     ciphertext: string; // Hex string of encrypted data
 }
+
+export type ThemePref   = 'light' | 'dark' | 'system';
+export type DensityPref = 'compact' | 'comfortable' | 'spacious';
+export type ShapePref   = 'sharp' | 'rounded' | 'pill';
+export type AccentPref  = 'emerald' | 'blue' | 'purple' | 'orange';
+
+export interface UserPreferences {
+    user_id: number;
+    theme: ThemePref;
+    density: DensityPref;
+    shape: ShapePref;
+    accent: AccentPref;
+    updated_at: string;
+}
+
+export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'user_id' | 'updated_at'> = {
+    theme: 'system',
+    density: 'comfortable',
+    shape: 'rounded',
+    accent: 'emerald'
+};
+
+export const THEME_VALUES:   ReadonlyArray<ThemePref>   = ['light', 'dark', 'system'];
+export const DENSITY_VALUES: ReadonlyArray<DensityPref> = ['compact', 'comfortable', 'spacious'];
+export const SHAPE_VALUES:   ReadonlyArray<ShapePref>   = ['sharp', 'rounded', 'pill'];
+export const ACCENT_VALUES:  ReadonlyArray<AccentPref>  = ['emerald', 'blue', 'purple', 'orange'];

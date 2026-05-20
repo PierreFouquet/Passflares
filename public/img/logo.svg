@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" fill="none" aria-label="Passflares">
+  <defs>
+    <linearGradient id="pfw-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="currentColor" stop-opacity="1"/>
+      <stop offset="100%" stop-color="currentColor" stop-opacity="0.78"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <path
+      d="M32 4 L56 14 V32 C56 46 44 56.4 32 60 C20 56.4 8 46 8 32 V14 Z"
+      fill="url(#pfw-grad)"
+    />
+    <circle cx="32" cy="28" r="6.5" fill="#fff"/>
+    <rect x="29.25" y="32" width="5.5" height="11" rx="2.4" fill="#fff"/>
+  </g>
+  <text
+    x="74" y="42"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="26" font-weight="700"
+    letter-spacing="-0.5"
+    fill="currentColor"
+  >Passflares</text>
+</svg>

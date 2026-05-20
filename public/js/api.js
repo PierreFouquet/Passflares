@@ -139,3 +139,12 @@ export async function removeMember(orgId, userId) {
 export async function deleteOrganization(orgId) {
     return apiCall(`/organizations/${orgId}`, 'DELETE');
 }
+
+// --- Preference Endpoints ---
+export async function getPreferences() {
+    return apiCall('/users/me/preferences', 'GET');
+}
+
+export async function updatePreferences(partial) {
+    return apiCall('/users/me/preferences', 'PUT', partial);
+}

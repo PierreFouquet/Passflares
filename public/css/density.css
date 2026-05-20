@@ -1,0 +1,24 @@
+/* Density preference. Multiplies --space-scale so all --space-* derived
+   values shrink/grow proportionally, and tweaks per-component vertical
+   rhythm for inputs, list rows, and the app bar. */
+
+[data-density='compact'] {
+    --space-scale: 0.78;
+    --row-height: 36px;
+    --input-height: 40px;
+    --app-bar-height: 52px;
+}
+
+[data-density='comfortable'] {
+    --space-scale: 1;
+    --row-height: 48px;
+    --input-height: 48px;
+    --app-bar-height: 60px;
+}
+
+[data-density='spacious'] {
+    --space-scale: 1.25;
+    --row-height: 60px;
+    --input-height: 56px;
+    --app-bar-height: 68px;
+}

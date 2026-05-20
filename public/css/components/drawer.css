@@ -1,0 +1,94 @@
+/* Right-side detail drawer (entry view) + reusable side-sheet. */
+
+.entry-drawer-scrim {
+    position: fixed;
+    inset: 0;
+    background: var(--color-scrim);
+    z-index: var(--z-drawer);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-normal) var(--ease-standard);
+}
+.entry-drawer-scrim.is-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.entry-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: calc(var(--z-drawer) + 1);
+    width: var(--entry-drawer-width);
+    max-width: 100vw;
+    height: 100vh;
+    background: var(--color-surface);
+    border-left: 1px solid var(--color-border);
+    box-shadow: var(--elev-4);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform var(--motion-normal) var(--ease-decelerate);
+}
+.entry-drawer.is-open { transform: none; }
+
+.entry-drawer__header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.entry-drawer__title {
+    flex: 1 1 auto;
+    font-size: var(--text-headline);
+    font-weight: var(--weight-semibold);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.entry-drawer__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.entry-drawer__field-label {
+    font-size: var(--text-label);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-1);
+}
+
+.entry-drawer__field-value {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-input);
+    font-family: var(--font-mono);
+    font-size: var(--text-body);
+    word-break: break-all;
+}
+
+.entry-drawer__field-value--password { letter-spacing: 0.1em; }
+
+.entry-drawer__footer {
+    padding: var(--space-4) var(--space-5);
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+}
+
+@media (max-width: 520px) {
+    .entry-drawer { width: 100vw; }
+}

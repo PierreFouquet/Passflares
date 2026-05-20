@@ -1,0 +1,124 @@
+/* Design tokens. Defaults reflect: theme=dark, density=comfortable, shape=rounded, accent=emerald.
+   Per-pref override files (theme-*, density, shape, accent) refine these against [data-*] selectors. */
+
+:root {
+    /* Typography */
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-icon: 'Material Symbols Rounded';
+
+    --text-display: 2rem;
+    --text-title:   1.375rem;
+    --text-headline: 1.125rem;
+    --text-body:    0.9375rem;
+    --text-label:   0.8125rem;
+    --text-caption: 0.75rem;
+
+    --line-tight:   1.2;
+    --line-snug:    1.35;
+    --line-normal:  1.5;
+
+    --weight-regular: 400;
+    --weight-medium:  500;
+    --weight-semibold: 600;
+    --weight-bold:    700;
+
+    /* Spacing scale — multiplied by density.css per [data-density] */
+    --space-scale: 1;
+    --space-1:  calc(4px  * var(--space-scale));
+    --space-2:  calc(8px  * var(--space-scale));
+    --space-3:  calc(12px * var(--space-scale));
+    --space-4:  calc(16px * var(--space-scale));
+    --space-5:  calc(20px * var(--space-scale));
+    --space-6:  calc(24px * var(--space-scale));
+    --space-7:  calc(32px * var(--space-scale));
+    --space-8:  calc(40px * var(--space-scale));
+    --space-9:  calc(56px * var(--space-scale));
+
+    /* Radii — overridden by shape.css */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-pill: 999px;
+
+    /* Component-level radii (the actual ones used by .button, .card, .chip, etc.) */
+    --radius-button: var(--radius-md);
+    --radius-input:  var(--radius-md);
+    --radius-card:   var(--radius-lg);
+    --radius-chip:   var(--radius-pill);
+    --radius-dialog: var(--radius-xl);
+
+    /* Elevation (shadows) — tuned for dark by default; theme-light.css softens them */
+    --elev-0: none;
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.10);
+    --elev-2: 0 2px 4px rgba(0, 0, 0, 0.22), 0 4px 8px rgba(0, 0, 0, 0.16);
+    --elev-3: 0 4px 8px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.22);
+    --elev-4: 0 8px 16px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.28);
+
+    /* Motion */
+    --motion-fast:    140ms;
+    --motion-normal:  220ms;
+    --motion-slow:    320ms;
+    --ease-standard:  cubic-bezier(0.2, 0, 0, 1);
+    --ease-emphasized: cubic-bezier(0.3, 0, 0, 1.05);
+    --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+
+    /* Z-index scale */
+    --z-nav:       100;
+    --z-app-bar:   110;
+    --z-drawer:    900;
+    --z-dialog:    1000;
+    --z-snackbar:  1100;
+    --z-loading:   1200;
+
+    /* Layout */
+    --app-bar-height:    60px;
+    --nav-rail-width:    72px;
+    --nav-rail-width-expanded: 220px;
+    --entry-drawer-width: 420px;
+    --max-content-width: 1200px;
+
+    /* Status colours (defined once; brightness varies by theme) */
+    --color-success:        #1f9d55;
+    --color-success-on:     #ffffff;
+    --color-warning:        #d97706;
+    --color-warning-on:     #0f0d0a;
+    --color-danger:         #d23a3a;
+    --color-danger-on:      #ffffff;
+    --color-info:           #2563eb;
+    --color-info-on:        #ffffff;
+
+    /* Surface / text — overridden by theme-*.css */
+    --color-bg:             #11151a;
+    --color-bg-2:           #161b22;
+    --color-surface:        #1b212a;
+    --color-surface-2:      #232a35;
+    --color-surface-3:      #2c3441;
+    --color-surface-tint:   rgba(255, 255, 255, 0.04);
+    --color-text:           #e8edf3;
+    --color-text-muted:     #aab6c4;
+    --color-text-faint:     #7c8a99;
+    --color-border:         rgba(255, 255, 255, 0.08);
+    --color-border-strong:  rgba(255, 255, 255, 0.16);
+    --color-focus-ring:     color-mix(in srgb, var(--color-primary) 60%, transparent);
+    --color-scrim:          rgba(0, 0, 0, 0.55);
+
+    /* Primary (accent) — overridden by accent.css; default emerald */
+    --color-primary:        #00a86b;
+    --color-primary-soft:   #1cbc7e;
+    --color-primary-strong: #038a59;
+    --color-primary-on:     #ffffff;
+    --color-primary-container: rgba(0, 168, 107, 0.16);
+    --color-primary-on-container: #6ee0ad;
+}
+
+/* Honour prefers-reduced-motion globally */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-fast:   0ms;
+        --motion-normal: 0ms;
+        --motion-slow:   0ms;
+    }
+}

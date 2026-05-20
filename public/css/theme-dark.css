@@ -1,0 +1,25 @@
+/* Dark theme. Tokens already default to dark in tokens.css, but we still
+   set [data-theme="dark"] explicitly so the user can force dark even when
+   the OS prefers light — and so [data-theme="system"] correctly falls back
+   to dark via prefers-color-scheme. */
+
+[data-theme='dark'],
+[data-theme='system'] {
+    --color-bg:             #11151a;
+    --color-bg-2:           #161b22;
+    --color-surface:        #1b212a;
+    --color-surface-2:      #232a35;
+    --color-surface-3:      #2c3441;
+    --color-surface-tint:   rgba(255, 255, 255, 0.04);
+    --color-text:           #e8edf3;
+    --color-text-muted:     #aab6c4;
+    --color-text-faint:     #7c8a99;
+    --color-border:         rgba(255, 255, 255, 0.08);
+    --color-border-strong:  rgba(255, 255, 255, 0.16);
+    --color-scrim:          rgba(0, 0, 0, 0.55);
+
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.10);
+    --elev-2: 0 2px 4px rgba(0, 0, 0, 0.22), 0 4px 8px rgba(0, 0, 0, 0.16);
+    --elev-3: 0 4px 8px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.22);
+    --elev-4: 0 8px 16px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.28);
+}
