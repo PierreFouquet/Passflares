@@ -85,6 +85,8 @@ async function handleCreateVault(composer) {
         ownerId = `org_${selected}`;
     }
 
+    if (!getKey()) { snack.error('Vault unlocked session lost — please sign in again.'); return; }
+
     showLoading('Creating vault…');
     try {
         const newVault = await createVault(name, description, ownerId, ownerType, 'auto-generated', 'manage');
@@ -217,6 +219,7 @@ async function openVaultDetail(vault, orgs) {
             const raw = await loadEncryptedVaultData(vault.id);
             let entries = [];
             if (raw?.encryptedData) {
+                if (!getKey()) { throw new Error('Vault unlocked session lost — please sign in again.'); }
                 entries = await decryptData(raw.encryptedData, getKey());
             }
             payload = { metadata: vault, entries };
@@ -457,6 +460,7 @@ function handleAddEntry(container, payload) {
 }
 
 async function handleSaveVault(container, payload) {
+    if (!getKey()) { snack.error('Vault unlocked session lost — please sign in again.'); return; }
     showLoading('Encrypting and saving vault…');
     try {
         const encryptedPayload = await encryptData(payload.entries, getKey());

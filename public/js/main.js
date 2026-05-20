@@ -12,7 +12,7 @@ import { renderVaultsPage, loadVaultsAndRender } from './pages/vaults.js';
 import { renderOrgsPage } from './pages/orgs.js';
 import { renderSettingsPage } from './pages/settings.js';
 import { attachShortcut as attachSearchShortcut, attachAppBarSearch, buildIndex, setOnSelect, open as openPalette, close as closePalette } from './search.js';
-import { reset as resetState, getVaults, getAllDecryptedEntries } from './state.js';
+import { reset as resetState, getVaults, getAllDecryptedEntries, hasKey } from './state.js';
 import { closeEntryDrawer } from './drawer.js';
 import { getOrganizations } from './api.js';
 import { setOrgs } from './state.js';
@@ -26,20 +26,29 @@ async function boot() {
     await loadPrefs({ fetchRemote: isLoggedIn() });
     watchSystemTheme();
 
-    if (isLoggedIn()) {
+    if (isLoggedIn() && hasKey()) {
         await showApp();
+    } else if (isLoggedIn()) {
+        // Token persisted in localStorage, but the encryption key only lives
+        // in memory and is gone after a page reload. The token alone is
+        // useless for decryption, so send the user back to sign in.
+        const cachedUser = getUserInfo();
+        showAuth({
+            prefillEmail: cachedUser?.email,
+            notice: 'Your session was locked when the page reloaded. Sign in again to unlock your vaults.'
+        });
     } else {
         showAuth();
     }
 }
 
-function showAuth() {
+function showAuth({ prefillEmail, notice } = {}) {
     document.getElementById('auth-screen')?.classList.remove('hidden');
     document.getElementById('app-shell')?.classList.add('hidden');
     clearSession();
     resetState();
     stopInactivityTimer();
-    initAuthPage({ onLogin: () => showApp() });
+    initAuthPage({ onLogin: () => showApp(), prefillEmail, notice });
 }
 
 async function showApp() {

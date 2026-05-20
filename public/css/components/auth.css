@@ -43,6 +43,17 @@
     margin-bottom: var(--space-6);
 }
 
+.auth-notice {
+    margin-bottom: var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+    border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+    border-radius: var(--radius-card);
+    color: var(--color-text);
+    font-size: var(--text-body);
+    text-align: center;
+}
+
 .auth-tabs {
     display: flex;
     background: var(--color-surface-2);

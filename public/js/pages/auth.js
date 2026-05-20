@@ -10,8 +10,24 @@ import { checkPasswordStrength, generateSalt, uint8ArrayToHexString } from '../u
 
 let onLoggedIn = null;
 
-export function initAuthPage({ onLogin }) {
+export function initAuthPage({ onLogin, prefillEmail, notice } = {}) {
     onLoggedIn = onLogin;
+
+    const noticeEl = document.getElementById('auth-notice');
+    if (noticeEl) {
+        if (notice) {
+            noticeEl.textContent = notice;
+            noticeEl.classList.remove('hidden');
+        } else {
+            noticeEl.textContent = '';
+            noticeEl.classList.add('hidden');
+        }
+    }
+    if (prefillEmail) {
+        const emailInput = document.getElementById('login-email');
+        if (emailInput) emailInput.value = prefillEmail;
+        document.getElementById('login-master-password')?.focus();
+    }
 
     const tabs = document.querySelectorAll('.auth-tabs button[data-tab]');
     const panels = document.querySelectorAll('[data-tab-panel]');
