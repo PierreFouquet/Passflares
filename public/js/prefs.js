@@ -80,8 +80,14 @@ export function resolvedTheme(theme = current.theme) {
 function updateThemeToggleIcon() {
     const icon = document.getElementById('theme-toggle-icon');
     if (!icon) return;
-    const actual = resolvedTheme();
-    icon.textContent = actual === 'dark' ? 'dark_mode' : 'light_mode';
+    const btn = document.getElementById('theme-toggle-btn');
+    if (current.theme === 'system') {
+        icon.textContent = 'brightness_auto';
+        if (btn) btn.title = `Theme: system (${resolvedTheme()})`;
+    } else {
+        icon.textContent = resolvedTheme() === 'dark' ? 'dark_mode' : 'light_mode';
+        if (btn) btn.title = `Theme: ${current.theme}`;
+    }
 }
 
 /**

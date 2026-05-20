@@ -26,7 +26,15 @@
     function updateThemeIcon() {
         const icon = document.getElementById('theme-toggle-icon');
         if (!icon) return;
-        icon.textContent = resolvedTheme(html.dataset.theme) === 'dark' ? 'dark_mode' : 'light_mode';
+        const btn = document.getElementById('theme-toggle-btn');
+        const theme = html.dataset.theme || 'system';
+        if (theme === 'system') {
+            icon.textContent = 'brightness_auto';
+            if (btn) btn.title = `Theme: system (${resolvedTheme(theme)})`;
+        } else {
+            icon.textContent = resolvedTheme(theme) === 'dark' ? 'dark_mode' : 'light_mode';
+            if (btn) btn.title = `Theme: ${theme}`;
+        }
     }
 
     // Theme toggle: cycles light → dark → system → light.

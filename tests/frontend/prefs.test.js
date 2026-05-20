@@ -59,6 +59,12 @@ describe('applyPrefs', () => {
         expect(document.getElementById('theme-toggle-icon').textContent).toBe('dark_mode');
     });
 
+    it('uses brightness_auto icon when theme is system', async () => {
+        const { applyPrefs } = await import('../../public/js/prefs.js');
+        applyPrefs({ theme: 'system' });
+        expect(document.getElementById('theme-toggle-icon').textContent).toBe('brightness_auto');
+    });
+
     it('notifies listeners on change', async () => {
         const { applyPrefs, onPrefsChange } = await import('../../public/js/prefs.js');
         const fn = vi.fn();
