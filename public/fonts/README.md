@@ -9,7 +9,7 @@
 ## Material Symbols Rounded (`material-symbols/MaterialSymbolsRounded.woff2`)
 
 This file is a **subset** containing only the icons referenced by the app. Full
-font is ~5.3 MB; the subset is ~55 KB.
+font is ~5.3 MB; the subset is ~64 KB.
 
 - License: Apache 2.0 (<https://github.com/google/material-design-icons/blob/master/LICENSE>)
 - Subset icons (keep in sync with `public/css/base.css` and any icon used in JS):
@@ -18,9 +18,10 @@ font is ~5.3 MB; the subset is ~55 KB.
 add, add_circle, arrow_back, arrow_forward, check, check_circle, close,
 content_copy, dark_mode, dark_mode_outline, delete, download, edit, error,
 expand_more, folder, format_size, groups, history, home, info, key,
-light_mode, lock, login, logout, menu, more_vert, palette, person,
-person_add, radio_button_unchecked, refresh, rounded_corner, save, search,
-security, settings, shield, upload, visibility, visibility_off, warning
+light_mode, lock, login, logout, menu, menu_book, more_vert, open_in_new,
+palette, person, person_add, radio_button_unchecked, refresh, rocket_launch,
+rounded_corner, save, search, security, settings, shield, upload, visibility,
+visibility_off, warning
 ```
 
 ### Re-generating the subset when new icons are added

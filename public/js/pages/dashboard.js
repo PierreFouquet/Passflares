@@ -5,6 +5,7 @@ import { cloneTemplate, escapeHTML, resolveOrgName } from '../ui.js';
 import { getVaults, getOrgs, getAllDecryptedEntries } from '../state.js';
 import { getUserInfo } from '../session.js';
 import { go } from '../router.js';
+import { snack } from '../snackbar.js';
 import { checkPasswordStrength } from '../utils.js';
 
 const RECENT_LIMIT = 5;
@@ -19,8 +20,8 @@ export function renderDashboard({ mount }) {
     // Action buttons
     mount.querySelector('[data-action="new-vault"]').addEventListener('click', () => go('vaults'));
     mount.querySelector('[data-action="open-generator"]').addEventListener('click', () => {
-        // Set a hash that the vaults page picks up to focus the generator.
-        location.hash = '#/vaults?generator=1';
+        snack.info('Generator is available inside any vault\'s entry composer.');
+        go('vaults');
     });
 
     renderSecurityTiles(mount.querySelector('[data-security-tiles]'));
