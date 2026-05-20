@@ -1,70 +1,128 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system" data-density="comfortable" data-shape="rounded" data-accent="emerald">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#00a86b">
     <title>Passflares Documentation</title>
+
+    <link rel="icon" type="image/svg+xml" href="../img/mark.svg">
+
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-light.css">
+    <link rel="stylesheet" href="../css/density.css">
+    <link rel="stylesheet" href="../css/shape.css">
+    <link rel="stylesheet" href="../css/accent.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components/button.css">
     <link rel="stylesheet" href="css/docs.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+
+    <script>
+        (function () {
+            try {
+                const raw = localStorage.getItem('passflares.prefs');
+                if (!raw) return;
+                const p = JSON.parse(raw);
+                const html = document.documentElement;
+                if (p.theme)   html.dataset.theme   = p.theme;
+                if (p.density) html.dataset.density = p.density;
+                if (p.shape)   html.dataset.shape   = p.shape;
+                if (p.accent)  html.dataset.accent  = p.accent;
+            } catch {}
+        })();
+    </script>
 </head>
 <body>
-    <header>
-        <h1>Passflares</h1>
-        <nav>
-            <ul>
-                <li><a href="../index.html">App</a></li>
-                <li><a href="user-guide.html">Getting Started</a></li>
-                <li><a href="vaults-guide.html">Vaults</a></li>
-                <li><a href="organisations-guide.html">Organisations</a></li>
-                <li><a href="admin-guide.html">Admin</a></li>
-            </ul>
+<div class="docs-shell">
+
+    <header class="docs-bar">
+        <a class="docs-bar__brand" href="../index.html" aria-label="Passflares home">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <defs>
+                    <linearGradient id="pf-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="currentColor" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="currentColor" stop-opacity="0.78"/>
+                    </linearGradient>
+                </defs>
+                <path d="M32 4 L56 14 V32 C56 46 44 56.4 32 60 C20 56.4 8 46 8 32 V14 Z" fill="url(#pf-grad)"/>
+                <circle cx="32" cy="28" r="6.5" fill="#fff"/>
+                <rect x="29.25" y="32" width="5.5" height="11" rx="2.4" fill="#fff"/>
+            </svg>
+            <span class="docs-bar__brand-text">Passflares<span class="docs-bar__brand-kicker">Docs</span></span>
+        </a>
+
+        <nav class="docs-bar__nav" aria-label="Documentation sections">
+            <a href="docs.html" class="is-active"><span class="icon">menu_book</span>Overview</a>
+            <a href="user-guide.html"><span class="icon">rocket_launch</span>Getting started</a>
+            <a href="vaults-guide.html"><span class="icon">lock</span>Vaults</a>
+            <a href="organisations-guide.html"><span class="icon">groups</span>Organisations</a>
+            <a href="admin-guide.html"><span class="icon">shield</span>Admin</a>
         </nav>
+
+        <div class="docs-bar__actions">
+            <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle theme">
+                <span class="icon" id="theme-toggle-icon">dark_mode</span>
+            </button>
+            <a href="../index.html" class="btn btn--tonal btn--sm">
+                <span class="icon">open_in_new</span>Open app
+            </a>
+        </div>
     </header>
 
-    <main>
-        <section class="welcome-section">
+    <main class="docs-main">
+
+        <section class="docs-welcome">
             <h2>Documentation</h2>
             <p>Passflares is a secure, client-side encrypted password manager built on the Cloudflare stack. Your master password never leaves your device — all encryption and decryption happens in your browser.</p>
         </section>
 
-        <section class="guide-links">
-            <div class="card">
-                <h3>Getting Started</h3>
+        <section class="guide-grid">
+            <a href="user-guide.html" class="guide-card">
+                <span class="guide-card__icon"><span class="icon">rocket_launch</span></span>
+                <h3>Getting started</h3>
                 <p>Create your account, log in, manage your session and master password, and keep your account secure.</p>
-                <a href="user-guide.html" class="button">Getting Started &rarr;</a>
-            </div>
-            <div class="card">
+                <span class="guide-card__cta">Open guide <span class="icon">arrow_forward</span></span>
+            </a>
+            <a href="vaults-guide.html" class="guide-card">
+                <span class="guide-card__icon"><span class="icon">lock</span></span>
                 <h3>Vaults</h3>
                 <p>Create vaults, add and manage password entries, search, copy credentials, and save your data.</p>
-                <a href="vaults-guide.html" class="button">Vaults Guide &rarr;</a>
-            </div>
-            <div class="card">
+                <span class="guide-card__cta">Open guide <span class="icon">arrow_forward</span></span>
+            </a>
+            <a href="organisations-guide.html" class="guide-card">
+                <span class="guide-card__icon"><span class="icon">groups</span></span>
                 <h3>Organisations</h3>
                 <p>Create organisations, manage members and roles (Member / Admin / Owner), and share vaults with your team.</p>
-                <a href="organisations-guide.html" class="button">Organisations Guide &rarr;</a>
-            </div>
-            <div class="card">
-                <h3>Admin Reference</h3>
+                <span class="guide-card__cta">Open guide <span class="icon">arrow_forward</span></span>
+            </a>
+            <a href="admin-guide.html" class="guide-card">
+                <span class="guide-card__icon"><span class="icon">shield</span></span>
+                <h3>Admin reference</h3>
                 <p>Infrastructure, secrets setup, database migrations, audit logs, and security best practices.</p>
-                <a href="admin-guide.html" class="button">Admin Guide &rarr;</a>
-            </div>
+                <span class="guide-card__cta">Open guide <span class="icon">arrow_forward</span></span>
+            </a>
         </section>
 
-        <section>
-            <h2>How Passflares Keeps You Safe</h2>
-            <ul>
-                <li><strong>Client-side encryption</strong> — Vault data is encrypted with AES-256-GCM using a key derived from your master password before it leaves your browser.</li>
-                <li><strong>Zero-knowledge server</strong> — The server stores only encrypted blobs. It cannot read your passwords.</li>
-                <li><strong>Scrypt password hashing</strong> — Your master password is hashed server-side for authentication, keeping the derivation key separate from the auth credential.</li>
-                <li><strong>Short-lived sessions</strong> — You are logged out automatically after 5 minutes of inactivity.</li>
-                <li><strong>Rate limiting</strong> — Failed login attempts are rate-limited to prevent brute-force attacks.</li>
-                <li><strong>Audit logging</strong> — Every sensitive action is logged for your security review.</li>
+        <section class="docs-section">
+            <h2>How Passflares keeps you safe</h2>
+            <ul class="security-list">
+                <li><span><strong>Client-side encryption</strong>Vault data is encrypted with AES-256-GCM using a key derived from your master password before it leaves your browser.</span></li>
+                <li><span><strong>Zero-knowledge server</strong>The server stores only encrypted blobs. It cannot read your passwords.</span></li>
+                <li><span><strong>Scrypt password hashing</strong>Your master password is hashed server-side for authentication, keeping the derivation key separate from the auth credential.</span></li>
+                <li><span><strong>Short-lived sessions</strong>You are logged out automatically after 5 minutes of inactivity.</span></li>
+                <li><span><strong>Rate limiting</strong>Failed login attempts are rate-limited to prevent brute-force attacks.</span></li>
+                <li><span><strong>Audit logging</strong>Every sensitive action is logged for your security review.</span></li>
             </ul>
         </section>
+
     </main>
 
-    <footer>
-        <p>&copy; 2026 Passflares. All rights reserved.</p>
+    <footer class="docs-footer">
+        <p>&copy; 2026 Passflares. <a href="../index.html">Back to the app</a>.</p>
     </footer>
+</div>
+
+<script src="js/docs.js"></script>
 </body>
 </html>
