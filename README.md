@@ -127,26 +127,9 @@ To set up and run locally:
 
 ## Deployment
 
-The live site at [pierrefouquet.co.uk](https://pierrefouquet.co.uk) is built
-by Cloudflare's GitHub integration, which watches the **`production`**
-branch. Merges into `main` do **not** deploy on their own — that branch is
-the integration branch where pull requests land and bake. Promoting to
-production is a deliberate action:
-
-```bash
-# from main with the changes you want to ship merged in
-npm run release
-```
-
-`npm run release` fast-forwards `production` to `main` and pushes, which
-triggers the Cloudflare build. If you'd rather drive it manually:
-
-```bash
-git checkout production
-git merge --ff-only main
-git push origin production
-git checkout main
-```
+The live site at [passflares.pierrefouquet.co.uk](https://passflares.pierrefouquet.co.uk) is built
+by Cloudflare's GitHub integration, which watches the **`main`**
+branch.
 
 Other operational commands:
 
