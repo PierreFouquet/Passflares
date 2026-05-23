@@ -71,14 +71,34 @@ export function initAuthPage({ onLogin, prefillEmail, notice } = {}) {
     document.getElementById('login-form')?.addEventListener('submit', handleLogin);
     document.getElementById('register-form')?.addEventListener('submit', handleRegister);
 
-    // Inject brand mark
+    // Inject brand mark — parse via DOMParser instead of innerHTML so even a
+    // same-origin SVG can't be executed as HTML if the file is ever swapped.
     fetch('img/logo.svg')
         .then(r => r.text())
         .then(svg => {
             const slot = document.querySelector('.auth-screen__brand');
-            if (slot) slot.innerHTML = svg;
+            if (!slot) return;
+            const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+            const node = doc.documentElement;
+            if (node && node.nodeName.toLowerCase() === 'svg') {
+                slot.replaceChildren(node);
+            }
         })
         .catch(() => {});
+}
+
+function readTurnstileToken(form) {
+    return form.querySelector('input[name="cf-turnstile-response"]')?.value || '';
+}
+
+function resetTurnstileWidgetIn(form) {
+    // The Turnstile script exposes `window.turnstile.reset` once loaded; reset
+    // so a failed submission can retry with a fresh challenge instead of
+    // reusing an already-consumed token.
+    const container = form.querySelector('.cf-turnstile');
+    if (container && window.turnstile?.reset) {
+        try { window.turnstile.reset(container); } catch {}
+    }
 }
 
 async function handleRegister(e) {
@@ -97,10 +117,16 @@ async function handleRegister(e) {
         return;
     }
 
+    const turnstileToken = readTurnstileToken(e.target);
+    if (!turnstileToken) {
+        snack.error('Please complete the CAPTCHA before creating your account.');
+        return;
+    }
+
     showLoading('Creating your account…');
     try {
         const encryptionSalt = generateSalt();
-        await registerUser(email, masterPassword, uint8ArrayToHexString(encryptionSalt));
+        await registerUser(email, masterPassword, uint8ArrayToHexString(encryptionSalt), turnstileToken);
         snack.success('Account created. You can now sign in.');
         e.target.reset();
         document.querySelector('.auth-tabs button[data-tab="login"]')?.click();
@@ -108,6 +134,7 @@ async function handleRegister(e) {
     } catch (err) {
         console.error('Registration failed:', err);
         snack.error(err.message ?? 'Registration failed.');
+        resetTurnstileWidgetIn(e.target);
     } finally {
         hideLoading();
     }
@@ -118,9 +145,15 @@ async function handleLogin(e) {
     const email = document.getElementById('login-email').value;
     const masterPassword = document.getElementById('login-master-password').value;
 
+    const turnstileToken = readTurnstileToken(e.target);
+    if (!turnstileToken) {
+        snack.error('Please complete the CAPTCHA before signing in.');
+        return;
+    }
+
     showLoading('Signing in…');
     try {
-        const { userId, email: userEmail, encryptionSalt, token } = await loginUser(email, masterPassword);
+        const { userId, email: userEmail, encryptionSalt, token } = await loginUser(email, masterPassword, turnstileToken);
         const key = await deriveKey(masterPassword, encryptionSalt);
         setKey(key);
         storeSession(token, { userId, email: userEmail, encryptionSalt });
@@ -130,6 +163,7 @@ async function handleLogin(e) {
     } catch (err) {
         console.error('Login failed:', err);
         snack.error(err.message ?? 'Could not sign in.');
+        resetTurnstileWidgetIn(e.target);
     } finally {
         hideLoading();
     }

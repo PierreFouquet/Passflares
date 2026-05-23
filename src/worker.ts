@@ -45,8 +45,9 @@ const SECURITY_HEADERS = {
 const ALLOWED_ORIGINS = [
     'https://pierrefouquet.co.uk',
     'https://passflares.pierrefouquet93.workers.dev',
-    'https://prerelease.passflares.pierrefouquet93.workers.dev',
     'https://api.pierrefouquet.co.uk',
+    // Local dev origins; the worker's deployed routes are restricted to
+    // pierrefouquet.co.uk, so these only ever match when running `wrangler dev`.
     'http://localhost:8080',
     'http://localhost:5173'
 ];

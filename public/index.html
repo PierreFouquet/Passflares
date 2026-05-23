@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#00a86b">
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self';
-          script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
+          script-src 'self' https://challenges.cloudflare.com;
           style-src 'self' 'unsafe-inline';
           font-src 'self';
           img-src 'self' data:;
@@ -15,6 +15,8 @@
     <title>Passflares</title>
 
     <link rel="icon" type="image/svg+xml" href="img/mark.svg">
+
+    <script src="js/prefs-bootstrap.js"></script>
 
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/theme-dark.css">
@@ -35,23 +37,6 @@
     <link rel="stylesheet" href="css/components/menu.css">
     <link rel="stylesheet" href="css/components/auth.css">
     <link rel="stylesheet" href="css/components/pages.css">
-
-    <script>
-        // Read cached preferences from localStorage BEFORE CSS computes,
-        // to avoid a flash of mismatched theme on cold-load.
-        (function () {
-            try {
-                const raw = localStorage.getItem('passflares.prefs');
-                if (!raw) return;
-                const p = JSON.parse(raw);
-                const html = document.documentElement;
-                if (p.theme)   html.dataset.theme   = p.theme;
-                if (p.density) html.dataset.density = p.density;
-                if (p.shape)   html.dataset.shape   = p.shape;
-                if (p.accent)  html.dataset.accent  = p.accent;
-            } catch {}
-        })();
-    </script>
 
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
@@ -164,7 +149,7 @@
                     <button type="button" class="menu__item" id="logout-btn" role="menuitem">
                         <span class="icon">logout</span>Sign out
                     </button>
-                    <div class="menu__footer">Passflares v2.1.0-beta</div>
+                    <div class="menu__footer">Passflares v1.0.0</div>
                 </div>
             </div>
         </div>

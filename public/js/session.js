@@ -28,7 +28,6 @@ export function clearSession() {
     stopInactivityTimer(); // Clear inactivity timer and event listeners
     sessionTimeoutTimer = null;
     inactivityTimer = null;
-    console.log("Session cleared.");
 }
 
 export function getAuthHeaders() {
@@ -64,8 +63,6 @@ export function startInactivityTimer() {
     window.addEventListener('keydown', resetTimerFunction);
     window.addEventListener('click', resetTimerFunction);
     window.addEventListener('scroll', resetTimerFunction);
-
-    console.log(`Inactivity timer started for ${SESSION_TIMEOUT_MINUTES} minutes.`);
 }
 
 export function stopInactivityTimer() {
@@ -78,7 +75,6 @@ export function stopInactivityTimer() {
         resetTimerFunction = null;
     }
     inactivityTimer = null;
-    console.log("Inactivity timer stopped.");
 }
 
 // Helper to reset timer

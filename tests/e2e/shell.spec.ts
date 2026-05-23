@@ -31,4 +31,25 @@ test.describe('App shell (signed in)', () => {
         await expect(page.locator('.nav-rail')).toHaveClass(/is-open/);
         await expect(page.locator('.nav-rail-scrim')).toHaveClass(/is-open/);
     });
+
+    test('search shortcut hint is visible on desktop', async ({ mockedPage: page, isMobile }) => {
+        test.skip(!!isMobile, 'desktop only — shortcuts are hidden on mobile by design');
+        await gotoAndSeedLogin(page);
+        await expect(page.locator('#search-shortcut-hint')).toBeVisible();
+    });
+
+    test('search shortcut hint is hidden on mobile', async ({ mockedPage: page, isMobile }) => {
+        test.skip(!isMobile, 'mobile only');
+        await gotoAndSeedLogin(page);
+        await expect(page.locator('#search-shortcut-hint')).toBeHidden();
+    });
+
+    test('command palette keyboard-hint footer is hidden on mobile', async ({ mockedPage: page, isMobile }) => {
+        test.skip(!isMobile, 'mobile only');
+        await gotoAndSeedLogin(page);
+        await page.locator('#global-search').click();
+        await page.locator('#global-search').fill('a');
+        await expect(page.locator('.palette')).toBeVisible();
+        await expect(page.locator('.palette__hint')).toBeHidden();
+    });
 });

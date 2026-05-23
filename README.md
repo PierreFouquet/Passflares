@@ -127,9 +127,72 @@ To set up and run locally:
 
 ## Deployment
 
-* **Deploy the Worker (production):** `npm run deploy`
+The live site at [pierrefouquet.co.uk](https://pierrefouquet.co.uk) is built
+by Cloudflare's GitHub integration, which watches the **`production`**
+branch. Merges into `main` do **not** deploy on their own — that branch is
+the integration branch where pull requests land and bake. Promoting to
+production is a deliberate action:
+
+```bash
+# from main with the changes you want to ship merged in
+npm run release
+```
+
+`npm run release` fast-forwards `production` to `main` and pushes, which
+triggers the Cloudflare build. If you'd rather drive it manually:
+
+```bash
+git checkout production
+git merge --ff-only main
+git push origin production
+git checkout main
+```
+
+Other operational commands:
+
+* **Manual worker deploy (Wrangler CLI):** `npm run deploy`
 * **Apply D1 migrations in production:** `npx wrangler d1 migrations apply secure-password-db --remote`
 * **Set production secrets:** `npx wrangler secret put JWT_SECRET` and `npx wrangler secret put TURNSTILE_KEY`
+
+## Security overview
+
+* **Master password never stored:** the password is sent over HTTPS only,
+  hashed with scrypt server-side (N=32768, r=12, p=1), and only the hash is
+  persisted in D1.
+* **End-to-end vault encryption:** vault entries are encrypted in the
+  browser with AES-256-GCM using a key derived from the master password
+  (PBKDF2, 600k iterations) before the ciphertext ever reaches R2. The
+  server never sees plaintext entries.
+* **HSTS + tight CSP:** `Strict-Transport-Security: max-age=31536000` on
+  every API response, plus a Content Security Policy that disallows inline
+  scripts on the app shell.
+* **Bot protection:** Cloudflare Turnstile is enforced server-side on both
+  `/api/register` and `/api/login` — a missing or invalid token blocks the
+  request before any DB or scrypt work happens.
+* **Rate limiting:** both `/api/login` and `/api/register` lock an IP out
+  after 5 failed attempts within 15 minutes (KV-backed).
+* **Audit logging:** every authentication, vault-management, and
+  organisation event is written to the D1 `audit_logs` table.
+* **Auto sign-out:** the client signs the user out after 5 minutes of
+  inactivity; the JWT itself expires after 1 hour server-side.
+
+## Forking and self-hosting
+
+The committed `wrangler.toml` references the upstream maintainer's
+Cloudflare resources (D1 database ID, KV namespace ID, R2 bucket, and the
+`pierrefouquet.co.uk` route). Those are not secrets, but they will not work
+for you — `wrangler deploy` will fail with permission errors. To stand up
+your own copy:
+
+1. Copy the template: `cp wrangler.toml.example wrangler.toml`
+2. Follow the comment block at the top of that file: create your own D1
+   database, KV namespace, and R2 bucket via the Wrangler CLI, then paste
+   the printed IDs into `wrangler.toml`.
+3. Set `JWT_SECRET` and `TURNSTILE_KEY` as Cloudflare secrets (see
+   Deployment above).
+4. Update the Turnstile sitekey in `public/index.html` to your own widget's
+   sitekey.
+5. Apply migrations: `npx wrangler d1 migrations apply secure-password-db --local` (then `--remote` once you're ready to deploy).
 
 ## License
 

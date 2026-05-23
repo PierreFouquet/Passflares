@@ -79,3 +79,36 @@ export function jsonResponse(body: Record<string, any>, status: number = 200): R
         status: status
     });
 }
+
+const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+
+/**
+ * Verifies a Cloudflare Turnstile token against the siteverify endpoint.
+ * Returns true only when Cloudflare confirms `success: true`. Missing tokens,
+ * network errors, and unexpected responses all resolve to false so the caller
+ * can fail closed.
+ */
+export async function verifyTurnstile(
+    token: string | null | undefined,
+    secret: string,
+    ipAddress: string | null = null
+): Promise<boolean> {
+    if (!token || !secret) return false;
+
+    const formData = new FormData();
+    formData.append('secret', secret);
+    formData.append('response', token);
+    if (ipAddress) formData.append('remoteip', ipAddress);
+
+    try {
+        const result = await fetch(TURNSTILE_VERIFY_URL, {
+            method: 'POST',
+            body: formData
+        });
+        if (!result.ok) return false;
+        const data = await result.json() as { success?: boolean };
+        return data.success === true;
+    } catch {
+        return false;
+    }
+}

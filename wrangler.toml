@@ -1,3 +1,16 @@
+# ============================================================
+#  Heads up — forking this project?
+#  The IDs in this file (D1 database_id, KV namespace id, R2
+#  bucket_name, the pierrefouquet.co.uk route) belong to the
+#  upstream maintainer's Cloudflare account. They are not
+#  secrets, but they will NOT work for you — `wrangler deploy`
+#  will fail with permission errors until you swap them out.
+#
+#  See `wrangler.toml.example` for a clean template with
+#  step-by-step instructions for setting up your own
+#  Cloudflare resources.
+# ============================================================
+
 name = "passflares"
 main = "src/worker.ts"
 compatibility_date = "2026-05-19"

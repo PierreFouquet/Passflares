@@ -58,16 +58,17 @@ export async function apiCall(endpoint, method = 'GET', data = null, needsAuth =
 }
 
 // --- Auth Endpoints ---
-export async function registerUser(email, masterPassword, encryptionSalt) {
+export async function registerUser(email, masterPassword, encryptionSalt, turnstileToken) {
     return apiCall('/register', 'POST', {
         email,
         masterPassword,
-        encryptionSalt
+        encryptionSalt,
+        turnstileToken
     }, false); // No auth needed for registration
 }
 
-export async function loginUser(email, masterPassword) {
-    return apiCall('/login', 'POST', { email, masterPassword }, false); // No auth needed for login
+export async function loginUser(email, masterPassword, turnstileToken) {
+    return apiCall('/login', 'POST', { email, masterPassword, turnstileToken }, false); // No auth needed for login
 }
 
 export async function getUserEncryptionSalt(userId) {
