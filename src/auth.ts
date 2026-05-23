@@ -1,6 +1,6 @@
 import { sign } from 'jsonwebtoken';
 import { VaultMetadata } from './types.js';
-import { deriveScryptHash } from './utils.js';
+import { deriveScryptHash, verifyTurnstile } from './utils.js';
 import { logAudit } from './auditLog.js';
 import { CustomRequest, Env, User } from './types.js';
 import { jsonResponse } from './utils.js';
@@ -9,13 +9,35 @@ const FAILED_ATTEMPTS_LIMIT = 5;
 const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
 
 export async function handleRegister(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const { email, masterPassword, encryptionSalt } = await request.json() as { email: string; masterPassword: string; encryptionSalt: string };
+    const { email, masterPassword, encryptionSalt, turnstileToken } = await request.json() as {
+        email: string;
+        masterPassword: string;
+        encryptionSalt: string;
+        turnstileToken?: string;
+    };
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
+
+    // Rate limit by IP — same lockout policy as /login to prevent registration spam
+    const ipKey = `rate_limit:register:${ipAddress}`;
+    const failedAttempts = await env.RATE_LIMIT.get(ipKey);
+    if (failedAttempts && parseInt(failedAttempts) >= FAILED_ATTEMPTS_LIMIT) {
+        logAudit(env, ctx, null, 'REGISTER_FAILURE', { email, reason: 'Rate limited' }, ipAddress, userAgent);
+        return jsonResponse({ message: "Too many registration attempts. Try again later." }, 429);
+    }
 
     if (!email || !masterPassword || !encryptionSalt) {
         logAudit(env, ctx, null, 'REGISTER_FAILURE', { reason: 'Missing fields' }, ipAddress, userAgent);
         return jsonResponse({ message: "Email, master password, and encryption salt are required." }, 400);
+    }
+
+    // Turnstile is required — fail closed so a missing or invalid token blocks registration.
+    const turnstileOk = await verifyTurnstile(turnstileToken, env.TURNSTILE_KEY, ipAddress);
+    if (!turnstileOk) {
+        const newCount = failedAttempts ? parseInt(failedAttempts) + 1 : 1;
+        await env.RATE_LIMIT.put(ipKey, newCount.toString(), { expirationTtl: LOCKOUT_DURATION / 1000 });
+        logAudit(env, ctx, null, 'REGISTER_FAILURE', { email, reason: 'Turnstile failed' }, ipAddress, userAgent);
+        return jsonResponse({ message: "CAPTCHA verification failed. Please try again." }, 403);
     }
 
     try {
@@ -35,6 +57,7 @@ export async function handleRegister(request: CustomRequest, env: Env, ctx: Exec
         ).bind(email, passwordHash, storedSalt, encryptionSalt).run();
 
         if (success) {
+            await env.RATE_LIMIT.delete(ipKey);
             logAudit(env, ctx, null, 'REGISTER_SUCCESS', { email }, ipAddress, userAgent);
             return jsonResponse({ message: "User registered successfully." }, 201);
         } else {
@@ -49,7 +72,11 @@ export async function handleRegister(request: CustomRequest, env: Env, ctx: Exec
 }
 
 export async function handleLogin(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const { email, masterPassword } = await request.json() as { email: string; masterPassword: string };
+    const { email, masterPassword, turnstileToken } = await request.json() as {
+        email: string;
+        masterPassword: string;
+        turnstileToken?: string;
+    };
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
 
@@ -64,6 +91,15 @@ export async function handleLogin(request: CustomRequest, env: Env, ctx: Executi
     if (failedAttempts && parseInt(failedAttempts) >= FAILED_ATTEMPTS_LIMIT) {
         logAudit(env, ctx, null, 'LOGIN_FAILURE', { email, reason: 'Rate limited' }, ipAddress, userAgent);
         return jsonResponse({ message: "Too many failed attempts. Try again later." }, 429);
+    }
+
+    // Turnstile is required — fail closed so a missing or invalid token blocks login.
+    const turnstileOk = await verifyTurnstile(turnstileToken, env.TURNSTILE_KEY, ipAddress);
+    if (!turnstileOk) {
+        const newCount = failedAttempts ? parseInt(failedAttempts) + 1 : 1;
+        await env.RATE_LIMIT.put(ipKey, newCount.toString(), { expirationTtl: LOCKOUT_DURATION / 1000 });
+        logAudit(env, ctx, null, 'LOGIN_FAILURE', { email, reason: 'Turnstile failed' }, ipAddress, userAgent);
+        return jsonResponse({ message: "CAPTCHA verification failed. Please try again." }, 403);
     }
 
     try {

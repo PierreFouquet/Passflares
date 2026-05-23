@@ -47,10 +47,13 @@ export function applyPrefs(prefs, { persistCache = true } = {}) {
     }
     current = next;
     if (persistCache) {
+        // localStorage.setItem can throw on quota errors or in private-browsing
+        // contexts; the in-memory copy is still applied so we swallow it.
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(current)); } catch {}
     }
     // Theme toggle icon mirrors current theme
     updateThemeToggleIcon();
+    // A misbehaving listener shouldn't stop later listeners from running.
     LISTENERS.forEach(fn => { try { fn(current); } catch {} });
     return current;
 }
@@ -66,6 +69,7 @@ function readCache() {
         if (!raw) return null;
         return JSON.parse(raw);
     } catch {
+        // Corrupt JSON or unavailable storage — fall back to defaults.
         return null;
     }
 }

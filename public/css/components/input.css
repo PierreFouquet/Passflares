@@ -121,6 +121,10 @@ textarea.input {
     border: 1px solid var(--color-border);
 }
 
+@media (max-width: 860px) {
+    .search kbd { display: none; }
+}
+
 /* Password input with toggle */
 .password-field {
     position: relative;

@@ -1,0 +1,54 @@
+# Wrangler config template for self-hosting Passflares on your own
+# Cloudflare account. Copy this file to `wrangler.toml`, then replace every
+# `REPLACE_ME` with the corresponding ID from your account.
+#
+# Setup (one-time):
+#   1. Create a D1 database:        npx wrangler d1 create secure-password-db
+#   2. Create a KV namespace:       npx wrangler kv namespace create RATE_LIMIT
+#   3. Create an R2 bucket:         npx wrangler r2 bucket create secure-vaults-r2
+#   4. Paste the printed IDs into the fields below.
+#   5. Set the route/zone to a domain you control (or remove the `routes`
+#      block to deploy to the default *.workers.dev subdomain).
+#   6. Apply migrations locally:    npx wrangler d1 migrations apply secure-password-db --local
+#      ...and remotely once ready:  npx wrangler d1 migrations apply secure-password-db --remote
+#   7. Set secrets:
+#         npx wrangler secret put JWT_SECRET       # openssl rand -base64 64
+#         npx wrangler secret put TURNSTILE_KEY    # secret key from your Turnstile widget
+#   8. Update the Turnstile sitekey in `public/index.html` to match your widget.
+#
+# Resource IDs (database_id, KV namespace id, R2 bucket name) are not secrets
+# — they only identify resources in your account, and access still requires
+# your Cloudflare credentials — but they should still be yours, not the
+# upstream maintainer's.
+
+name = "passflares"
+main = "src/worker.ts"
+compatibility_date = "2026-05-19"
+compatibility_flags = [ "nodejs_compat" ]
+tsconfig = "tsconfig.json"
+
+# Remove this block to deploy to <name>.<your-subdomain>.workers.dev instead.
+routes = [
+    { pattern = "*example.com/*", zone_name = "example.com" }
+]
+preview_urls = false
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[r2_buckets]]
+binding = "VAULTS"
+bucket_name = "REPLACE_ME"  # e.g. "secure-vaults-r2"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "REPLACE_ME"  # from `wrangler kv namespace create RATE_LIMIT`
+
+[[d1_databases]]
+binding = "DB"
+database_name = "secure-password-db"
+database_id = "REPLACE_ME"  # from `wrangler d1 create secure-password-db`
+
+[observability.logs]
+enabled = true

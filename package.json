@@ -1,11 +1,12 @@
 {
   "name": "passflares",
-  "version": "2.1.0-beta",
+  "version": "1.0.0",
   "description": "A modern and secure password manager built on the Cloudflare Stack.",
   "main": "src/worker.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --env=\"\"",
+    "release": "git checkout production && git merge --ff-only main && git push origin production && git checkout main",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

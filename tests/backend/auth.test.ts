@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sign } from 'jsonwebtoken';
 import {
     handleRegister,
@@ -8,7 +8,9 @@ import {
 } from '../../src/auth.js';
 import { createMockDB, createMockEnv, createMockKV, makeRequest, mockCtx } from '../mocks/cloudflare.js';
 
-// Mock scrypt — it's tested separately in utils.test.ts and is too slow here
+// Mock scrypt — it's tested separately in utils.test.ts and is too slow here.
+// verifyTurnstile is mocked per-test by stubbing global.fetch so we can flip
+// it between pass/fail without re-mocking the module.
 vi.mock('../../src/utils.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../src/utils.js')>();
     return {
@@ -26,6 +28,27 @@ vi.mock('../../src/auditLog.js', () => ({
 }));
 
 const SECRET = 'test-jwt-secret-32-chars-minimum!!';
+const VALID_TURNSTILE_TOKEN = 'valid-token';
+
+function mockTurnstileResponse(success: boolean) {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (typeof url === 'string' && url.includes('turnstile/v0/siteverify')) {
+            return new Response(JSON.stringify({ success }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        throw new Error(`Unexpected fetch in test: ${url}`);
+    }));
+}
+
+beforeEach(() => {
+    mockTurnstileResponse(true);
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
 
 function baseEnv(dbResponses = {}) {
     return createMockEnv({
@@ -43,7 +66,8 @@ describe('handleRegister', () => {
         const req = makeRequest('POST', '/api/register', {
             email: 'test@example.com',
             masterPassword: 'Password123!',
-            encryptionSalt: 'aabbcc'
+            encryptionSalt: 'aabbcc',
+            turnstileToken: VALID_TURNSTILE_TOKEN
         }) as any;
 
         const res = await handleRegister(req, env, mockCtx);
@@ -57,7 +81,8 @@ describe('handleRegister', () => {
         const req = makeRequest('POST', '/api/register', {
             email: 'existing@example.com',
             masterPassword: 'Password123!',
-            encryptionSalt: 'aabbcc'
+            encryptionSalt: 'aabbcc',
+            turnstileToken: VALID_TURNSTILE_TOKEN
         }) as any;
 
         const res = await handleRegister(req, env, mockCtx);
@@ -70,6 +95,51 @@ describe('handleRegister', () => {
 
         const res = await handleRegister(req, env, mockCtx);
         expect(res.status).toBe(400);
+    });
+
+    it('returns 403 when Turnstile token is missing', async () => {
+        const env = baseEnv({ 'SELECT id FROM users': { first: null } });
+        const req = makeRequest('POST', '/api/register', {
+            email: 'test@example.com',
+            masterPassword: 'Password123!',
+            encryptionSalt: 'aabbcc'
+        }) as any;
+
+        const res = await handleRegister(req, env, mockCtx);
+        expect(res.status).toBe(403);
+        const body = await res.json() as any;
+        expect(body.message).toMatch(/captcha/i);
+    });
+
+    it('returns 403 when Turnstile verification fails', async () => {
+        mockTurnstileResponse(false);
+        const env = baseEnv({ 'SELECT id FROM users': { first: null } });
+        const req = makeRequest('POST', '/api/register', {
+            email: 'test@example.com',
+            masterPassword: 'Password123!',
+            encryptionSalt: 'aabbcc',
+            turnstileToken: 'bad-token'
+        }) as any;
+
+        const res = await handleRegister(req, env, mockCtx);
+        expect(res.status).toBe(403);
+    });
+
+    it('returns 429 after 5 failed register attempts from the same IP', async () => {
+        const kv = createMockKV();
+        (kv as any).get = vi.fn(() => Promise.resolve('5'));
+        const env = baseEnv({ 'SELECT id FROM users': { first: null } });
+        (env as any).RATE_LIMIT = kv;
+
+        const req = makeRequest('POST', '/api/register', {
+            email: 'test@example.com',
+            masterPassword: 'Password123!',
+            encryptionSalt: 'aabbcc',
+            turnstileToken: VALID_TURNSTILE_TOKEN
+        }) as any;
+
+        const res = await handleRegister(req, env, mockCtx);
+        expect(res.status).toBe(429);
     });
 });
 
@@ -91,7 +161,8 @@ describe('handleLogin', () => {
 
         const req = makeRequest('POST', '/api/login', {
             email: 'test@example.com',
-            masterPassword: 'correct-password'
+            masterPassword: 'correct-password',
+            turnstileToken: VALID_TURNSTILE_TOKEN
         }) as any;
 
         const res = await handleLogin(req, env, mockCtx);
@@ -105,7 +176,8 @@ describe('handleLogin', () => {
         const env = baseEnv({ 'SELECT id, email': { first: null } });
         const req = makeRequest('POST', '/api/login', {
             email: 'nobody@example.com',
-            masterPassword: 'password'
+            masterPassword: 'password',
+            turnstileToken: VALID_TURNSTILE_TOKEN
         }) as any;
 
         const res = await handleLogin(req, env, mockCtx);
@@ -117,7 +189,8 @@ describe('handleLogin', () => {
         const env = baseEnv({ 'SELECT id, email': { first: userWithDifferentHash } });
         const req = makeRequest('POST', '/api/login', {
             email: 'test@example.com',
-            masterPassword: 'wrong-password'
+            masterPassword: 'wrong-password',
+            turnstileToken: VALID_TURNSTILE_TOKEN
         }) as any;
 
         const res = await handleLogin(req, env, mockCtx);
@@ -132,7 +205,8 @@ describe('handleLogin', () => {
 
         const req = makeRequest('POST', '/api/login', {
             email: 'test@example.com',
-            masterPassword: 'password'
+            masterPassword: 'password',
+            turnstileToken: VALID_TURNSTILE_TOKEN
         }) as any;
 
         const res = await handleLogin(req, env, mockCtx);
@@ -145,6 +219,32 @@ describe('handleLogin', () => {
 
         const res = await handleLogin(req, env, mockCtx);
         expect(res.status).toBe(400);
+    });
+
+    it('returns 403 when Turnstile token is missing', async () => {
+        const env = baseEnv({ 'SELECT id, email': { first: mockUser } });
+        const req = makeRequest('POST', '/api/login', {
+            email: 'test@example.com',
+            masterPassword: 'correct-password'
+        }) as any;
+
+        const res = await handleLogin(req, env, mockCtx);
+        expect(res.status).toBe(403);
+        const body = await res.json() as any;
+        expect(body.message).toMatch(/captcha/i);
+    });
+
+    it('returns 403 when Turnstile verification fails', async () => {
+        mockTurnstileResponse(false);
+        const env = baseEnv({ 'SELECT id, email': { first: mockUser } });
+        const req = makeRequest('POST', '/api/login', {
+            email: 'test@example.com',
+            masterPassword: 'correct-password',
+            turnstileToken: 'bad-token'
+        }) as any;
+
+        const res = await handleLogin(req, env, mockCtx);
+        expect(res.status).toBe(403);
     });
 });
 

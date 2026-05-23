@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
     uint8ArrayToHexString,
     hexStringToUint8Array,
     jsonResponse,
-    deriveScryptHash
+    deriveScryptHash,
+    verifyTurnstile
 } from '../../src/utils.js';
 
 describe('uint8ArrayToHexString', () => {
@@ -75,3 +76,48 @@ describe('deriveScryptHash', () => {
         expect(hash1).not.toBe(hash2);
     }, 30_000);
 }, 60_000);
+
+describe('verifyTurnstile', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    function stubFetch(body: unknown, status = 200) {
+        vi.stubGlobal('fetch', vi.fn(async () =>
+            new Response(JSON.stringify(body), {
+                status,
+                headers: { 'Content-Type': 'application/json' }
+            })
+        ));
+    }
+
+    it('returns true when Cloudflare reports success', async () => {
+        stubFetch({ success: true });
+        expect(await verifyTurnstile('token', 'secret')).toBe(true);
+    });
+
+    it('returns false when Cloudflare reports failure', async () => {
+        stubFetch({ success: false, 'error-codes': ['invalid-input-response'] });
+        expect(await verifyTurnstile('token', 'secret')).toBe(false);
+    });
+
+    it('returns false when the token is missing', async () => {
+        stubFetch({ success: true });
+        expect(await verifyTurnstile(null, 'secret')).toBe(false);
+        expect(await verifyTurnstile(undefined, 'secret')).toBe(false);
+        expect(await verifyTurnstile('', 'secret')).toBe(false);
+    });
+
+    it('returns false when the secret is missing', async () => {
+        stubFetch({ success: true });
+        expect(await verifyTurnstile('token', '')).toBe(false);
+    });
+
+    it('returns false when the siteverify endpoint returns a non-2xx', async () => {
+        stubFetch({}, 500);
+        expect(await verifyTurnstile('token', 'secret')).toBe(false);
+    });
+
+    it('returns false when fetch throws', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network'); }));
+        expect(await verifyTurnstile('token', 'secret')).toBe(false);
+    });
+});
