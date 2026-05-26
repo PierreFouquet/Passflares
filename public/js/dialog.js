@@ -3,7 +3,9 @@
 let root;
 
 function ensureRoot() {
-    if (!root) root = document.getElementById('dialog-root');
+    if (!root || !document.body.contains(root)) {
+        root = document.getElementById('dialog-root');
+    }
     return root;
 }
 
@@ -21,12 +23,21 @@ export function openDialog({ title, body, actions = [], variant }) {
 
     const header = document.createElement('div');
     header.className = 'dialog__header';
-    header.innerHTML = `
-        <h3 class="dialog__title" id="dialog-title">${title ?? ''}</h3>
-        <button type="button" class="icon-btn" data-dialog-close aria-label="Close">
-            <span class="icon">close</span>
-        </button>
-    `;
+    // Title is set via textContent — many callers interpolate user-controlled
+    // values like vault or entry names, and innerHTML here would let them
+    // smuggle markup into the dialog (stored XSS via vault/org membership).
+    const titleEl = document.createElement('h3');
+    titleEl.className = 'dialog__title';
+    titleEl.id = 'dialog-title';
+    titleEl.textContent = title ?? '';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'icon-btn';
+    closeBtn.setAttribute('data-dialog-close', '');
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '<span class="icon">close</span>';
+    header.appendChild(titleEl);
+    header.appendChild(closeBtn);
 
     const bodyEl = document.createElement('div');
     bodyEl.className = 'dialog__body';
@@ -44,12 +55,14 @@ export function openDialog({ title, body, actions = [], variant }) {
     host.appendChild(scrim);
 
     let closed = false;
+    let resolveClose;
+    const closedPromise = new Promise(res => { resolveClose = res; });
     const close = (result) => {
         if (closed) return;
         closed = true;
         scrim.classList.add('is-closing');
         setTimeout(() => scrim.remove(), 180);
-        api._resolveClose?.(result);
+        resolveClose?.(result);
     };
 
     actions.forEach(action => {
@@ -83,16 +96,18 @@ export function openDialog({ title, body, actions = [], variant }) {
         (f ?? header.querySelector('[data-dialog-close]')).focus();
     });
 
-    const closedPromise = new Promise(res => { api._resolveClose = res; });
-    const api = { close, scrim, dialog, bodyEl, closedPromise };
-    return api;
+    return { close, scrim, dialog, bodyEl, closedPromise };
 }
 
 export function confirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', variant = 'danger' } = {}) {
     return new Promise(resolve => {
+        // Build the message <p> via textContent rather than HTML interpolation
+        // so vault/entry names embedded in the message can't smuggle markup.
+        const p = document.createElement('p');
+        p.textContent = message ?? '';
         const d = openDialog({
             title,
-            body: `<p>${message}</p>`,
+            body: p,
             variant,
             actions: [
                 { label: cancelLabel, variant: 'text', onClick: () => resolve(false) },

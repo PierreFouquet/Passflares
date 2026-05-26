@@ -31,16 +31,38 @@ import { jsonResponse } from './utils.js';
 
 const router = Router();
 
-// Security headers for all API responses
-const SECURITY_HEADERS = {
+// Security headers common to every response (API + static assets).
+const BASE_SECURITY_HEADERS = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '1; mode=block',
-    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com; manifest-src 'self'"
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()'
 };
+
+// CSP for HTML pages: no inline scripts (the pre-paint bootstrap is an
+// external file), base-uri / object-src / form-action / frame-ancestors all
+// locked down to address the scanner's CSP hardening recommendations.
+const HTML_CSP =
+    "default-src 'self'; " +
+    "script-src 'self' https://challenges.cloudflare.com; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data:; " +
+    "font-src 'self'; " +
+    "connect-src 'self' https://api.pierrefouquet.co.uk; " +
+    "frame-src https://challenges.cloudflare.com; " +
+    "manifest-src 'self'; " +
+    "base-uri 'self'; " +
+    "object-src 'none'; " +
+    "form-action 'self'; " +
+    "frame-ancestors 'none'";
+
+// CSP for API/JSON responses — these should never load any subresource.
+const API_CSP =
+    "default-src 'none'; " +
+    "base-uri 'none'; " +
+    "frame-ancestors 'none'";
 
 const ALLOWED_ORIGINS = [
     'https://pierrefouquet.co.uk',
@@ -126,6 +148,21 @@ router.delete('/api/organizations/:orgId', withAuth, handleDeleteOrganization);
 // --- Catch-all: serve static assets ---
 router.all('*', (request: Request, env: Env) => env.ASSETS.fetch(request));
 
+function isHtmlResponse(response: Response): boolean {
+    const ct = response.headers.get('Content-Type') ?? '';
+    return ct.includes('text/html');
+}
+
+// Picks the right CSP (HTML vs API) and merges with the base security headers.
+function withSecurityHeaders(response: Response, isApi: boolean): Response {
+    const csp = isApi
+        ? API_CSP
+        : (isHtmlResponse(response) ? HTML_CSP : '');
+    const extras: Record<string, string> = { ...BASE_SECURITY_HEADERS };
+    if (csp) extras['Content-Security-Policy'] = csp;
+    return applyHeaders(response, extras);
+}
+
 // --- Worker fetch handler ---
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -135,21 +172,18 @@ export default {
             }
 
             const response = await router.handle(request, env, ctx);
-
-            // Only apply API security/CORS headers to /api/* responses
             const url = new URL(request.url);
-            if (url.pathname.startsWith('/api/')) {
-                return applyHeaders(
-                    applyHeaders(response, SECURITY_HEADERS),
-                    getCorsHeaders(request)
-                );
-            }
-            return response;
+            const isApi = url.pathname.startsWith('/api/');
+
+            const secured = withSecurityHeaders(response, isApi);
+            return isApi
+                ? applyHeaders(secured, getCorsHeaders(request))
+                : secured;
         } catch (err: unknown) {
             console.error('Request processing failed:', err);
             const errorResponse = jsonResponse({ message: 'Service unavailable' }, 500);
             return applyHeaders(
-                applyHeaders(errorResponse, SECURITY_HEADERS),
+                withSecurityHeaders(errorResponse, true),
                 getCorsHeaders(request)
             );
         }
