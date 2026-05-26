@@ -1,6 +1,6 @@
 {
   "name": "passflares",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A modern and secure password manager built on the Cloudflare Stack.",
   "main": "src/worker.ts",
   "scripts": {
@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:all": "vitest run && playwright test"
+    "test:audit": "npm audit --audit-level=moderate",
+    "test:all": "npm run test:audit && vitest run && playwright test"
   },
   "keywords": [],
   "author": "",
