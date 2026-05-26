@@ -18,7 +18,12 @@ compatibility_flags = [ "nodejs_compat" ]
 tsconfig = "tsconfig.json"
 
 routes = [
-    { pattern = "passflares.pierrefouquet.co.uk/*", zone_name = "passflares.pierrefouquet.co.uk" }
+    # `pattern` is the exact host(+path) the Worker handles. `zone_name` is
+    # the actual Cloudflare zone (the apex domain), which is where the DNS
+    # for the subdomain lives. `passflares.pierrefouquet.co.uk` is NOT a
+    # separate zone — Cloudflare returns "zone does not exist [10083]"
+    # if you set zone_name to a subdomain.
+    { pattern = "passflares.pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
 ]
 preview_urls = false
 
