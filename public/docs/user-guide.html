@@ -18,20 +18,7 @@
     <link rel="stylesheet" href="../css/components/button.css">
     <link rel="stylesheet" href="css/docs.css">
 
-    <script>
-        (function () {
-            try {
-                const raw = localStorage.getItem('passflares.prefs');
-                if (!raw) return;
-                const p = JSON.parse(raw);
-                const html = document.documentElement;
-                if (p.theme)   html.dataset.theme   = p.theme;
-                if (p.density) html.dataset.density = p.density;
-                if (p.shape)   html.dataset.shape   = p.shape;
-                if (p.accent)  html.dataset.accent  = p.accent;
-            } catch {}
-        })();
-    </script>
+    <script src="../js/prefs-bootstrap.js"></script>
 </head>
 <body>
 <div class="docs-shell">

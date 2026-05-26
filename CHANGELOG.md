@@ -5,6 +5,78 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-05-26
+
+Follow-up to 1.0.1. A re-scan after 1.0.1 was deployed still flagged the same
+missing-header findings on `passflares.pierrefouquet.co.uk`. Direct probing
+revealed that the security headers were applied correctly to `/api/*`
+responses but completely absent from `/` and `/js/*.js` — `cf-cache-status:
+HIT`, no worker headers in sight. Root cause: Cloudflare Workers' `[assets]`
+binding defaults to `run_worker_first = false`, so any request that matches a
+static asset is served directly by the CDN and the Worker is never invoked.
+1.0.1's `withSecurityHeaders()` was correct in code but never ran for the
+HTML/JS/CSS responses the scanner was probing.
+
+### Changed
+- `wrangler.toml` and `wrangler.toml.example` now set
+  `run_worker_first = true` on the `[assets]` binding. The Worker runs for
+  every request, asset or not, so the security-header layer reaches static
+  responses too.
+- All five docs pages (`public/docs/*.html`) now load the theme bootstrap
+  via `<script src="../js/prefs-bootstrap.js">` instead of an inline
+  `<script>` block. Same fix the app shell got in 1.0.0; needed here too
+  because the Worker (now running on every request) applies the strict CSP
+  to the docs pages as well, and the inline block would have been blocked.
+  Caught by the new `static-security-audit.test.ts` suite below.
+- `package.json` adds `test:audit` (`npm audit --audit-level=moderate`)
+  and chains it into `test:all` so dependency vulnerabilities surface
+  alongside test failures. Initial run cleared three moderate-severity
+  transitive findings in `ws` (via `miniflare` via `wrangler`) by way of
+  a non-breaking `npm audit fix`.
+
+### Added
+- `tests/backend/wrangler-config.test.ts` — parses `wrangler.toml` and
+  `wrangler.toml.example` and asserts `[assets].run_worker_first === true`.
+  Regression guard for this exact bypass.
+- `tests/backend/cors-strict.test.ts` — unknown / missing `Origin` does
+  not get echoed back; CORS never combines `*` with `Allow-Credentials: true`;
+  OPTIONS preflight carries the base security headers too.
+- `tests/backend/http-methods.test.ts` — TRACE rejected, vault routes
+  return 401 + security headers when called without `Authorization`,
+  unknown `/api/*` paths return 404 with security headers, HEAD matches GET.
+- `tests/backend/header-injection.test.ts` — CR/LF bytes in `Origin`
+  and request bodies never appear verbatim in response headers; oversize
+  `Origin` is ignored, not echoed.
+- `tests/backend/static-security-audit.test.ts` — repo-level greps:
+  no `http://` URLs in `public/**`, no PEM markers, no `console.log` or
+  `debugger` left in `public/js/**`, no inline `<script>` blocks in any
+  `public/**/*.html`, `robots.txt` exposes no admin paths.
+- `tests/backend/vuln-classes.test.ts` — behavioural tests for IDOR,
+  missing/expired/tampered JWT, mass-assignment on `/api/users/me/preferences`,
+  prototype pollution, path traversal, behavioural SQL-injection probe,
+  loose login-timing check, and oversize-body handling.
+- `tests/e2e/security-headers-live.spec.ts` — opt-in Playwright spec that
+  probes the deployed site (`LIVE_HOST=https://passflares.pierrefouquet.co.uk
+  npx playwright test security-headers-live`) and asserts every public path
+  carries CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`,
+  `X-Frame-Options`, and `Permissions-Policy`. Skipped when `LIVE_HOST` is
+  unset so offline CI still passes.
+- Extra assertions in `tests/backend/worker-security.test.ts`: HSTS
+  `max-age` ≥ 7,776,000 with `preload`; HTML CSP names every directive
+  (`default-src`, `script-src`, `style-src`, `img-src`, `font-src`,
+  `connect-src`, `frame-src`, `manifest-src`, `base-uri`, `object-src`,
+  `form-action`, `frame-ancestors`); `script-src` rejects `'unsafe-eval'`,
+  `*`, and `data:`; no `X-Powered-By` is emitted; base security headers
+  also land on JS, font, and image responses.
+- `SECURITY.md` now notes that `/cdn-cgi/*` is Cloudflare-managed edge
+  infrastructure and is intentionally out of scope for this repo.
+
+### Deployment notes
+- After deploy, Cloudflare may still serve the previous header-less
+  responses from edge cache. Purge via the Cloudflare dashboard
+  (Caching → Configuration → Purge Everything) or the API:
+  `curl -X POST "https://api.cloudflare.com/client/v4/zones/<zone_id>/purge_cache" -H "Authorization: Bearer <token>" -H "Content-Type: application/json" --data '{"purge_everything":true}'`.
+
 ## [1.0.1] — 2026-05-26
 
 Security hardening release following an external Pentest-Tools Light scan
