@@ -5,6 +5,20 @@ let fallback = null;
 let mountEl = null;
 let currentRouteName = null;
 
+function buildErrorState(message) {
+    const wrap = document.createElement('div');
+    wrap.className = 'empty-state';
+    const icon = document.createElement('span');
+    icon.className = 'icon';
+    icon.textContent = 'error';
+    const h = document.createElement('h3');
+    h.textContent = 'Something went wrong';
+    const p = document.createElement('p');
+    p.textContent = message;
+    wrap.append(icon, h, p);
+    return wrap;
+}
+
 export function registerRoute(name, mount) {
     routes.set(name, mount);
 }
@@ -56,7 +70,10 @@ async function renderCurrent() {
         await mount({ params: rest, mount: mountEl });
     } catch (err) {
         console.error(`Route "${name}" failed to render:`, err);
-        mountEl.innerHTML = `<div class="empty-state"><span class="icon">error</span><h3>Something went wrong</h3><p>${err?.message ?? 'Try refreshing the page.'}</p></div>`;
+        // Build via DOM APIs so err.message (which can include any string a
+        // page renderer rejected with — potentially derived from API or user
+        // data) cannot inject markup into the error state.
+        mountEl.replaceChildren(buildErrorState(err?.message ?? 'Try refreshing the page.'));
     }
 
     syncNavRailActive(name);

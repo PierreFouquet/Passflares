@@ -4,14 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#00a86b">
-    <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self';
-          script-src 'self' https://challenges.cloudflare.com;
-          style-src 'self' 'unsafe-inline';
-          font-src 'self';
-          img-src 'self' data:;
-          connect-src 'self' https://api.pierrefouquet.co.uk;
-          frame-src https://challenges.cloudflare.com;">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- Content-Security-Policy is sent by the worker as an HTTP response header
+         (see HTML_CSP in src/worker.ts). Kept there only — duplicating it in a
+         <meta> tag would mean two sources of truth that can drift apart. -->
     <title>Passflares</title>
 
     <link rel="icon" type="image/svg+xml" href="img/mark.svg">
@@ -57,7 +53,7 @@
             <button type="button" data-tab="register" role="tab" aria-selected="false">Create account</button>
         </div>
 
-        <form id="login-form" class="auth-form" data-tab-panel="login">
+        <form id="login-form" class="auth-form" data-tab-panel="login" method="post" action="#">
             <div class="field">
                 <input type="email" id="login-email" placeholder=" " required autocomplete="username">
                 <label for="login-email">Email</label>
@@ -75,7 +71,7 @@
             </button>
         </form>
 
-        <form id="register-form" class="auth-form hidden" data-tab-panel="register">
+        <form id="register-form" class="auth-form hidden" data-tab-panel="register" method="post" action="#">
             <div class="field">
                 <input type="email" id="register-email" placeholder=" " required autocomplete="username">
                 <label for="register-email">Email</label>
@@ -149,7 +145,7 @@
                     <button type="button" class="menu__item" id="logout-btn" role="menuitem">
                         <span class="icon">logout</span>Sign out
                     </button>
-                    <div class="menu__footer">Passflares v1.0.0</div>
+                    <div class="menu__footer">Passflares v1.0.1</div>
                 </div>
             </div>
         </div>

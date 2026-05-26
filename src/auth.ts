@@ -273,10 +273,8 @@ export async function handleDeleteAccount(request: CustomRequest, env: Env, ctx:
 
         // 3. Delete owned vault records (FK cascade removes vault_access_controls)
         if (ownedVaults.length > 0) {
-            const placeholders = ownedVaults.map(() => '?').join(', ');
-            await env.DB.prepare(
-                `DELETE FROM vaults WHERE id IN (${placeholders})`
-            ).bind(...ownedVaults.map(v => v.id)).run();
+            const deleteVault = env.DB.prepare('DELETE FROM vaults WHERE id = ?');
+            await env.DB.batch(ownedVaults.map(v => deleteVault.bind(v.id)));
         }
 
         // 4. Remove user from shared vault access controls

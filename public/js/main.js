@@ -83,12 +83,19 @@ function registerRoutes() {
 }
 
 function wireShell() {
-    // Inject brand SVG in app bar
+    // Inject brand SVG in app bar — parse via DOMParser instead of innerHTML
+    // so even a same-origin SVG can't be executed as HTML if the file is
+    // ever swapped. Mirrors the same pattern in pages/auth.js.
     fetch('img/logo.svg')
         .then(r => r.text())
         .then(svg => {
             const slot = document.querySelector('[data-logo-slot]');
-            if (slot) slot.innerHTML = svg;
+            if (!slot) return;
+            const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+            const node = doc.documentElement;
+            if (node && node.nodeName.toLowerCase() === 'svg') {
+                slot.replaceChildren(node);
+            }
         })
         .catch(() => {});
 
