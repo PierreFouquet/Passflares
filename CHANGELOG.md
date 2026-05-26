@@ -18,6 +18,7 @@ static asset is served directly by the CDN and the Worker is never invoked.
 HTML/JS/CSS responses the scanner was probing.
 
 ### Changed
+
 - `wrangler.toml` and `wrangler.toml.example` now set
   `run_worker_first = true` on the `[assets]` binding. The Worker runs for
   every request, asset or not, so the security-header layer reaches static
@@ -35,6 +36,7 @@ HTML/JS/CSS responses the scanner was probing.
   a non-breaking `npm audit fix`.
 
 ### Added
+
 - `tests/backend/wrangler-config.test.ts` — parses `wrangler.toml` and
   `wrangler.toml.example` and asserts `[assets].run_worker_first === true`.
   Regression guard for this exact bypass.
@@ -72,10 +74,18 @@ HTML/JS/CSS responses the scanner was probing.
   infrastructure and is intentionally out of scope for this repo.
 
 ### Deployment notes
+
 - After deploy, Cloudflare may still serve the previous header-less
   responses from edge cache. Purge via the Cloudflare dashboard
   (Caching → Configuration → Purge Everything) or the API:
-  `curl -X POST "https://api.cloudflare.com/client/v4/zones/<zone_id>/purge_cache" -H "Authorization: Bearer <token>" -H "Content-Type: application/json" --data '{"purge_everything":true}'`.
+
+  ```sh
+  curl -X POST \
+    "https://api.cloudflare.com/client/v4/zones/<zone_id>/purge_cache" \
+    -H "Authorization: Bearer <token>" \
+    -H "Content-Type: application/json" \
+    --data '{"purge_everything":true}'
+  ```
 
 ## [1.0.1] — 2026-05-26
 
@@ -86,6 +96,7 @@ issues — no exploitable vulnerabilities were reported. This release addresses
 every confirmed finding and mitigates the one unconfirmed false-positive.
 
 ### Added
+
 - `public/.well-known/security.txt` so external researchers have a
   discoverable channel for vulnerability reports (closes the scanner's
   "Security.txt file is missing" finding).
@@ -109,6 +120,7 @@ every confirmed finding and mitigates the one unconfirmed false-positive.
   duplicated `<meta>` CSP, and that the auth forms declare `method="post"`.
 
 ### Changed
+
 - Security headers (HSTS, `X-Content-Type-Options`, `Referrer-Policy`,
   `Permissions-Policy`, `X-Frame-Options`, `Content-Security-Policy`) are
   now sent on every response, not just `/api/*`. Previously the static
@@ -135,6 +147,7 @@ every confirmed finding and mitigates the one unconfirmed false-positive.
   path for SVG content.
 
 ### Fixed
+
 - Dialog title and `confirmDialog` message are now rendered with
   `textContent`, not HTML interpolation. Callers that pass vault, entry,
   or organisation names (any user-controlled string) into a dialog can no
@@ -162,6 +175,7 @@ mature feature set across personal vaults, organisations, sharing, and
 preferences sync.
 
 ### Added
+
 - Server-side Turnstile verification on `/api/register` and `/api/login`. A
   missing or invalid token now blocks sign-in and account creation (previously
   the widget was rendered but never checked).
@@ -180,6 +194,7 @@ preferences sync.
   keyboard footer are hidden on mobile viewports and shown on desktop.
 
 ### Changed
+
 - Mobile (≤ 860px) no longer renders the Ctrl+K / `↑ ↓ Enter Esc` keyboard
   hints in the search bar or command palette — desktop behaviour unchanged.
 - `Content-Security-Policy` on `public/index.html` no longer allows
@@ -192,15 +207,18 @@ preferences sync.
   environment was removed.
 
 ### Removed
+
 - Debug `console.log` calls from `public/js/session.js`. Error/warn paths
   remain.
 
 ### Fixed
+
 - Empty `try { … } catch {}` blocks in `public/js/prefs.js` now carry a
   one-line comment naming the swallowed condition (localStorage quota,
   listener safety, corrupt cache).
 
 ### Security
+
 - Turnstile is now genuinely enforced (see Added).
 - CSP tightened (see Changed).
 - Master password continues to be transmitted only inside the TLS tunnel
@@ -210,6 +228,7 @@ preferences sync.
   1.0 — it's restated here for completeness on the milestone release.
 
 ### Known follow-ups (not blocking 1.0)
+
 - JWT session tokens live in `localStorage`. Mitigated by 5-minute inactivity
   timeout and 1-hour server-side expiry; future work: move to an HttpOnly
   cookie.

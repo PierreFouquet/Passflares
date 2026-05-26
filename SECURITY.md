@@ -2,9 +2,13 @@
 
 ## Reporting a Vulnerability
 
-Please go to - https://github.com/PierreFouquet/Passflares/security/advisories - and report a vulnerability here.
+Please report a vulnerability at
+[GitHub Security Advisories][advisories].
 
-Please include all details, including, if you managed to, any data to took (not the actual data just examples).
+Please include all details, including, if you managed to, any data you took
+(not the actual data — just examples).
+
+[advisories]: https://github.com/PierreFouquet/Passflares/security/advisories
 
 ## Scope
 
