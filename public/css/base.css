@@ -118,3 +118,22 @@ a:hover { text-decoration: underline; }
 .row-end { display: flex; gap: var(--space-2); align-items: center; justify-content: flex-end; }
 .row-wrap { flex-wrap: wrap; }
 .spacer { flex: 1 1 auto; }
+
+/* Spacing utilities — added so style-src can drop 'unsafe-inline'. */
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-8px { margin-bottom: 8px; }
+
+/* Form-row: a field that grows to fill its wrapping row. */
+.field--grow { flex: 1; min-width: 220px; }
+
+/* Icon shimmed onto a line of text. */
+.icon--inline { vertical-align: middle; margin-right: 6px; }
+
+/* Foreground colour utilities. */
+.text-danger { color: var(--color-danger); }
+
+/* Preserves user-entered line breaks (e.g. notes field) without overriding
+   the surrounding font stack. */
+.text-preserve-wrap { font-family: inherit; white-space: pre-wrap; }

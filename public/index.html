@@ -213,18 +213,18 @@
     <section class="dash-section">
         <h2>Security overview</h2>
         <div class="tile-grid" data-security-tiles>
-            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
-            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
-            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
-            <div class="skeleton skeleton-row" style="height: 140px; border-radius: var(--radius-card);"></div>
+            <div class="skeleton skeleton-row skeleton-row--tile"></div>
+            <div class="skeleton skeleton-row skeleton-row--tile"></div>
+            <div class="skeleton skeleton-row skeleton-row--tile"></div>
+            <div class="skeleton skeleton-row skeleton-row--tile"></div>
         </div>
     </section>
 
     <section class="dash-section">
         <h2>Recent vaults</h2>
         <div class="list" data-recent-vaults>
-            <div class="skeleton skeleton-row" style="height: 56px;"></div>
-            <div class="skeleton skeleton-row" style="height: 56px; margin-top: 8px;"></div>
+            <div class="skeleton skeleton-row skeleton-row--md"></div>
+            <div class="skeleton skeleton-row skeleton-row--md"></div>
         </div>
     </section>
 </template>
@@ -438,7 +438,7 @@
         </div>
         <div data-notes-section hidden>
             <div class="entry-drawer__field-label">Notes</div>
-            <div class="entry-drawer__field-value" data-notes style="font-family: inherit; white-space: pre-wrap;"></div>
+            <div class="entry-drawer__field-value text-preserve-wrap" data-notes></div>
         </div>
     </div>
     <div class="entry-drawer__footer">

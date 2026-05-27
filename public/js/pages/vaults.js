@@ -139,7 +139,7 @@ function renderSection(title, vaults, orgs, iconName) {
     wrap.className = 'list-section';
     wrap.innerHTML = `
         <header class="list-section__header">
-            <span><span class="icon icon--sm" style="vertical-align: middle; margin-right: 6px;">${iconName}</span>${escapeHTML(title)}</span>
+            <span><span class="icon icon--sm icon--inline">${escapeHTML(iconName)}</span>${escapeHTML(title)}</span>
             <span class="list-section__count">${vaults.length} vault${vaults.length === 1 ? '' : 's'}</span>
         </header>
     `;
@@ -253,7 +253,7 @@ function renderVaultDetail(container, payload, orgs) {
         <button type="button" class="btn btn--text" data-back-btn>
             <span class="icon">arrow_back</span>Back to vaults
         </button>
-        <div class="card" style="margin-top: var(--space-3);">
+        <div class="card mt-3">
             <header class="card__header">
                 <div>
                     <h2 class="card__title">${escapeHTML(metadata.name)}</h2>
@@ -274,11 +274,11 @@ function renderVaultDetail(container, payload, orgs) {
                     <label for="entry-name">Entry name</label>
                 </div>
                 <div class="row row-wrap">
-                    <div class="field" style="flex: 1; min-width: 220px;">
+                    <div class="field field--grow">
                         <input type="text" id="entry-username" placeholder=" " required>
                         <label for="entry-username">Username / email</label>
                     </div>
-                    <div class="field password-field" style="flex: 1; min-width: 220px;">
+                    <div class="field field--grow password-field">
                         <input type="text" id="entry-password" placeholder=" " required>
                         <label for="entry-password">Password</label>
                         <button type="button" class="icon-btn icon-btn--sm" data-toggle-generator aria-label="Open generator">
@@ -319,7 +319,7 @@ function renderVaultDetail(container, payload, orgs) {
             </div>
         </section>
 
-        <div class="row row-between" style="margin-bottom: var(--space-3);">
+        <div class="row row-between mb-3">
             <h2>Entries (<span data-entries-count></span>)</h2>
             <div class="row">
                 <button type="button" class="btn btn--filled" id="save-vault-btn">

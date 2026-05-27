@@ -35,6 +35,9 @@
 @keyframes skeleton-shimmer { from { background-position: 0% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation-duration: 0ms; } }
 .skeleton-row { height: 16px; }
+.skeleton-row--tile  { height: 140px; border-radius: var(--radius-card); }
+.skeleton-row--md    { height: 56px; }
+.skeleton-row--md + .skeleton-row--md { margin-top: 8px; }
 
 /* ── Command palette / global search ───────────── */
 .palette-scrim {
