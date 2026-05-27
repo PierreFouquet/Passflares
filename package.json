@@ -1,12 +1,11 @@
 {
   "name": "passflares",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A modern and secure password manager built on the Cloudflare Stack.",
   "main": "src/worker.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --env=\"\"",
-    "release": "git checkout production && git merge --ff-only main && git push origin production && git checkout main",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -21,16 +20,16 @@
     "@cloudflare/workers-types": "^4.20260527.1",
     "@playwright/test": "^1.60.0",
     "@types/jsonwebtoken": "^9.0.6",
-    "@types/node": "^25.9.1",
+    "@types/node": "^20.19.41",
     "happy-dom": "^20.9.0",
     "http-server": "^14.1.1",
-    "typescript": "^6.0.3",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.7",
     "wrangler": "^4.93.0"
   },
   "dependencies": {
-    "@noble/hashes": "^1.4.0",
-    "itty-router": "^5.0.23",
+    "@noble/hashes": "^2.2.0",
+    "itty-router": "^4.2.2",
     "jsonwebtoken": "^9.0.2"
   }
 }

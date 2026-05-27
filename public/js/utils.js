@@ -60,28 +60,56 @@ export function checkPasswordStrength(password) {
     };
 }
 
+// Cryptographically-secure unbiased integer in [0, max). Uses rejection
+// sampling on `crypto.getRandomValues` to avoid the modulo bias that
+// `randomU32() % max` would introduce when max is not a power of two.
+function secureRandomInt(max) {
+    if (max <= 0 || max > 0x100000000) {
+        throw new RangeError(`secureRandomInt: max out of range (got ${max})`);
+    }
+    const limit = Math.floor(0x100000000 / max) * max;
+    const buf = new Uint32Array(1);
+    let n;
+    do {
+        crypto.getRandomValues(buf);
+        n = buf[0];
+    } while (n >= limit);
+    return n % max;
+}
+
 export function generateRandomPassword(length = 16) {
+    // Minimum length must accommodate one of each required character class.
+    if (length < 4) length = 4;
+
     const lowercase = "abcdefghijklmnopqrstuvwxyz";
     const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const numbers = "0123456789";
-    const symbols = "!@#$%^&*()-_=+[{]}\\|;:'\",<.>/?`~";
-    
-    // Ensure at least one character from each set
-    const allChars = lowercase + uppercase + numbers + symbols;
-    let password = "";
-    
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += symbols[Math.floor(Math.random() * symbols.length)];
-    
-    // Fill the rest with random characters
+    const numbers   = "0123456789";
+    const symbols   = "!@#$%^&*()-_=+[{]}\\|;:'\",<.>/?`~";
+    const allChars  = lowercase + uppercase + numbers + symbols;
+
+    // Seed with one guaranteed character from each class so the password
+    // always meets the strength meter's class requirements.
+    const chars = [
+        lowercase[secureRandomInt(lowercase.length)],
+        uppercase[secureRandomInt(uppercase.length)],
+        numbers  [secureRandomInt(numbers.length)],
+        symbols  [secureRandomInt(symbols.length)]
+    ];
     for (let i = 4; i < length; i++) {
-        password += allChars[Math.floor(Math.random() * allChars.length)];
+        chars.push(allChars[secureRandomInt(allChars.length)]);
     }
-    
-    // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+
+    // Fisher-Yates shuffle so the guaranteed-class characters aren't pinned
+    // at the start. `Array.prototype.sort(() => Math.random() - 0.5)` is
+    // both biased AND non-CSPRNG, so the security gain from above would be
+    // lost otherwise.
+    for (let i = chars.length - 1; i > 0; i--) {
+        const j = secureRandomInt(i + 1);
+        const tmp = chars[i];
+        chars[i] = chars[j];
+        chars[j] = tmp;
+    }
+    return chars.join('');
 }
 
 export function searchVaultEntries(query, entries) {

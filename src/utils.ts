@@ -1,7 +1,10 @@
 // src/utils.ts
 
-import { scrypt, scryptAsync } from '@noble/hashes/scrypt';
-import { randomBytes } from '@noble/hashes/utils';
+// @noble/hashes 2.x requires the .js extension on submodule imports — see
+// https://github.com/paulmillr/noble-hashes/releases/tag/2.0.1 . The runtime
+// is unchanged; this is purely an ESM-resolution requirement.
+import { scrypt, scryptAsync } from '@noble/hashes/scrypt.js';
+import { randomBytes } from '@noble/hashes/utils.js';
 import { Env } from './types.js'; // Ensure correct path and .js extension
 
 export const KDF_SALT_LENGTH_BYTES = 16;

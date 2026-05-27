@@ -12,7 +12,7 @@ import { renderVaultsPage, loadVaultsAndRender } from './pages/vaults.js';
 import { renderOrgsPage } from './pages/orgs.js';
 import { renderSettingsPage } from './pages/settings.js';
 import { attachShortcut as attachSearchShortcut, attachAppBarSearch, buildIndex, setOnSelect, open as openPalette, close as closePalette } from './search.js';
-import { reset as resetState, getVaults, getAllDecryptedEntries, hasKey } from './state.js';
+import { reset as resetState, getVaults, getAllDecryptedEntries, hasKey, setKey } from './state.js';
 import { closeEntryDrawer } from './drawer.js';
 import { getOrganizations } from './api.js';
 import { setOrgs } from './state.js';
@@ -20,6 +20,16 @@ import { setOrgs } from './state.js';
 document.addEventListener('DOMContentLoaded', boot);
 
 async function boot() {
+    // Test seam (e2e only). The encryption key is a derived CryptoKey held
+    // in memory, so it can't be persisted across reload. Tests that want to
+    // exercise the signed-in path inject a placeholder by setting this
+    // window flag in `page.addInitScript`. Production never sets it; grep
+    // for `__PASSFLARES_E2E_FAKE_KEY` to find every test that depends on
+    // it. See [tests/e2e/fixtures.ts] `gotoAndSeedLogin`.
+    if (typeof window !== 'undefined' && window.__PASSFLARES_E2E_FAKE_KEY) {
+        setKey(window.__PASSFLARES_E2E_FAKE_KEY);
+    }
+
     // 1. Always apply cached prefs immediately (already done by the inline
     //    script in <head>, but we re-apply via the JS pipeline so listeners
     //    fire). Server fetch happens only when authenticated.

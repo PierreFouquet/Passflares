@@ -123,13 +123,29 @@ export const test = base.extend<{
 export { expect };
 
 export async function gotoAndSeedLogin(page: Page) {
-    await page.goto('/');
-    await page.evaluate(() => {
-        localStorage.setItem('jwtToken', 'fake-test-jwt');
-        localStorage.setItem('userInfo', JSON.stringify({
+    // Pre-seed before boot() runs. Two things have to be true for boot to
+    // land on the signed-in path:
+    //   1. localStorage has jwtToken + userInfo  → isLoggedIn() = true
+    //   2. state.encryptionKey is non-null       → hasKey()    = true
+    //
+    // (2) is the catch: in production the key is a real CryptoKey derived
+    // from the master password at sign-in and only lives in memory. Tests
+    // can't reproduce that without doing a full PBKDF2 derive every run,
+    // so main.js exposes a tiny window-flag test seam (search the source
+    // for `__PASSFLARES_E2E_FAKE_KEY`). addInitScript runs in every frame
+    // before the page's own scripts, so the flag is set by the time
+    // boot()'s DOMContentLoaded listener fires.
+    await page.addInitScript(() => {
+        window.localStorage.setItem('jwtToken', 'fake-test-jwt');
+        window.localStorage.setItem('userInfo', JSON.stringify({
             userId: 1, email: 'tester@example.com',
             encryptionSalt: 'aabbccddeeff00112233445566778899'
         }));
+        // Any truthy non-null value satisfies hasKey() in state.js.
+        // Tests that exercise actual encrypt/decrypt would need a real
+        // CryptoKey — for those, do a real login through the auth flow
+        // instead of using this fixture.
+        (window as unknown as { __PASSFLARES_E2E_FAKE_KEY: unknown }).__PASSFLARES_E2E_FAKE_KEY = { __test: true };
     });
-    await page.reload();
+    await page.goto('/');
 }

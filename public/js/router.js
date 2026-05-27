@@ -69,7 +69,12 @@ async function renderCurrent() {
     try {
         await mount({ params: rest, mount: mountEl });
     } catch (err) {
-        console.error(`Route "${name}" failed to render:`, err);
+        // Pass `name` as a separate argument rather than interpolating it
+        // into the format-string position. Avoids the CodeQL js/tainted-
+        // format-string finding: console.error treats the first argument
+        // as a printf-style format, so a `name` containing `%s`/`%d` would
+        // consume the next argument (here `err`) as a placeholder value.
+        console.error('Route failed to render:', name, err);
         // Build via DOM APIs so err.message (which can include any string a
         // page renderer rejected with — potentially derived from API or user
         // data) cannot inject markup into the error state.
