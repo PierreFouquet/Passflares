@@ -28,6 +28,33 @@ updates:
         update-types:
           - minor
           - patch
+    # Suppress *routine* version-update PRs for SemVer-major bumps.
+    #
+    # Background: in 1.0.3 → 1.0.4, dependabot auto-merged itty-router
+    # 4.2 → 5.0 (renamed `Router` → `AutoRouter`, broke routing at
+    # runtime), typescript 5 → 6, and @types/node 20 → 25, all on green
+    # CI + green CodeQL. Cloudflare auto-deployed → live site returned
+    # 1101 worker exceptions until rolled back. Major bumps need to be
+    # taken deliberately by a human after a behavioural review, not
+    # auto-merged.
+    #
+    # Important: this `ignore` field affects ONLY version-update PRs
+    # (the routine "a new version exists" channel). Dependabot's
+    # SECURITY-update channel (driven by GitHub Advisory Database CVEs,
+    # configured separately in repo Settings → Code security &
+    # analysis) is documented to ignore this field — so if a CVE is
+    # filed against a transitive whose only fix is in a new major, you
+    # still get the PR, flagged as a security update.
+    # See: https://docs.github.com/en/code-security/dependabot/dependabot-security-updates/about-dependabot-security-updates
+    #
+    # To deliberately upgrade a major: do it manually, run the full test
+    # suite (vitest + playwright) locally before pushing, and open the
+    # PR yourself so it gets the same review the CodeQL/Workers Build
+    # checks already require.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     commit-message:
       prefix: "chore(deps)"
       include: scope

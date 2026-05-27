@@ -88,6 +88,56 @@ describe('generateRandomPassword', () => {
     it('generates different passwords each call', () => {
         expect(generateRandomPassword()).not.toBe(generateRandomPassword());
     });
+
+    it('coerces length < 4 up to 4 (cannot satisfy class requirements otherwise)', () => {
+        expect(generateRandomPassword(2)).toHaveLength(4);
+        expect(generateRandomPassword(0)).toHaveLength(4);
+    });
+
+    it('uses crypto.getRandomValues, not Math.random (regression — CodeQL js/insecure-randomness)', () => {
+        // Math.random must never be called from password generation. If it
+        // ever returns, a future regression has re-introduced a CSPRNG
+        // weakness for the master-vault password generator.
+        const origRandom = Math.random;
+        let mathRandomCalls = 0;
+        try {
+            Math.random = () => { mathRandomCalls++; return 0.5; };
+            for (let i = 0; i < 5; i++) generateRandomPassword(20);
+        } finally {
+            Math.random = origRandom;
+        }
+        expect(mathRandomCalls).toBe(0);
+    });
+
+    it('actually invokes crypto.getRandomValues at least once per call', () => {
+        const origGetRandomValues = crypto.getRandomValues.bind(crypto);
+        let calls = 0;
+        crypto.getRandomValues = (buf) => { calls++; return origGetRandomValues(buf); };
+        try {
+            generateRandomPassword(16);
+        } finally {
+            crypto.getRandomValues = origGetRandomValues;
+        }
+        expect(calls).toBeGreaterThanOrEqual(16);
+    });
+
+    it('shuffle does not pin the lowercase/upper/digit/symbol seeds at positions 0..3', () => {
+        // The old Math.random()-based sort was both biased and non-CSPRNG.
+        // The Fisher-Yates replacement must actually move characters around,
+        // so the first four positions are not always (lower, upper, digit,
+        // symbol). Statistically that ordering should appear < 1% of the
+        // time across many runs.
+        let pinnedCount = 0;
+        const N = 200;
+        for (let i = 0; i < N; i++) {
+            const p = generateRandomPassword(20);
+            if (/^[a-z][A-Z][0-9][^A-Za-z0-9]/.test(p)) pinnedCount++;
+        }
+        // With a uniform shuffle the expected hit rate is ~ 1 / 116,280
+        // (= 4! / 20·19·18·17 for the right slot picks across the 20-char
+        // permutation), so any nonzero rate above ~5/200 here is suspicious.
+        expect(pinnedCount).toBeLessThan(5);
+    });
 });
 
 describe('searchVaultEntries', () => {

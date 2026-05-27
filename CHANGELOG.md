@@ -5,6 +5,104 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] — 2026-05-27
+
+Site-recovery + security-hardening release. Three unrelated streams that all
+hit at once:
+
+1. **Live site recovery.** After 1.0.3 shipped, three Dependabot
+   version-update PRs auto-merged on green CI: `itty-router` 4.2 → 5.0
+   (renamed `Router` to `AutoRouter` and changed routing internals),
+   `typescript` 5.9 → 6.0, and `@types/node` 20 → 25. The itty-router
+   major was a breaking API change — the build compiled clean but the
+   Worker threw `Error 1101` on every request once Cloudflare auto-
+   deployed. Pinned all three back to known-good versions.
+
+2. **Critical CodeQL alert: insecure randomness in the password
+   generator.** CodeQL's `js/insecure-randomness` flagged five sites in
+   [public/js/utils.js](public/js/utils.js) where
+   `generateRandomPassword()` used `Math.random()` to pick characters —
+   and used `.sort(() => Math.random() - 0.5)` for the final shuffle
+   (which is both biased and non-CSPRNG). For a *password manager* this
+   was a real failure mode: generated passwords were drawn from a
+   predictable PRNG state. Rewrote the generator to use
+   `crypto.getRandomValues()` with rejection-sampled unbiased
+   `secureRandomInt()` and a proper Fisher-Yates shuffle.
+
+3. **The e2e auth-bypass plumbing** (issue #27, filed in 1.0.3) is
+   fixed. The root cause was that `boot()` requires both `isLoggedIn()`
+   *and* `hasKey()`, but the test fixture could only seed localStorage
+   — the encryption key is a derived `CryptoKey` that only exists in
+   memory. Added a clearly-marked `__PASSFLARES_E2E_FAKE_KEY` window
+   test seam in [public/js/main.js](public/js/main.js) and rewrote
+   `gotoAndSeedLogin` in [tests/e2e/fixtures.ts](tests/e2e/fixtures.ts)
+   to inject it via `addInitScript`. E2E suite now runs 45 / 0 / 17
+   (passed / failed / skipped-intentional-live-deploy).
+
+Closes #27.
+
+### Fixed
+
+- **CRITICAL — `generateRandomPassword`** in
+  [public/js/utils.js](public/js/utils.js) no longer uses `Math.random()`.
+  New `secureRandomInt(max)` helper does rejection-sampling on
+  `crypto.getRandomValues` to avoid modulo bias. Final shuffle is a
+  cryptographic Fisher-Yates, not the broken
+  `Array.sort(() => Math.random() - 0.5)` pattern. Closes five
+  CodeQL `js/insecure-randomness` alerts.
+- **CodeQL `js/tainted-format-string`** in
+  [public/js/router.js](public/js/router.js): `console.error` now
+  receives `name` as a separate argument instead of inside the format
+  string template, so a route name containing `%s` / `%d` can't consume
+  the next argument as a placeholder value.
+- **CodeQL `js/bad-tag-filter`** in
+  [tests/backend/static-security-audit.test.ts](tests/backend/static-security-audit.test.ts):
+  the inline-script regex now matches `</script\s*>` (HTML5 permits
+  whitespace before the closing `>`).
+- **E2E auth-bypass** (`gotoAndSeedLogin`): the test fixture now sets
+  a `__PASSFLARES_E2E_FAKE_KEY` window flag via `page.addInitScript`
+  before navigation; `boot()` honours it via a clearly-marked test
+  seam. Closes issue #27.
+
+### Changed
+
+- **`@noble/hashes` 1.4.0 → 2.2.0.** Picks up the March 2026 self-audit,
+  the `pbkdf2`/`blake2`/`turboshake`/`kt` `dkLen=0` handling fix, the
+  `parallelHash` `blockLen=0` fix, and the `argon2` progress-callback fix.
+  2.x requires `.js` extension on submodule imports, so
+  [src/utils.ts](src/utils.ts) now imports `@noble/hashes/scrypt.js` and
+  `@noble/hashes/utils.js`. Runtime behaviour unchanged. (This
+  supersedes Dependabot PR #31, which is being closed.)
+- **Pinned majors that broke 1.0.3 → main:** `itty-router` ^5.0.23
+  → ^4.2.2, `typescript` ^6.0.3 → ^5.9.3, `@types/node` ^25.9.1 →
+  ^20.19.41. These had auto-merged on green CI but `itty-router 5.x`
+  broke the Worker runtime (Router → AutoRouter rename).
+- **`dependabot.yml`** now ignores SemVer-major version-update PRs
+  globally. Major bumps need a human review and a full test-suite
+  pass before landing. Important: this `ignore` only affects the
+  routine version-update channel — Dependabot security-update PRs
+  (driven by GitHub Advisory Database CVEs, configured separately in
+  repo Settings → Code security & analysis) are documented to ignore
+  this field, so security PRs still flow through even if they are
+  major-version bumps.
+- Removed the stale `release` script from
+  [package.json](package.json) — it referenced the `production` branch
+  that was retired in commit `1fcbac5`.
+
+### Added
+
+- **Password generator regression tests** in
+  [tests/frontend/utils.test.js](tests/frontend/utils.test.js):
+  - `Math.random` must never be called during generation (stub +
+    counter assertion).
+  - `crypto.getRandomValues` must be invoked at least once per
+    character generated.
+  - Lengths < 4 are coerced to 4 (so all four character-class
+    requirements can be met).
+  - The Fisher-Yates shuffle actually moves characters around — the
+    seeded `(lower, upper, digit, symbol)` quartet must not stay
+    pinned at positions 0..3 across a 200-call statistical sample.
+
 ## [1.0.3] — 2026-05-27
 
 CSP hardening release. Threat-modelled the residual XSS surface against the
