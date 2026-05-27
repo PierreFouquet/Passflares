@@ -113,10 +113,12 @@ describe('public/**/*.html — inline script audit', () => {
         for (const file of filesByExt('.html')) {
             const text = read(file);
             // Match <script ...> ... </script> with any body that has
-            // non-whitespace content. The closing tag permits optional
-            // whitespace before `>` (`</script >`) — HTML5 allows it and
-            // CodeQL's js/bad-tag-filter flags the stricter form.
-            const re = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+            // non-whitespace content. The closing tag is lenient — HTML
+            // parsers accept `</script>`, `</script >`, `</script\n>`,
+            // even `</script bar>` (junk before `>`). CodeQL's
+            // js/bad-tag-filter rule fails any tighter form, so we use
+            // `</script[^>]*>` to match exactly what a browser would.
+            const re = /<script\b([^>]*)>([\s\S]*?)<\/script[^>]*>/gi;
             for (const match of text.matchAll(re)) {
                 const attrs = match[1] ?? '';
                 const body = (match[2] ?? '').trim();
