@@ -81,9 +81,9 @@ export function renderOrgCard(org, members, currentUserId) {
     card.querySelector('[data-toggle-panel]').addEventListener('click', () => panel.classList.toggle('hidden'));
 
     panel.innerHTML = `
-        <h4 class="text-label" style="margin-bottom: 8px;">Members</h4>
+        <h4 class="text-label mb-8px">Members</h4>
         <div data-members></div>
-        <div class="row-end" style="margin-top: var(--space-3);">
+        <div class="row-end mt-3">
             ${isAdmin ? `<button type="button" class="btn btn--tonal" data-add-member><span class="icon">person_add</span>Add member</button>` : ''}
             ${isSuper ? `<button type="button" class="btn btn--danger-text" data-delete-org><span class="icon">delete</span>Delete organisation</button>` : ''}
         </div>
@@ -121,22 +121,24 @@ function renderMemberRow(member, currentUserId, isSuper, isAdmin, orgId) {
     const row = document.createElement('div');
     row.className = 'org-member-row';
     const isSelf = member.userId === currentUserId;
-    const roleControl = isSuper && !isSelf
-        ? `<select aria-label="Role">
-              <option value="member"      ${member.role === 'member'      ? 'selected' : ''}>Member</option>
-              <option value="admin"       ${member.role === 'admin'       ? 'selected' : ''}>Admin</option>
-              <option value="super_admin" ${member.role === 'super_admin' ? 'selected' : ''}>Owner</option>
-           </select>
-           <button type="button" class="btn btn--text btn--sm" data-apply-role>Apply</button>`
-        : `<span class="chip ${ROLE_CHIP_CLASS[member.role]}">${ROLE_LABEL[member.role]}</span>`;
-    const removeBtn = isAdmin && !isSelf
-        ? `<button type="button" class="icon-btn icon-btn--sm icon-btn--danger" data-remove-member title="Remove">
-              <span class="icon">delete</span>
-           </button>` : '';
 
     row.innerHTML = `
         <span class="org-member-row__email">${escapeHTML(member.email)}${isSelf ? ' <em>(you)</em>' : ''}</span>
-        <div class="org-member-row__actions">${roleControl}${removeBtn}</div>
+        <div class="org-member-row__actions">
+            ${isSuper && !isSelf
+                ? `<select aria-label="Role">
+                      <option value="member"      ${member.role === 'member'      ? 'selected' : ''}>Member</option>
+                      <option value="admin"       ${member.role === 'admin'       ? 'selected' : ''}>Admin</option>
+                      <option value="super_admin" ${member.role === 'super_admin' ? 'selected' : ''}>Owner</option>
+                   </select>
+                   <button type="button" class="btn btn--text btn--sm" data-apply-role>Apply</button>`
+                : `<span class="chip ${ROLE_CHIP_CLASS[member.role]}">${ROLE_LABEL[member.role]}</span>`}
+            ${isAdmin && !isSelf
+                ? `<button type="button" class="icon-btn icon-btn--sm icon-btn--danger" data-remove-member title="Remove">
+                      <span class="icon">delete</span>
+                   </button>`
+                : ''}
+        </div>
     `;
 
     row.querySelector('[data-apply-role]')?.addEventListener('click', async () => {
@@ -227,7 +229,7 @@ function openAddMemberDialog(org) {
             <input type="email" id="dialog-member-email" placeholder=" " required>
             <label for="dialog-member-email">Email</label>
         </div>
-        <div class="row" style="margin-top: var(--space-2);">
+        <div class="row mt-2">
             <label for="dialog-member-role" class="text-muted">Role</label>
             <select id="dialog-member-role">
                 <option value="member">Member</option>

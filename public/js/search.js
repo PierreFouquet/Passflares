@@ -91,7 +91,7 @@ function render(query) {
         btn.setAttribute('role', 'option');
         const iconName = r.kind === 'vault' ? 'lock' : 'key';
         btn.innerHTML = `
-            <span class="icon">${iconName}</span>
+            <span class="icon">${escapeHTML(iconName)}</span>
             <span class="palette__result__title">${escapeHTML(r.label)}</span>
             <span class="palette__result__meta">${escapeHTML(r.sub)}</span>
         `;

@@ -93,7 +93,9 @@ describe('worker security headers — static / HTML responses', () => {
     it('sets a CSP on HTML responses without script-src unsafe-inline', async () => {
         const res = await worker.fetch(get('/'), envWithHtmlAssets(), mockCtx);
         const csp = res.headers.get('Content-Security-Policy') ?? '';
-        expect(csp).toContain("default-src 'self'");
+        // 1.0.3 tightened default-src from 'self' to 'none' — deny by
+        // default; every directive must explicitly opt resources back in.
+        expect(csp).toContain("default-src 'none'");
         // The scanner's "Unsafe security header: Content-Security-Policy"
         // finding was specifically driven by `'unsafe-inline'` on script-src.
         // Pull the script-src directive out and assert it alone.
@@ -102,6 +104,29 @@ describe('worker security headers — static / HTML responses', () => {
             .map((d) => d.trim())
             .find((d) => d.startsWith('script-src ')) ?? '';
         expect(scriptSrc).not.toContain("'unsafe-inline'");
+    });
+
+    it('CSP style-src has no unsafe-inline (1.0.3 — blocks CSS keyloggers)', async () => {
+        const res = await worker.fetch(get('/'), envWithHtmlAssets(), mockCtx);
+        const csp = res.headers.get('Content-Security-Policy') ?? '';
+        const styleSrc = csp
+            .split(';')
+            .map((d) => d.trim())
+            .find((d) => d.startsWith('style-src ')) ?? '';
+        expect(styleSrc, 'style-src directive must be present').not.toBe('');
+        // Removing 'unsafe-inline' from style-src closes the CSS-keylogger
+        // attack vector (e.g. `input[value^="a"] { background: url(…) }`)
+        // that any HTML-injection bug would otherwise expose against the
+        // master-password input.
+        expect(styleSrc).not.toContain("'unsafe-inline'");
+        expect(styleSrc).not.toContain("'unsafe-hashes'");
+    });
+
+    it('sets X-XSS-Protection: 0 (disables legacy auditors; CSP is the real defence)', async () => {
+        const res = await worker.fetch(get('/'), envWithHtmlAssets(), mockCtx);
+        // mode=block has been used to selectively disable JS in
+        // otherwise-safe pages. 1.0.3 switched this to 0.
+        expect(res.headers.get('X-XSS-Protection')).toBe('0');
     });
 
     it('locks down base-uri, object-src, form-action, frame-ancestors in HTML CSP', async () => {

@@ -35,19 +35,32 @@ const router = Router();
 const BASE_SECURITY_HEADERS = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
-    'X-XSS-Protection': '1; mode=block',
+    // X-XSS-Protection: 0 disables legacy browser XSS auditors. Modern
+    // browsers (Chrome 78+, Firefox) already removed them, and Safari's
+    // mode=block auditor has been used to selectively disable JS in
+    // otherwise-safe pages. Defence here is CSP, not legacy auditors.
+    'X-XSS-Protection': '0',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'geolocation=(), microphone=(), camera=()'
 };
 
-// CSP for HTML pages: no inline scripts (the pre-paint bootstrap is an
-// external file), base-uri / object-src / form-action / frame-ancestors all
-// locked down to address the scanner's CSP hardening recommendations.
+// CSP for HTML pages. Notable choices:
+//   - default-src 'none' — deny-by-default; every directive below must
+//     explicitly opt resources back in. Anything we forget to declare is
+//     blocked, not silently allowed.
+//   - script-src 'self' + Turnstile — no inline scripts (pre-paint bootstrap
+//     is an external file at public/js/prefs-bootstrap.js).
+//   - style-src 'self' — no 'unsafe-inline'. Closes the CSS-keylogger vector
+//     against the master-password input that an HTML-injection bug would
+//     otherwise enable. All inline `style="..."` attributes were moved to
+//     utility classes in base.css; static-security-audit.test.ts enforces.
+//   - object-src 'none', form-action 'self', frame-ancestors 'none' — all
+//     locked down per the OWASP cheat sheet.
 const HTML_CSP =
-    "default-src 'self'; " +
+    "default-src 'none'; " +
     "script-src 'self' https://challenges.cloudflare.com; " +
-    "style-src 'self' 'unsafe-inline'; " +
+    "style-src 'self'; " +
     "img-src 'self' data:; " +
     "font-src 'self'; " +
     "connect-src 'self' https://api.pierrefouquet.co.uk; " +

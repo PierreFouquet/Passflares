@@ -80,7 +80,7 @@ function renderSecurityTiles(container) {
         const el = document.createElement('div');
         el.className = `tile ${t.cls}`;
         el.innerHTML = `
-            <span class="tile__icon"><span class="icon">${t.icon}</span></span>
+            <span class="tile__icon"><span class="icon">${escapeHTML(t.icon)}</span></span>
             <span class="tile__label">${escapeHTML(t.label)}</span>
             <span class="tile__value">${escapeHTML(String(t.value))}</span>
             <span class="tile__sub">${escapeHTML(t.sub)}</span>

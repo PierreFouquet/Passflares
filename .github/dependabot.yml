@@ -1,0 +1,49 @@
+# Dependabot version updates.
+#
+# Security-fix PRs are opened automatically by Dependabot security updates
+# (configured in repo Settings → Code security & analysis) — they don't need
+# this file. This file controls *version* updates: opening PRs to keep deps
+# fresh when new non-security releases land.
+#
+# Both ecosystems we use:
+#   - npm  (everything in package.json — wrangler, vitest, playwright, etc.)
+#   - github-actions (any workflows under .github/workflows/)
+#
+# Schedule: weekly. Grouped so 1.0.x-class minor bumps land in a single PR
+# instead of one per package. Major bumps stay separate so they get a real
+# review.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - dependencies
+      - ci
