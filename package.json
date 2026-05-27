@@ -24,7 +24,7 @@
     "@types/node": "^20.14.9",
     "happy-dom": "^20.9.0",
     "http-server": "^14.1.1",
-    "typescript": "^5.5.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.6",
     "wrangler": "^4.93.0"
   },
