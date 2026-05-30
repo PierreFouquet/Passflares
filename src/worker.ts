@@ -127,6 +127,21 @@ function applyHeaders(response: Response, extra: Record<string, string>): Respon
     });
 }
 
+// passflares.com is the canonical origin. `www.passflares.com` is also routed
+// to this Worker, but every request to it is permanently redirected to the
+// bare apex, preserving path + query. The base security headers (incl. HSTS)
+// ride along so the redirect response itself is covered.
+const CANONICAL_HOST = 'passflares.com';
+
+function redirectToCanonicalHost(url: URL): Response | null {
+    if (url.hostname !== `www.${CANONICAL_HOST}`) return null;
+    const location = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
+    return applyHeaders(
+        new Response(null, { status: 301, headers: { Location: location } }),
+        BASE_SECURITY_HEADERS
+    );
+}
+
 // Middleware wrappers: itty-router continues when a handler returns undefined,
 // but our middleware returns null to signal "continue". Convert null → undefined.
 const withAuth = (req: CustomRequest, env: Env, ctx: ExecutionContext) =>
@@ -196,12 +211,16 @@ function withSecurityHeaders(response: Response, isApi: boolean): Response {
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         try {
+            const url = new URL(request.url);
+
+            const canonicalRedirect = redirectToCanonicalHost(url);
+            if (canonicalRedirect) return canonicalRedirect;
+
             if (request.method === 'OPTIONS') {
                 return handleCorsPreflight(request);
             }
 
             const response = await router.handle(request, env, ctx);
-            const url = new URL(request.url);
             const isApi = url.pathname.startsWith('/api/');
 
             const secured = withSecurityHeaders(response, isApi);

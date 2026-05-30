@@ -19,11 +19,12 @@ tsconfig = "tsconfig.json"
 
 routes = [
     # `pattern` is the exact host(+path) the Worker handles; `zone_name` is the
-    # Cloudflare zone that owns the DNS. Here both are the apex `passflares.com`.
-    # A proxied (orange-cloud) DNS record must exist for `passflares.com`, or the
-    # route receives no traffic. `www.passflares.com` is handled separately by a
-    # Cloudflare Single Redirect Rule (www -> apex), not by this Worker.
-    { pattern = "passflares.com/*", zone_name = "passflares.com" }
+    # Cloudflare zone that owns the DNS — the apex `passflares.com`. A proxied
+    # (orange-cloud) DNS record must exist for each host below, or the route
+    # receives no traffic. `www` serves the same Worker, which 301-redirects
+    # every www request to the apex (see redirectToCanonicalHost in worker.ts).
+    { pattern = "passflares.com/*", zone_name = "passflares.com" },
+    { pattern = "www.passflares.com/*", zone_name = "passflares.com" }
 ]
 preview_urls = false
 

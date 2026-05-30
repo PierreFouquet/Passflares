@@ -17,9 +17,10 @@ how data is stored or encrypted moves with the domain.
 ### Changed
 
 - **Serving origin → `passflares.com`** ([wrangler.toml](wrangler.toml)). The
-  Worker route is now `passflares.com/*` on the `passflares.com` zone;
-  `www.passflares.com` 301-redirects to the apex via a Cloudflare Single
-  Redirect Rule (edge, not the Worker).
+  Worker route is now `passflares.com/*` on the `passflares.com` zone.
+  `www.passflares.com` is also routed to the Worker, which permanently
+  redirects every www request to the apex (`redirectToCanonicalHost` in
+  [src/worker.ts](src/worker.ts), preserving path + query, HSTS on the 301).
 - **CORS allow-list + default origin** ([src/worker.ts](src/worker.ts)) now
   name `passflares.com` (and a reserved `api.passflares.com`) instead of the
   old `pierrefouquet.co.uk` origins. The live serving origin is now explicitly
@@ -47,10 +48,11 @@ how data is stored or encrypted moves with the domain.
 - **No database change and no new secrets.** D1 stores nothing domain-coupled;
   `JWT_SECRET`, `TURNSTILE_KEY`, and `TOTP_ENC_KEY` are unaffected.
 - Cloudflare-side prerequisites, staged **before** merge (merge = auto-deploy):
-  proxied DNS records for `passflares.com` and `www`, the www→apex redirect
-  rule, a verified Universal SSL edge certificate, and `passflares.com` added to
-  the existing Turnstile widget's hostname allow-list (same site key + secret —
-  no code change).
+  proxied DNS records for `passflares.com` and `www` (the www→apex redirect is
+  handled in the Worker, so no edge redirect rule is needed), a verified
+  Universal SSL edge certificate, and `passflares.com` added to the existing
+  Turnstile widget's hostname allow-list (same site key + secret — no code
+  change).
 - Post-cutover cleanup: drop the old `passflares.pierrefouquet.co.uk` Worker
   route and its DNS record so it no longer serves.
 
