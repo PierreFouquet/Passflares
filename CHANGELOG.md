@@ -5,6 +5,75 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-05-30
+
+Two-factor authentication (TOTP) with single-use recovery codes. 2FA is
+opt-in: a signed-in user enables it from Settings, and from then on login is
+a two-step flow — master password, then a 6-digit authenticator code (or a
+recovery code). The zero-knowledge model is unchanged — 2FA is purely an
+authentication gate and never touches the client-side vault key, which is
+still derived from the master password alone.
+
+### Added
+
+- **TOTP enrolment** ([src/totp.ts](src/totp.ts),
+  [migrations/0004_totp_2fa.sql](migrations/0004_totp_2fa.sql)). The server
+  issues a *pending* secret; the client shows a QR code + the base32 secret,
+  and the secret is only activated once a valid code confirms it. Built on
+  the `otpauth` library; QR codes are rendered server-side as an inline SVG
+  data URI (`qrcode-svg`), which the existing `img-src 'self' data:` CSP
+  already allows — no client-side QR dependency, no CSP change.
+- **Single-use recovery codes.** Ten codes are issued on enable, shown once,
+  and stored as peppered HMAC-SHA256 hashes — not the slow scrypt KDF, since
+  recovery codes are high-entropy and a fast hash allows an O(1) lookup and
+  avoids running scrypt up to 10× per recovery login on the Worker. Each
+  works once; **Regenerate recovery codes** replaces the set.
+- **Two-step login.** `POST /api/login` returns a short-lived token scoped to
+  `2fa` (carrying `sub`, not `userId`) instead of a session when 2FA is
+  enabled; `POST /api/login/2fa` exchanges it plus a TOTP/recovery code for
+  the real session + encryption salt. The auth middleware rejects the
+  `2fa`-scoped token on every protected route, so it can never reach vault
+  data. The verification endpoint is rate-limited per IP and per user.
+- **Change authenticator** (move to a new phone) and **Disable 2FA**, both
+  requiring the master password plus a current code (or recovery code).
+  Changing keeps the old authenticator valid until the new one is confirmed,
+  so there is no lock-out window.
+- **TOTP secrets encrypted at rest** with AES-GCM under a new `TOTP_ENC_KEY`
+  worker secret (HKDF-derived sub-keys separate the encryption key from the
+  recovery-code pepper). Fails closed if the secret is unset.
+- Settings UI, the login second-factor prompt,
+  [public/css/components/totp.css](public/css/components/totp.css), and a new
+  "Two-factor authentication" section in the
+  [user guide](public/docs/user-guide.html).
+
+### Tests
+
+- New backend suites [tests/backend/totp.test.ts](tests/backend/totp.test.ts)
+  and [tests/backend/totp-handlers.test.ts](tests/backend/totp-handlers.test.ts)
+  cover add / remove / change / the recovery-code lifecycle and the second
+  login step. Frontend
+  [tests/frontend/api-2fa.test.js](tests/frontend/api-2fa.test.js) and e2e
+  [tests/e2e/2fa.spec.ts](tests/e2e/2fa.spec.ts) cover login with and without
+  2FA, enrolment, disable, change, and recovery-code flows. Unit suite 329
+  passing; e2e 63 passing / 17 intentionally skipped.
+- The opt-in live header probe
+  [tests/e2e/security-headers-live.spec.ts](tests/e2e/security-headers-live.spec.ts)
+  now requires a CSP only on HTML/API responses, matching the worker's
+  deliberate omission of CSP on static JS/CSS subresources (previously the
+  probe and [worker-security.test.ts](tests/backend/worker-security.test.ts)
+  disagreed).
+
+### Migration / deployment
+
+- Apply the new migration to production D1:
+  `npx wrangler d1 migrations apply secure-password-db --remote` — additive
+  (two new tables, `user_totp` and `user_recovery_codes`); no impact on
+  existing users until they opt in.
+- Set the new secret **before** deploying:
+  `npx wrangler secret put TOTP_ENC_KEY` (a long random value, e.g.
+  `openssl rand -base64 48`). 2FA enrol/verify fail closed without it;
+  rotating it later invalidates existing 2FA enrolments.
+
 ## [1.0.4] — 2026-05-27
 
 Site-recovery + security-hardening release. Three unrelated streams that all

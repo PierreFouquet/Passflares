@@ -4,12 +4,16 @@
 // you point it at) and asserts every public path carries the security
 // headers a Pentest-Tools Light scan checks for.
 //
-// Run:
+// Run against the deployed worker:
 //   LIVE_HOST=https://passflares.pierrefouquet.co.uk \
 //     npx playwright test security-headers-live
 //
+// Or against a local worker (emits the same headers as production):
+//   npx wrangler dev --port 8787 --local        # in one terminal
+//   LIVE_HOST=http://localhost:8787 npx playwright test security-headers-live
+//
 // CI without LIVE_HOST set will skip this whole file — keeps offline runs
-// green.
+// green (the hermetic http-server can't emit the worker's headers).
 
 import { test, expect, request as pwRequest } from '@playwright/test';
 
@@ -17,8 +21,8 @@ const LIVE_HOST = process.env.LIVE_HOST;
 
 test.skip(!LIVE_HOST, 'Set LIVE_HOST to enable live security-header probes.');
 
-const REQUIRED_HEADERS = [
-    'content-security-policy',
+// Headers every response must carry, regardless of content type.
+const BASE_HEADERS = [
     'strict-transport-security',
     'x-content-type-options',
     'referrer-policy',
@@ -26,11 +30,21 @@ const REQUIRED_HEADERS = [
     'permissions-policy'
 ];
 
-// Paths we expect to carry the full security-header set.
+// Content-Security-Policy is applied to HTML documents and API/JSON responses,
+// but deliberately NOT to static JS/CSS subresources: a CSP on a loaded
+// subresource is inert, so the worker omits it there. See
+// src/worker.ts `withSecurityHeaders` and tests/backend/worker-security.test.ts.
 const STATIC_PATHS = ['/', '/js/main.js', '/css/base.css'];
-
-// API paths — same headers expected (CSP differs but is still present).
 const API_PATHS = ['/api/login', '/api/this-route-does-not-exist'];
+
+function expectBaseHeaders(headers: Record<string, string>, path: string) {
+    for (const h of BASE_HEADERS) {
+        expect(
+            headers[h],
+            `${path} missing ${h}. headers seen: ${Object.keys(headers).join(', ')}`
+        ).toBeTruthy();
+    }
+}
 
 test.describe('live deployment — static asset security headers', () => {
     for (const path of STATIC_PATHS) {
@@ -42,10 +56,14 @@ test.describe('live deployment — static asset security headers', () => {
             expect(res.status(), `${url} unexpected status`).toBeLessThan(500);
 
             const headers = res.headers();
-            for (const h of REQUIRED_HEADERS) {
+            expectBaseHeaders(headers, path);
+
+            // CSP is required on HTML documents; static JS/CSS subresources omit
+            // it by design (see note above).
+            if ((headers['content-type'] ?? '').includes('text/html')) {
                 expect(
-                    headers[h],
-                    `${path} missing ${h}. headers seen: ${Object.keys(headers).join(', ')}`
+                    headers['content-security-policy'],
+                    `${path} (HTML) missing content-security-policy`
                 ).toBeTruthy();
             }
 
@@ -69,12 +87,12 @@ test.describe('live deployment — API security headers', () => {
                 data: '{}'
             });
             const headers = res.headers();
-            for (const h of REQUIRED_HEADERS) {
-                expect(
-                    headers[h],
-                    `${path} missing ${h}. headers seen: ${Object.keys(headers).join(', ')}`
-                ).toBeTruthy();
-            }
+            expectBaseHeaders(headers, path);
+            // API/JSON responses carry a locked-down CSP.
+            expect(
+                headers['content-security-policy'],
+                `${path} missing content-security-policy`
+            ).toBeTruthy();
             await ctx.dispose();
         });
     }

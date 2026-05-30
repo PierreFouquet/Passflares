@@ -1,0 +1,48 @@
+/* Two-factor authentication UI — enrollment QR, secret, recovery codes. */
+
+.totp-qr-slot {
+    display: flex;
+    justify-content: center;
+    margin: var(--space-4) 0;
+    min-height: 220px;
+    align-items: center;
+}
+
+.totp-qr {
+    width: 220px;
+    height: 220px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: #fff;
+}
+
+.totp-secret {
+    word-break: break-all;
+    text-align: center;
+}
+
+.recovery-code-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    list-style: none;
+    padding: var(--space-3);
+    margin: var(--space-4) 0;
+    background: var(--color-surface-2);
+    border-radius: var(--radius-md);
+}
+
+.recovery-code {
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    text-align: center;
+    padding: var(--space-1) 0;
+}
+
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    color: var(--color-text-muted);
+}

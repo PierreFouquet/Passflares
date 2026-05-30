@@ -7,9 +7,11 @@ import { confirmDialog, openDialog } from '../dialog.js';
 import { getUserInfo, clearSession } from '../session.js';
 import { reset as resetState, getKey, getVaults } from '../state.js';
 import { deleteAccount, updateMasterPassword, loadEncryptedVaultData, saveEncryptedVaultData, getVaults as apiGetVaults } from '../api.js';
+import { getTotpStatus, enrollTotp, enableTotp, disableTotp, regenerateRecoveryCodes } from '../api.js';
 import { deriveKey, encryptData, decryptData } from '../crypto.js';
 import { checkPasswordStrength, generateSalt, uint8ArrayToHexString } from '../utils.js';
 import { storeSession, getSessionToken } from '../session.js';
+import { copyToClipboard } from '../clipboard.js';
 
 export function renderSettingsPage({ mount }) {
     mount.appendChild(cloneTemplate('tpl-page-settings'));
@@ -47,6 +49,339 @@ export function renderSettingsPage({ mount }) {
     mount.querySelector('[data-action="change-password"]').addEventListener('click', openChangePasswordDialog);
     mount.querySelector('[data-action="export"]').addEventListener('click', handleExport);
     mount.querySelector('[data-action="delete-account"]').addEventListener('click', openDeleteAccountDialog);
+
+    // Two-factor authentication section
+    initTotpSection(mount);
+}
+
+// ── Two-factor authentication ──────────────────────
+async function initTotpSection(mount) {
+    const section = mount.querySelector('[data-totp-section]');
+    if (!section) return;
+    const statusEl = section.querySelector('[data-totp-status]');
+    const enableBtn = section.querySelector('[data-action="totp-enable"]');
+    const changeBtn = section.querySelector('[data-action="totp-change"]');
+    const regenBtn = section.querySelector('[data-action="totp-regenerate"]');
+    const disableBtn = section.querySelector('[data-action="totp-disable"]');
+
+    const setBusy = (busy) => {
+        [enableBtn, changeBtn, regenBtn, disableBtn].forEach(b => { if (b) b.disabled = busy; });
+    };
+
+    async function refresh() {
+        setBusy(true);
+        try {
+            const { enabled, remainingRecoveryCodes } = await getTotpStatus();
+            if (statusEl) {
+                statusEl.textContent = enabled
+                    ? `Enabled — ${remainingRecoveryCodes} recovery code${remainingRecoveryCodes === 1 ? '' : 's'} remaining.`
+                    : 'Disabled. Add an authenticator app for stronger account security.';
+            }
+            enableBtn?.classList.toggle('hidden', enabled);
+            changeBtn?.classList.toggle('hidden', !enabled);
+            regenBtn?.classList.toggle('hidden', !enabled);
+            disableBtn?.classList.toggle('hidden', !enabled);
+        } catch (err) {
+            if (statusEl) statusEl.textContent = 'Could not load 2FA status.';
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    enableBtn?.addEventListener('click', () => openEnrollDialog(false, refresh));
+    changeBtn?.addEventListener('click', () => openEnrollDialog(true, refresh));
+    regenBtn?.addEventListener('click', () => openRegenerateDialog(refresh));
+    disableBtn?.addEventListener('click', () => openDisableDialog(refresh));
+
+    await refresh();
+}
+
+// Renders a list of recovery codes into a container with Copy + Download, gated
+// behind an acknowledgement checkbox that enables the dialog's close button.
+function renderRecoveryCodes(codes, { onAcknowledge } = {}) {
+    const wrap = document.createElement('div');
+
+    const warn = document.createElement('p');
+    warn.className = 'text-muted';
+    warn.textContent = 'Save these recovery codes somewhere safe. Each works once and they will not be shown again.';
+
+    const list = document.createElement('ul');
+    list.className = 'recovery-code-list';
+    codes.forEach(code => {
+        const li = document.createElement('li');
+        li.className = 'recovery-code text-mono';
+        li.textContent = code;
+        list.appendChild(li);
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'row row-wrap';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn btn--tonal btn--sm';
+    copyBtn.textContent = 'Copy codes';
+    copyBtn.addEventListener('click', () => copyToClipboard(codes.join('\n'), { successMessage: 'Recovery codes copied.' }));
+    const dlBtn = document.createElement('button');
+    dlBtn.type = 'button';
+    dlBtn.className = 'btn btn--tonal btn--sm';
+    dlBtn.textContent = 'Download .txt';
+    dlBtn.addEventListener('click', () => {
+        const blob = new Blob([codes.join('\n') + '\n'], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `passflares-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+    actions.append(copyBtn, dlBtn);
+
+    const ackLabel = document.createElement('label');
+    ackLabel.className = 'checkbox-row';
+    const ack = document.createElement('input');
+    ack.type = 'checkbox';
+    const ackText = document.createElement('span');
+    ackText.textContent = 'I have saved my recovery codes';
+    ackLabel.append(ack, ackText);
+    ack.addEventListener('change', () => onAcknowledge?.(ack.checked));
+
+    wrap.append(warn, list, actions, ackLabel);
+    return wrap;
+}
+
+// Enrollment (first-time enable) and change-authenticator share the QR → verify
+// flow; `isChange` adds the master-password + current-code re-auth step.
+function openEnrollDialog(isChange, onDone) {
+    const body = document.createElement('div');
+
+    let reauthInputs = null;
+    if (isChange) {
+        const intro = document.createElement('p');
+        intro.className = 'text-muted';
+        intro.textContent = 'Confirm it\'s you, then scan the new QR code.';
+        const pwField = document.createElement('div');
+        pwField.className = 'field password-field';
+        const pw = document.createElement('input');
+        pw.type = 'password'; pw.id = 'totp-reauth-pw'; pw.setAttribute('placeholder', ' ');
+        const pwLabel = document.createElement('label');
+        pwLabel.setAttribute('for', 'totp-reauth-pw'); pwLabel.textContent = 'Master password';
+        pwField.append(pw, pwLabel);
+        const codeField = document.createElement('div');
+        codeField.className = 'field';
+        const code = document.createElement('input');
+        code.type = 'text'; code.id = 'totp-reauth-code'; code.setAttribute('placeholder', ' ');
+        code.setAttribute('inputmode', 'numeric'); code.setAttribute('autocomplete', 'one-time-code');
+        const codeLabel = document.createElement('label');
+        codeLabel.setAttribute('for', 'totp-reauth-code'); codeLabel.textContent = 'Current code or recovery code';
+        codeField.append(code, codeLabel);
+        body.append(intro, pwField, codeField);
+        reauthInputs = { pw, code };
+    } else {
+        const intro = document.createElement('p');
+        intro.className = 'text-muted';
+        intro.textContent = 'Scan this QR code with your authenticator app, then enter the 6-digit code to confirm.';
+        body.appendChild(intro);
+    }
+
+    const qrSlot = document.createElement('div');
+    qrSlot.className = 'totp-qr-slot';
+    body.appendChild(qrSlot);
+
+    const secretLine = document.createElement('p');
+    secretLine.className = 'text-muted text-mono totp-secret hidden';
+    body.appendChild(secretLine);
+
+    const verifyField = document.createElement('div');
+    verifyField.className = 'field hidden';
+    const verifyInput = document.createElement('input');
+    verifyInput.type = 'text'; verifyInput.id = 'totp-verify'; verifyInput.setAttribute('placeholder', ' ');
+    verifyInput.setAttribute('inputmode', 'numeric'); verifyInput.setAttribute('autocomplete', 'one-time-code');
+    verifyInput.maxLength = 6;
+    const verifyLabel = document.createElement('label');
+    verifyLabel.setAttribute('for', 'totp-verify'); verifyLabel.textContent = 'Verification code';
+    verifyField.append(verifyInput, verifyLabel);
+    body.appendChild(verifyField);
+
+    let pendingStarted = false;
+
+    const startEnroll = async () => {
+        showLoading('Setting up…');
+        try {
+            const reauth = isChange
+                ? { masterPassword: reauthInputs.pw.value, code: reauthInputs.code.value.trim() }
+                : null;
+            const { secret, qrDataUri } = await enrollTotp(reauth);
+            const img = document.createElement('img');
+            img.alt = 'Authenticator QR code';
+            img.className = 'totp-qr';
+            img.src = qrDataUri;
+            qrSlot.replaceChildren(img);
+            secretLine.textContent = `Secret: ${secret}`;
+            secretLine.classList.remove('hidden');
+            verifyField.classList.remove('hidden');
+            if (reauthInputs) { reauthInputs.pw.disabled = true; reauthInputs.code.disabled = true; }
+            verifyInput.focus();
+            pendingStarted = true;
+            return true;
+        } catch (err) {
+            snack.error(err.message ?? 'Could not start 2FA setup.');
+            return false;
+        } finally {
+            hideLoading();
+        }
+    };
+
+    const verify = async ({ close }) => {
+        if (!pendingStarted) { await startEnroll(); return; }
+        const code = verifyInput.value.trim();
+        if (!code) { snack.error('Enter the code from your app.'); return; }
+        showLoading('Verifying…');
+        try {
+            const resp = await enableTotp(code);
+            if (resp?.recoveryCodes) {
+                // First-time enable — show recovery codes once, gate the close.
+                const verifyBtn = document.querySelector('.dialog__actions .btn--filled');
+                let acked = false;
+                body.replaceChildren(renderRecoveryCodes(resp.recoveryCodes, {
+                    onAcknowledge: (checked) => { acked = checked; if (verifyBtn) verifyBtn.disabled = !checked; }
+                }));
+                if (verifyBtn) { verifyBtn.textContent = 'Done'; verifyBtn.disabled = true; }
+                // Swap the action to a plain close on next click.
+                pendingStarted = 'codes-shown';
+                snack.success('Two-factor authentication enabled.');
+                onDone?.();
+            } else {
+                snack.success('Authenticator updated.');
+                onDone?.();
+                close();
+            }
+        } catch (err) {
+            snack.error(err.message ?? 'That code was not valid.');
+            verifyInput.value = '';
+            verifyInput.focus();
+        } finally {
+            hideLoading();
+        }
+    };
+
+    openDialog({
+        title: isChange ? 'Change authenticator' : 'Enable two-factor authentication',
+        body,
+        actions: [
+            { label: 'Cancel', variant: 'text' },
+            {
+                label: isChange ? 'Confirm' : 'Continue',
+                variant: 'filled',
+                closeOnClick: false,
+                onClick: (ctx) => {
+                    if (pendingStarted === 'codes-shown') { ctx.close(); return; }
+                    return verify(ctx);
+                }
+            }
+        ]
+    });
+}
+
+function openRegenerateDialog(onDone) {
+    const body = document.createElement('div');
+    const intro = document.createElement('p');
+    intro.className = 'text-muted';
+    intro.textContent = 'Generating new recovery codes invalidates your old ones. Confirm your master password.';
+    const pwField = document.createElement('div');
+    pwField.className = 'field password-field';
+    const pw = document.createElement('input');
+    pw.type = 'password'; pw.id = 'regen-pw'; pw.setAttribute('placeholder', ' ');
+    const pwLabel = document.createElement('label');
+    pwLabel.setAttribute('for', 'regen-pw'); pwLabel.textContent = 'Master password';
+    pwField.append(pw, pwLabel);
+    body.append(intro, pwField);
+
+    let shown = false;
+    openDialog({
+        title: 'Regenerate recovery codes',
+        body,
+        actions: [
+            { label: 'Cancel', variant: 'text' },
+            {
+                label: 'Generate',
+                variant: 'filled',
+                closeOnClick: false,
+                onClick: async ({ close }) => {
+                    if (shown) { close(); return; }
+                    if (!pw.value) { snack.error('Enter your master password.'); return; }
+                    showLoading('Generating…');
+                    try {
+                        const { recoveryCodes } = await regenerateRecoveryCodes(pw.value);
+                        const btn = document.querySelector('.dialog__actions .btn--filled');
+                        body.replaceChildren(renderRecoveryCodes(recoveryCodes, {
+                            onAcknowledge: (checked) => { if (btn) btn.disabled = !checked; }
+                        }));
+                        if (btn) { btn.textContent = 'Done'; btn.disabled = true; }
+                        shown = true;
+                        onDone?.();
+                        snack.success('New recovery codes generated.');
+                    } catch (err) {
+                        snack.error(err.message ?? 'Could not regenerate codes.');
+                    } finally {
+                        hideLoading();
+                    }
+                }
+            }
+        ]
+    });
+}
+
+function openDisableDialog(onDone) {
+    const body = document.createElement('div');
+    const intro = document.createElement('p');
+    intro.className = 'text-muted';
+    intro.textContent = 'Disabling 2FA removes your authenticator and recovery codes. Confirm your master password and a current code.';
+    const pwField = document.createElement('div');
+    pwField.className = 'field password-field';
+    const pw = document.createElement('input');
+    pw.type = 'password'; pw.id = 'disable-pw'; pw.setAttribute('placeholder', ' ');
+    const pwLabel = document.createElement('label');
+    pwLabel.setAttribute('for', 'disable-pw'); pwLabel.textContent = 'Master password';
+    pwField.append(pw, pwLabel);
+    const codeField = document.createElement('div');
+    codeField.className = 'field';
+    const code = document.createElement('input');
+    code.type = 'text'; code.id = 'disable-code'; code.setAttribute('placeholder', ' ');
+    code.setAttribute('inputmode', 'numeric'); code.setAttribute('autocomplete', 'one-time-code');
+    const codeLabel = document.createElement('label');
+    codeLabel.setAttribute('for', 'disable-code'); codeLabel.textContent = 'Current code or recovery code';
+    codeField.append(code, codeLabel);
+    body.append(intro, pwField, codeField);
+
+    openDialog({
+        title: 'Disable two-factor authentication',
+        variant: 'danger',
+        body,
+        actions: [
+            { label: 'Cancel', variant: 'text' },
+            {
+                label: 'Disable 2FA',
+                variant: 'danger',
+                closeOnClick: false,
+                onClick: async ({ close }) => {
+                    if (!pw.value || !code.value.trim()) { snack.error('Both fields are required.'); return; }
+                    showLoading('Disabling…');
+                    try {
+                        await disableTotp(pw.value, code.value.trim());
+                        snack.success('Two-factor authentication disabled.');
+                        onDone?.();
+                        close();
+                    } catch (err) {
+                        snack.error(err.message ?? 'Could not disable 2FA.');
+                    } finally {
+                        hideLoading();
+                    }
+                }
+            }
+        ]
+    });
 }
 
 function labelOf(field) {

@@ -94,22 +94,66 @@
             <div class="callout warning">
                 <span><strong>Too many failed attempts?</strong> After 5 failed logins from the same IP address you will be locked out for 15 minutes.</span>
             </div>
+            <div class="callout info">
+                <span><strong>Using two-factor authentication?</strong> After your master password you'll be asked for a one-time code — see the next section.</span>
+            </div>
         </section>
 
         <section class="docs-section">
-            <h2>3. Navigating the app</h2>
+            <h2>3. Two-factor authentication (2FA)</h2>
+            <p>Two-factor authentication adds a second step to sign-in: after your master password, you also enter a one-time code from an authenticator app (Google Authenticator, Authy, 1Password, and similar). Even if someone learns your master password, they can't sign in without your authenticator. 2FA is optional and you turn it on yourself.</p>
+
+            <h3>Turning it on</h3>
+            <ol>
+                <li>Go to <strong>Settings</strong> and find the <strong>Two-factor authentication</strong> card.</li>
+                <li>Click <strong>Enable 2FA</strong>, then <strong>Continue</strong>.</li>
+                <li>Scan the QR code with your authenticator app, or type the shown secret in manually.</li>
+                <li>Enter the 6-digit code your app generates to confirm.</li>
+                <li>Save your <strong>recovery codes</strong> (see below), tick <em>I have saved my recovery codes</em>, then click <strong>Done</strong>.</li>
+            </ol>
+
+            <h3>Recovery codes</h3>
+            <p>When you enable 2FA you are given <strong>10 single-use recovery codes</strong>. Each code works <em>once</em> and lets you sign in if you ever lose access to your authenticator app. Copy or download them and store them somewhere safe — and separate from this password manager.</p>
+            <div class="callout warning">
+                <span><strong>Don't lose both.</strong> If you lose your authenticator <em>and</em> your recovery codes you will be locked out: the server can't verify a second factor it never sees. Treat recovery codes like spare keys.</span>
+            </div>
+            <p>You can generate a fresh set at any time with <strong>Regenerate recovery codes</strong> — this invalidates the old set. The Settings card shows how many unused codes you have left.</p>
+
+            <h3>Signing in with 2FA</h3>
+            <ol>
+                <li>Enter your email and master password as usual.</li>
+                <li>When prompted, type the current 6-digit code from your authenticator app.</li>
+                <li>No app to hand? Click <strong>Use a recovery code instead</strong> and enter one of your saved codes.</li>
+            </ol>
+
+            <h3>Moving to a new phone (changing authenticator)</h3>
+            <p>Switching authenticator apps or devices? Use <strong>Change authenticator</strong> in Settings.</p>
+            <ol>
+                <li>Click <strong>Change authenticator</strong> and confirm your master password plus a current code (or a recovery code).</li>
+                <li>Scan the new QR code with your new app and enter a code to confirm.</li>
+            </ol>
+            <div class="callout info">
+                <span>Your old authenticator keeps working until the new one is confirmed, so there's no window where you're locked out. Your recovery codes are unchanged.</span>
+            </div>
+
+            <h3>Turning it off</h3>
+            <p>Click <strong>Disable 2FA</strong> and confirm with your master password and a current code (or a recovery code). This removes your authenticator secret and all recovery codes; future sign-ins need only your master password.</p>
+        </section>
+
+        <section class="docs-section">
+            <h2>4. Navigating the app</h2>
             <p>Once signed in you will see four sections in the navigation rail:</p>
             <ul>
                 <li><strong>Home</strong> — security overview and recent vaults.</li>
                 <li><strong>Vaults</strong> — your personal and shared password vaults. See the <a href="vaults-guide.html">Vaults guide</a>.</li>
                 <li><strong>Organisations</strong> — create and manage teams with shared vault access. See the <a href="organisations-guide.html">Organisations guide</a>.</li>
-                <li><strong>Settings</strong> — appearance preferences (theme, density, shape, accent) and account actions.</li>
+                <li><strong>Settings</strong> — appearance preferences (theme, density, shape, accent), account actions, and <strong>two-factor authentication</strong>.</li>
             </ul>
             <p>Account-level actions (change master password, export, delete account) live in the user menu in the top right of the app bar.</p>
         </section>
 
         <section class="docs-section">
-            <h2>4. Changing your master password</h2>
+            <h2>5. Changing your master password</h2>
             <p>Changing your master password re-encrypts <em>all</em> your vaults with the new key. This may take a moment if you have many entries.</p>
             <ol>
                 <li>Open the user menu and click <strong>Change master password</strong>.</li>
@@ -122,12 +166,12 @@
         </section>
 
         <section class="docs-section">
-            <h2>5. Exporting your data</h2>
+            <h2>6. Exporting your data</h2>
             <p>Click <strong>Export vault data</strong> in the user menu to download a JSON file containing all your vaults in their <em>encrypted</em> form. The file is useless without your master password — store both safely. This is useful as an offline backup.</p>
         </section>
 
         <section class="docs-section">
-            <h2>6. Deleting your account</h2>
+            <h2>7. Deleting your account</h2>
             <div class="callout warning">
                 <span><strong>This is permanent and cannot be undone.</strong></span>
             </div>
@@ -140,10 +184,13 @@
         </section>
 
         <section class="docs-section">
-            <h2>7. Frequently asked questions</h2>
+            <h2>8. Frequently asked questions</h2>
 
             <h3>What if I forget my master password?</h3>
             <p>Your data cannot be recovered. There is no reset mechanism — this is deliberate, as the server never knows your master password.</p>
+
+            <h3>I lost my authenticator — how do I get in?</h3>
+            <p>Sign in with your master password, then click <strong>Use a recovery code instead</strong> and enter one of the recovery codes you saved when enabling 2FA. Once back in, go to Settings and either <strong>Change authenticator</strong> to set up a new device or <strong>Regenerate recovery codes</strong>. If you have lost both your authenticator and your recovery codes, no one — including the server operator — can verify your second factor for you.</p>
 
             <h3>Is my data backed up?</h3>
             <p>Vault data is stored in Cloudflare R2. Use <strong>Export vault data</strong> regularly to keep your own offline backup.</p>

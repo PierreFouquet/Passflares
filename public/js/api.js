@@ -12,7 +12,7 @@ import { getAuthHeaders, clearSession } from './session.js';
  * @returns {Promise<Object|null>} JSON response from the API or null for 204 No Content.
  * @throws {Error} If the API call fails.
  */
-export async function apiCall(endpoint, method = 'GET', data = null, needsAuth = true) {
+export async function apiCall(endpoint, method = 'GET', data = null, needsAuth = true, { suppressAuthRedirect = false } = {}) {
     const headers = needsAuth
         ? getAuthHeaders()
         : { 'Content-Type': 'application/json' };
@@ -38,7 +38,7 @@ export async function apiCall(endpoint, method = 'GET', data = null, needsAuth =
             }
             console.error(`Error during ${method} ${endpoint}:`, errorBody);
 
-            if (response.status === 401 || response.status === 403) {
+            if ((response.status === 401 || response.status === 403) && !suppressAuthRedirect) {
                 clearSession();
                 alert("Your session expired or you don't have access. Please log in again.");
                 window.location.reload(); // Force refresh to re-render login
@@ -69,6 +69,33 @@ export async function registerUser(email, masterPassword, encryptionSalt, turnst
 
 export async function loginUser(email, masterPassword, turnstileToken) {
     return apiCall('/login', 'POST', { email, masterPassword, turnstileToken }, false); // No auth needed for login
+}
+
+// Second login step: exchange the temp token + a TOTP/recovery code for a real
+// session. suppressAuthRedirect so a wrong code's 401 doesn't wipe the dialog.
+export async function verifyLogin2fa(tempToken, code) {
+    return apiCall('/login/2fa', 'POST', { tempToken, code }, false, { suppressAuthRedirect: true });
+}
+
+// --- Two-factor (TOTP) endpoints ---
+export async function getTotpStatus() {
+    return apiCall('/2fa/status', 'GET');
+}
+
+export async function enrollTotp(reauth = null) {
+    return apiCall('/2fa/enroll', 'POST', reauth ?? {}, true, { suppressAuthRedirect: true });
+}
+
+export async function enableTotp(code) {
+    return apiCall('/2fa/enable', 'POST', { code }, true, { suppressAuthRedirect: true });
+}
+
+export async function disableTotp(masterPassword, code) {
+    return apiCall('/2fa/disable', 'POST', { masterPassword, code }, true, { suppressAuthRedirect: true });
+}
+
+export async function regenerateRecoveryCodes(masterPassword) {
+    return apiCall('/2fa/recovery-codes/regenerate', 'POST', { masterPassword }, true, { suppressAuthRedirect: true });
 }
 
 export async function getUserEncryptionSalt(userId) {

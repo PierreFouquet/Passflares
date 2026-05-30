@@ -92,6 +92,7 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
         ASSETS: {} as Fetcher,
         JWT_SECRET: 'test-jwt-secret-32-chars-minimum!!',
         TURNSTILE_KEY: 'test-turnstile-key',
+        TOTP_ENC_KEY: 'test-totp-enc-key-32-chars-minimum!!',
         ...overrides
     };
 }

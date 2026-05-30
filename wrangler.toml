@@ -38,8 +38,10 @@ run_worker_first = true
 
 # ========================
 # PRODUCTION ENVIRONMENT
-# JWT_SECRET and TURNSTILE_KEY are stored as Cloudflare secrets.
+# JWT_SECRET, TURNSTILE_KEY, and TOTP_ENC_KEY are stored as Cloudflare secrets.
 # To update: wrangler secret put JWT_SECRET
+# TOTP_ENC_KEY encrypts users' TOTP secrets at rest — set a long random value
+# (>= 32 chars); rotating it invalidates existing 2FA enrollments.
 # ========================
 
 [[r2_buckets]]

@@ -1,11 +1,12 @@
 // public/js/pages/auth.js — login + register flow.
 
-import { registerUser, loginUser } from '../api.js';
+import { registerUser, loginUser, verifyLogin2fa } from '../api.js';
 import { deriveKey } from '../crypto.js';
 import { storeSession } from '../session.js';
 import { setKey } from '../state.js';
 import { snack } from '../snackbar.js';
 import { showLoading, hideLoading } from '../ui.js';
+import { openDialog } from '../dialog.js';
 import { checkPasswordStrength, generateSalt, uint8ArrayToHexString } from '../utils.js';
 
 let onLoggedIn = null;
@@ -153,13 +154,17 @@ async function handleLogin(e) {
 
     showLoading('Signing in…');
     try {
-        const { userId, email: userEmail, encryptionSalt, token } = await loginUser(email, masterPassword, turnstileToken);
-        const key = await deriveKey(masterPassword, encryptionSalt);
-        setKey(key);
-        storeSession(token, { userId, email: userEmail, encryptionSalt });
-        snack.success(`Welcome back, ${userEmail}`);
+        const resp = await loginUser(email, masterPassword, turnstileToken);
+        // Two-step login: the server withholds the session + encryption salt
+        // until the second factor is verified. Keep the master password in
+        // memory (closure) so we can derive the vault key after step 2.
+        if (resp?.requires2FA) {
+            hideLoading();
+            promptSecondFactor(resp.tempToken, masterPassword, e.target);
+            return;
+        }
+        await completeLogin(resp, masterPassword);
         e.target.reset();
-        onLoggedIn?.();
     } catch (err) {
         console.error('Login failed:', err);
         snack.error(err.message ?? 'Could not sign in.');
@@ -167,4 +172,106 @@ async function handleLogin(e) {
     } finally {
         hideLoading();
     }
+}
+
+// Derives the vault key, stores the session, and hands off to the app. Shared
+// by the single-step (no 2FA) and two-step (post-2FA) login paths.
+async function completeLogin({ userId, email: userEmail, encryptionSalt, token }, masterPassword) {
+    const key = await deriveKey(masterPassword, encryptionSalt);
+    setKey(key);
+    storeSession(token, { userId, email: userEmail, encryptionSalt });
+    snack.success(`Welcome back, ${userEmail}`);
+    onLoggedIn?.();
+}
+
+// Second-factor prompt. Built with DOM APIs (no innerHTML interpolation) so it
+// satisfies the static XSS audit. Accepts a 6-digit TOTP code or a recovery
+// code; the temp token proves the password step already passed.
+function promptSecondFactor(tempToken, masterPassword, loginForm) {
+    const body = document.createElement('div');
+
+    const intro = document.createElement('p');
+    intro.className = 'text-muted';
+    intro.textContent = 'Enter the 6-digit code from your authenticator app.';
+
+    const field = document.createElement('div');
+    field.className = 'field';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'totp-code';
+    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('autocomplete', 'one-time-code');
+    input.setAttribute('placeholder', ' ');
+    input.maxLength = 6;
+    const label = document.createElement('label');
+    label.setAttribute('for', 'totp-code');
+    label.textContent = 'Authentication code';
+    field.append(input, label);
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'btn btn--text btn--sm';
+    toggle.textContent = 'Use a recovery code instead';
+
+    let recoveryMode = false;
+    toggle.addEventListener('click', () => {
+        recoveryMode = !recoveryMode;
+        if (recoveryMode) {
+            intro.textContent = 'Enter one of your saved recovery codes.';
+            label.textContent = 'Recovery code';
+            input.setAttribute('inputmode', 'text');
+            input.removeAttribute('maxLength');
+            toggle.textContent = 'Use your authenticator app instead';
+        } else {
+            intro.textContent = 'Enter the 6-digit code from your authenticator app.';
+            label.textContent = 'Authentication code';
+            input.setAttribute('inputmode', 'numeric');
+            input.maxLength = 6;
+            toggle.textContent = 'Use a recovery code instead';
+        }
+        input.value = '';
+        input.focus();
+    });
+
+    body.append(intro, field, toggle);
+
+    const submit = async ({ close }) => {
+        const code = input.value.trim();
+        if (!code) { snack.error('Enter your code to continue.'); return; }
+        showLoading('Verifying…');
+        try {
+            const resp = await verifyLogin2fa(tempToken, code);
+            await completeLogin(resp, masterPassword);
+            if (resp?.recoveryCodeUsed) {
+                snack.warning(`Recovery code used. ${resp.remainingRecoveryCodes ?? 0} remaining.`);
+            }
+            loginForm?.reset();
+            close();
+        } catch (err) {
+            console.error('2FA verification failed:', err);
+            snack.error(err.message ?? 'Invalid code.');
+            input.value = '';
+            input.focus();
+        } finally {
+            hideLoading();
+        }
+    };
+
+    const dlg = openDialog({
+        title: 'Two-factor authentication',
+        body,
+        actions: [
+            { label: 'Cancel', variant: 'text' },
+            {
+                label: 'Verify',
+                variant: 'filled',
+                closeOnClick: false,
+                onClick: submit
+            }
+        ]
+    });
+
+    input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' && dlg) { ev.preventDefault(); submit({ close: dlg.close }); }
+    });
 }

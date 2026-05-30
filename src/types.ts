@@ -28,6 +28,7 @@ export interface Env {
     ASSETS: Fetcher;
     JWT_SECRET: string;
     TURNSTILE_KEY: string;
+    TOTP_ENC_KEY: string; // encrypts TOTP secrets at rest (AES-GCM key material)
 }
 
 // Interfaces for database entities (optional but good practice)
@@ -37,6 +38,24 @@ export interface User {
     password_hash: string;
     password_salt: string;
     encryption_salt: string; // client-side encryption salt
+    created_at: string;
+}
+
+export interface UserTotp {
+    user_id: number;
+    secret_enc: string | null;        // active secret (AES-GCM "v1:iv:ct"); null until first confirm
+    pending_secret_enc: string | null; // in-flight enrollment/change
+    enabled: number;                  // 0 | 1
+    confirmed_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface UserRecoveryCode {
+    id: number;
+    user_id: number;
+    code_hash: string; // HMAC-SHA256(server pepper, normalized code)
+    used_at: string | null;
     created_at: string;
 }
 

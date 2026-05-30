@@ -26,6 +26,14 @@ import {
     handleDeleteOrganization
 } from './organizations.js';
 import { handleGetPreferences, handleUpdatePreferences } from './preferences.js';
+import {
+    handleTotpStatus,
+    handleTotpEnroll,
+    handleTotpEnable,
+    handleTotpDisable,
+    handleRegenerateRecoveryCodes,
+    handleLoginVerify2fa
+} from './totp.js';
 import { CustomRequest, Env } from './types.js';
 import { jsonResponse } from './utils.js';
 
@@ -131,11 +139,19 @@ const withVaultPermission = (permission: 'read' | 'write' | 'manage') =>
 // --- Public routes (no auth required) ---
 router.post('/api/register', handleRegister);
 router.post('/api/login', handleLogin);
+router.post('/api/login/2fa', handleLoginVerify2fa);
 
 // --- Authenticated user routes ---
 router.get('/api/users/:userId/encryption-salt', withAuth, handleGetUserEncryptionSalt);
 router.put('/api/users/:userId/update-password', withAuth, handleUpdateMasterPassword);
 router.delete('/api/users/:userId', withAuth, handleDeleteAccount);
+
+// --- Two-factor authentication ---
+router.get('/api/2fa/status', withAuth, handleTotpStatus);
+router.post('/api/2fa/enroll', withAuth, handleTotpEnroll);
+router.post('/api/2fa/enable', withAuth, handleTotpEnable);
+router.post('/api/2fa/disable', withAuth, handleTotpDisable);
+router.post('/api/2fa/recovery-codes/regenerate', withAuth, handleRegenerateRecoveryCodes);
 
 // --- User preferences (synced UI prefs) ---
 router.get('/api/users/me/preferences', withAuth, handleGetPreferences);
