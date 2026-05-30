@@ -42,7 +42,7 @@ run_worker_first = true
 # JWT_SECRET, TURNSTILE_KEY, and TOTP_ENC_KEY are stored as Cloudflare secrets.
 # To update: wrangler secret put JWT_SECRET
 # TOTP_ENC_KEY encrypts users' TOTP secrets at rest — set a long random value
-# (>= 32 chars); rotating it invalidates existing 2FA enrollments.
+# (>= 32 chars); rotating it invalidates existing 2FA enrolments.
 # ========================
 
 [[r2_buckets]]
@@ -62,4 +62,8 @@ database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
 # OBSERVABILITY
 # ========================
 [observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
 enabled = true
