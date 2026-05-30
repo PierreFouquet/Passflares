@@ -68,7 +68,7 @@ describe('Header injection — request body', () => {
 
 describe('Header injection — response header sanity', () => {
     it('no response header value contains raw CR/LF', async () => {
-        const res = await worker.fetch(loginReq({ Origin: 'https://pierrefouquet.co.uk' }), createMockEnv(), mockCtx);
+        const res = await worker.fetch(loginReq({ Origin: 'https://passflares.com' }), createMockEnv(), mockCtx);
         for (const [, value] of res.headers) {
             expect(value).not.toMatch(/\r|\n/);
         }

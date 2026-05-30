@@ -99,7 +99,7 @@ Passflares/
 
 For detailed usage instructions for a user or admin, please refer to the dedicated documentation pages:
 
-[Go to Documentation Site](https://pierrefouquet.co.uk/docs/docs.html "Passflares' Documentation Site")
+[Go to Documentation Site](https://passflares.com/docs/docs.html "Passflares' Documentation Site")
 
 ## Development
 
@@ -127,7 +127,7 @@ To set up and run locally:
 
 ## Deployment
 
-The live site at [passflares.pierrefouquet.co.uk](https://passflares.pierrefouquet.co.uk) is built
+The live site at [passflares.com](https://passflares.com) is built
 by Cloudflare's GitHub integration, which watches the **`main`**
 branch.
 
@@ -163,7 +163,7 @@ Other operational commands:
 
 The committed `wrangler.toml` references the upstream maintainer's
 Cloudflare resources (D1 database ID, KV namespace ID, R2 bucket, and the
-`pierrefouquet.co.uk` route). Those are not secrets, but they will not work
+`passflares.com` route). Those are not secrets, but they will not work
 for you — `wrangler deploy` will fail with permission errors. To stand up
 your own copy:
 

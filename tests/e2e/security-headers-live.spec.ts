@@ -5,7 +5,7 @@
 // headers a Pentest-Tools Light scan checks for.
 //
 // Run against the deployed worker:
-//   LIVE_HOST=https://passflares.pierrefouquet.co.uk \
+//   LIVE_HOST=https://passflares.com \
 //     npx playwright test security-headers-live
 //
 // Or against a local worker (emits the same headers as production):

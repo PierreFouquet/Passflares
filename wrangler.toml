@@ -1,7 +1,7 @@
 # ============================================================
 #  Heads up — forking this project?
 #  The IDs in this file (D1 database_id, KV namespace id, R2
-#  bucket_name, the pierrefouquet.co.uk route) belong to the
+#  bucket_name, the passflares.com route) belong to the
 #  upstream maintainer's Cloudflare account. They are not
 #  secrets, but they will NOT work for you — `wrangler deploy`
 #  will fail with permission errors until you swap them out.
@@ -18,12 +18,12 @@ compatibility_flags = [ "nodejs_compat" ]
 tsconfig = "tsconfig.json"
 
 routes = [
-    # `pattern` is the exact host(+path) the Worker handles. `zone_name` is
-    # the actual Cloudflare zone (the apex domain), which is where the DNS
-    # for the subdomain lives. `passflares.pierrefouquet.co.uk` is NOT a
-    # separate zone — Cloudflare returns "zone does not exist [10083]"
-    # if you set zone_name to a subdomain.
-    { pattern = "passflares.pierrefouquet.co.uk/*", zone_name = "pierrefouquet.co.uk" }
+    # `pattern` is the exact host(+path) the Worker handles; `zone_name` is the
+    # Cloudflare zone that owns the DNS. Here both are the apex `passflares.com`.
+    # A proxied (orange-cloud) DNS record must exist for `passflares.com`, or the
+    # route receives no traffic. `www.passflares.com` is handled separately by a
+    # Cloudflare Single Redirect Rule (www -> apex), not by this Worker.
+    { pattern = "passflares.com/*", zone_name = "passflares.com" }
 ]
 preview_urls = false
 
