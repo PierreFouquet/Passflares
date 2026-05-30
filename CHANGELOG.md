@@ -34,6 +34,9 @@ how data is stored or encrypted moves with the domain.
   documentation/live-site links in [README.md](README.md) updated to
   `passflares.com`. The in-app footer version (stale at `v1.0.1`) is corrected
   to `v1.1.1`.
+- **More observability** ([wrangler.toml](wrangler.toml)). Worker invocation
+  logs (`invocation_logs = true`) and traces (`[observability.traces]`,
+  `enabled = true`) are now both turned on. No code or data impact.
 
 ### Tests
 
@@ -55,6 +58,13 @@ how data is stored or encrypted moves with the domain.
   change).
 - Post-cutover cleanup: drop the old `passflares.pierrefouquet.co.uk` Worker
   route and its DNS record so it no longer serves.
+- **HSTS is enforced by the Worker, not the Cloudflare edge.** The new
+  `passflares.com` zone shipped with edge HSTS set to *max-age=0*, which
+  silently overrode the Worker's `Strict-Transport-Security: max-age=31536000;
+  includeSubDomains; preload` — caught by the `security-headers-live` probe.
+  Resolved by disabling the edge HSTS feature so the Worker's header (defined
+  in [src/worker.ts](src/worker.ts) and covered by tests) is authoritative;
+  verified live, 12/12 probe green.
 
 ## [1.1.0] — 2026-05-30
 
