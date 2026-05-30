@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import worker from '../../src/worker.js';
 import { createMockEnv, mockCtx } from '../mocks/cloudflare.js';
 
-const DEFAULT_ORIGIN = 'https://pierrefouquet.co.uk';
+const DEFAULT_ORIGIN = 'https://passflares.com';
 
 function apiReq(origin?: string | null) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

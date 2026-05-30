@@ -71,7 +71,7 @@ const HTML_CSP =
     "style-src 'self'; " +
     "img-src 'self' data:; " +
     "font-src 'self'; " +
-    "connect-src 'self' https://api.pierrefouquet.co.uk; " +
+    "connect-src 'self' https://api.passflares.com; " +
     "frame-src https://challenges.cloudflare.com; " +
     "manifest-src 'self'; " +
     "base-uri 'self'; " +
@@ -86,11 +86,11 @@ const API_CSP =
     "frame-ancestors 'none'";
 
 const ALLOWED_ORIGINS = [
-    'https://pierrefouquet.co.uk',
+    'https://passflares.com',
     'https://passflares.pierrefouquet93.workers.dev',
-    'https://api.pierrefouquet.co.uk',
+    'https://api.passflares.com',
     // Local dev origins; the worker's deployed routes are restricted to
-    // pierrefouquet.co.uk, so these only ever match when running `wrangler dev`.
+    // passflares.com, so these only ever match when running `wrangler dev`.
     'http://localhost:8080',
     'http://localhost:5173'
 ];
@@ -99,7 +99,7 @@ const getCorsHeaders = (request: Request): Record<string, string> => {
     const requestOrigin = request.headers.get('Origin');
     const allowedOrigin = ALLOWED_ORIGINS.includes(requestOrigin ?? '')
         ? requestOrigin
-        : 'https://pierrefouquet.co.uk';
+        : 'https://passflares.com';
 
     return {
         'Access-Control-Allow-Origin': allowedOrigin ?? '',
@@ -125,6 +125,21 @@ function applyHeaders(response: Response, extra: Record<string, string>): Respon
         statusText: response.statusText,
         headers
     });
+}
+
+// passflares.com is the canonical origin. `www.passflares.com` is also routed
+// to this Worker, but every request to it is permanently redirected to the
+// bare apex, preserving path + query. The base security headers (incl. HSTS)
+// ride along so the redirect response itself is covered.
+const CANONICAL_HOST = 'passflares.com';
+
+function redirectToCanonicalHost(url: URL): Response | null {
+    if (url.hostname !== `www.${CANONICAL_HOST}`) return null;
+    const location = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
+    return applyHeaders(
+        new Response(null, { status: 301, headers: { Location: location } }),
+        BASE_SECURITY_HEADERS
+    );
 }
 
 // Middleware wrappers: itty-router continues when a handler returns undefined,
@@ -196,12 +211,16 @@ function withSecurityHeaders(response: Response, isApi: boolean): Response {
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         try {
+            const url = new URL(request.url);
+
+            const canonicalRedirect = redirectToCanonicalHost(url);
+            if (canonicalRedirect) return canonicalRedirect;
+
             if (request.method === 'OPTIONS') {
                 return handleCorsPreflight(request);
             }
 
             const response = await router.handle(request, env, ctx);
-            const url = new URL(request.url);
             const isApi = url.pathname.startsWith('/api/');
 
             const secured = withSecurityHeaders(response, isApi);

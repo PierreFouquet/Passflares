@@ -259,13 +259,13 @@ describe('worker security headers — API responses', () => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Origin: 'https://pierrefouquet.co.uk'
+                Origin: 'https://passflares.com'
             },
             body: JSON.stringify({})
         });
         const res = await worker.fetch(req, createMockEnv(), mockCtx);
         expect(res.headers.get('Access-Control-Allow-Origin'))
-            .toBe('https://pierrefouquet.co.uk');
+            .toBe('https://passflares.com');
     });
 });
 
@@ -273,11 +273,11 @@ describe('OPTIONS preflight', () => {
     it('does not 500 and returns CORS headers', async () => {
         const req = new Request('https://passflares.test/api/login', {
             method: 'OPTIONS',
-            headers: { Origin: 'https://pierrefouquet.co.uk' }
+            headers: { Origin: 'https://passflares.com' }
         });
         const res = await worker.fetch(req, createMockEnv(), mockCtx);
         expect(res.status).toBe(204);
         expect(res.headers.get('Access-Control-Allow-Origin'))
-            .toBe('https://pierrefouquet.co.uk');
+            .toBe('https://passflares.com');
     });
 });

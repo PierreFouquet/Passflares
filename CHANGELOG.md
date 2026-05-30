@@ -5,6 +5,57 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-05-30
+
+Production domain migration to **passflares.com**. The app moves off its
+launch host `passflares.pierrefouquet.co.uk` to a dedicated apex domain. This
+is a hard cutover — the old host is retired — so existing users sign in once on
+the new origin (the session token lives in per-origin `localStorage`). The
+zero-knowledge model, vault encryption, and 2FA are unchanged; nothing about
+how data is stored or encrypted moves with the domain.
+
+### Changed
+
+- **Serving origin → `passflares.com`** ([wrangler.toml](wrangler.toml)). The
+  Worker route is now `passflares.com/*` on the `passflares.com` zone.
+  `www.passflares.com` is also routed to the Worker, which permanently
+  redirects every www request to the apex (`redirectToCanonicalHost` in
+  [src/worker.ts](src/worker.ts), preserving path + query, HSTS on the 301).
+- **CORS allow-list + default origin** ([src/worker.ts](src/worker.ts)) now
+  name `passflares.com` (and a reserved `api.passflares.com`) instead of the
+  old `pierrefouquet.co.uk` origins. The live serving origin is now explicitly
+  on the allow-list — previously it relied on requests being same-origin.
+- **CSP `connect-src`** ([src/worker.ts](src/worker.ts)) points at
+  `https://api.passflares.com` (reserved for future use; no such service ships
+  in this release). HSTS, the rest of the CSP, and all other security headers
+  are domain-agnostic and unchanged.
+- **`security.txt` canonical URL**
+  ([public/.well-known/security.txt](public/.well-known/security.txt)) and the
+  documentation/live-site links in [README.md](README.md) updated to
+  `passflares.com`. The in-app footer version (stale at `v1.0.1`) is corrected
+  to `v1.1.1`.
+
+### Tests
+
+- CORS/security/header-injection fixtures
+  ([tests/backend/cors-strict.test.ts](tests/backend/cors-strict.test.ts),
+  [tests/backend/worker-security.test.ts](tests/backend/worker-security.test.ts),
+  [tests/backend/header-injection.test.ts](tests/backend/header-injection.test.ts))
+  now assert against `https://passflares.com`.
+
+### Migration / deployment
+
+- **No database change and no new secrets.** D1 stores nothing domain-coupled;
+  `JWT_SECRET`, `TURNSTILE_KEY`, and `TOTP_ENC_KEY` are unaffected.
+- Cloudflare-side prerequisites, staged **before** merge (merge = auto-deploy):
+  proxied DNS records for `passflares.com` and `www` (the www→apex redirect is
+  handled in the Worker, so no edge redirect rule is needed), a verified
+  Universal SSL edge certificate, and `passflares.com` added to the existing
+  Turnstile widget's hostname allow-list (same site key + secret — no code
+  change).
+- Post-cutover cleanup: drop the old `passflares.pierrefouquet.co.uk` Worker
+  route and its DNS record so it no longer serves.
+
 ## [1.1.0] — 2026-05-30
 
 Two-factor authentication (TOTP) with single-use recovery codes. 2FA is
