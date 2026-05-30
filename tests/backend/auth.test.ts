@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sign } from 'jsonwebtoken';
+import { sign, decode } from 'jsonwebtoken';
 import {
     handleRegister,
     handleLogin,
@@ -151,12 +151,13 @@ describe('handleLogin', () => {
         email: 'test@example.com',
         password_hash: 'mockhash',
         password_salt: 'mocksalt',
-        encryption_salt: 'encryptionsalt'
+        encryption_salt: 'encryptionsalt',
+        totp_enabled: null
     };
 
     it('logs in successfully with correct credentials', async () => {
         const kv = createMockKV();
-        const env = baseEnv({ 'SELECT id, email': { first: mockUser } });
+        const env = baseEnv({ 'LEFT JOIN user_totp': { first: mockUser } });
         (env as any).RATE_LIMIT = kv;
 
         const req = makeRequest('POST', '/api/login', {
@@ -170,6 +171,31 @@ describe('handleLogin', () => {
         const body = await res.json() as any;
         expect(body.token).toBeTruthy();
         expect(body.encryptionSalt).toBe('encryptionsalt');
+    });
+
+    it('withholds the session and returns a 2FA challenge when TOTP is enabled', async () => {
+        // The LEFT JOIN surfaces totp_enabled=1, so handleLogin must NOT issue a
+        // session token or leak the encryption salt — only a short-lived temp token.
+        const env = baseEnv({ 'LEFT JOIN user_totp': { first: { ...mockUser, totp_enabled: 1 } } });
+        const req = makeRequest('POST', '/api/login', {
+            email: 'test@example.com',
+            masterPassword: 'correct-password',
+            turnstileToken: VALID_TURNSTILE_TOKEN
+        }) as any;
+
+        const res = await handleLogin(req, env, mockCtx);
+        expect(res.status).toBe(200);
+        const body = await res.json() as any;
+        expect(body.requires2FA).toBe(true);
+        expect(body.tempToken).toBeTruthy();
+        expect(body.token).toBeUndefined();
+        expect(body.encryptionSalt).toBeUndefined();
+
+        // The temp token is scoped to '2fa' and carries `sub`, not `userId`.
+        const decoded = decode(body.tempToken) as any;
+        expect(decoded.scope).toBe('2fa');
+        expect(decoded.sub).toBe(mockUser.id);
+        expect(decoded.userId).toBeUndefined();
     });
 
     it('returns 401 when user is not found', async () => {

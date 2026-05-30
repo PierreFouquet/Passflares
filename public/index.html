@@ -33,6 +33,7 @@
     <link rel="stylesheet" href="css/components/menu.css">
     <link rel="stylesheet" href="css/components/auth.css">
     <link rel="stylesheet" href="css/components/pages.css">
+    <link rel="stylesheet" href="css/components/totp.css">
 
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
@@ -355,6 +356,17 @@
                 <button type="button" class="btn btn--tonal" data-action="change-password"><span class="icon">key</span>Change master password</button>
                 <button type="button" class="btn btn--tonal" data-action="export"><span class="icon">download</span>Export vault data</button>
                 <button type="button" class="btn btn--danger-text" data-action="delete-account"><span class="icon">delete</span>Delete account</button>
+            </div>
+        </section>
+
+        <section class="card" data-totp-section>
+            <h2 class="card__title">Two-factor authentication</h2>
+            <p class="settings-section__hint" data-totp-status>Loading…</p>
+            <div class="row row-wrap">
+                <button type="button" class="btn btn--filled hidden" data-action="totp-enable"><span class="icon">shield</span>Enable 2FA</button>
+                <button type="button" class="btn btn--tonal hidden" data-action="totp-change"><span class="icon">sync</span>Change authenticator</button>
+                <button type="button" class="btn btn--tonal hidden" data-action="totp-regenerate"><span class="icon">password</span>Regenerate recovery codes</button>
+                <button type="button" class="btn btn--danger-text hidden" data-action="totp-disable"><span class="icon">remove_moderator</span>Disable 2FA</button>
             </div>
         </section>
     </div>

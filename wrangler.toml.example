@@ -14,6 +14,9 @@
 #   7. Set secrets:
 #         npx wrangler secret put JWT_SECRET       # openssl rand -base64 64
 #         npx wrangler secret put TURNSTILE_KEY    # secret key from your Turnstile widget
+#         npx wrangler secret put TOTP_ENC_KEY     # openssl rand -base64 48 (>= 32 chars)
+#      TOTP_ENC_KEY encrypts users' 2FA secrets at rest. Keep it stable — rotating
+#      it invalidates every existing two-factor enrollment.
 #   8. Update the Turnstile sitekey in `public/index.html` to match your widget.
 #
 # Resource IDs (database_id, KV namespace id, R2 bucket name) are not secrets

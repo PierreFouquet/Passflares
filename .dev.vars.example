@@ -4,3 +4,6 @@
 JWT_SECRET="local-dev-secret-change-me"
 # Turnstile test key — always passes validation, safe for local dev only.
 TURNSTILE_KEY="1x0000000000000000000000000000000AA"
+# Encrypts users' TOTP secrets at rest (AES-GCM key material). Use a long
+# random string (>= 32 chars). Rotating this invalidates existing 2FA setups.
+TOTP_ENC_KEY="local-dev-totp-key-change-me-at-least-32-chars"

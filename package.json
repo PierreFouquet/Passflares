@@ -1,6 +1,6 @@
 {
   "name": "passflares",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "A modern and secure password manager built on the Cloudflare Stack.",
   "main": "src/worker.ts",
   "scripts": {
@@ -30,6 +30,8 @@
   "dependencies": {
     "@noble/hashes": "^2.2.0",
     "itty-router": "^4.2.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "otpauth": "^9.5.1",
+    "qrcode-svg": "^1.1.0"
   }
 }

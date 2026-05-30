@@ -103,9 +103,9 @@ export async function handleLogin(request: CustomRequest, env: Env, ctx: Executi
     }
 
     try {
-        const user: User | null = await env.DB.prepare(
-            "SELECT id, email, password_hash, password_salt, encryption_salt FROM users WHERE email = ?"
-        ).bind(email).first();
+        const user = await env.DB.prepare(
+            "SELECT users.id, users.email, users.password_hash, users.password_salt, users.encryption_salt, user_totp.enabled AS totp_enabled FROM users LEFT JOIN user_totp ON user_totp.user_id = users.id WHERE users.email = ?"
+        ).bind(email).first() as (User & { totp_enabled: number | null }) | null;
 
         if (!user) {
             // Increment failed attempts
@@ -129,6 +129,16 @@ export async function handleLogin(request: CustomRequest, env: Env, ctx: Executi
 
         // Reset failed attempts on successful login
         await env.RATE_LIMIT.delete(ipKey);
+
+        // If the user has 2FA enabled, don't issue a session yet. Return a
+        // short-lived token scoped to the 2FA step only — handleLoginVerify2fa
+        // exchanges it (plus a TOTP/recovery code) for the real session token,
+        // and the auth middleware rejects scope:'2fa' on protected routes.
+        if (user.totp_enabled === 1) {
+            const tempToken = sign({ sub: user.id, email: user.email, scope: '2fa' }, env.JWT_SECRET, { expiresIn: '5m' });
+            logAudit(env, ctx, user.id, 'LOGIN_2FA_REQUIRED', { email }, ipAddress, userAgent);
+            return jsonResponse({ message: "Two-factor authentication required.", requires2FA: true, tempToken });
+        }
 
         // Generate JWT token
         const token = sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '1h' });
@@ -281,6 +291,10 @@ export async function handleDeleteAccount(request: CustomRequest, env: Env, ctx:
         await env.DB.prepare(
             "DELETE FROM vault_access_controls WHERE entity_id = ? AND entity_type = 'user'"
         ).bind(`user_${userId}`).run();
+
+        // 4b. Remove 2FA secret + recovery codes (also covered by FK cascade)
+        await env.DB.prepare("DELETE FROM user_recovery_codes WHERE user_id = ?").bind(userId).run();
+        await env.DB.prepare("DELETE FROM user_totp WHERE user_id = ?").bind(userId).run();
 
         // 5. Delete user record (FK cascade removes user_organizations; audit_logs.user_id set to NULL)
         await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();

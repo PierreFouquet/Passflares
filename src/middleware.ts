@@ -23,8 +23,14 @@ export async function authenticateRequest(request: CustomRequest, env: Env, ctx:
 
     const token = authHeader.split(' ')[1];
     try {
-        const decoded = verify(token, env.JWT_SECRET) as { userId: number; email: string; iat: number; exp: number };
-        request.user = decoded;
+        const decoded = verify(token, env.JWT_SECRET) as { userId?: number; email: string; scope?: string; iat: number; exp: number };
+        // Reject the short-lived token minted for the 2FA step (scope:'2fa',
+        // carries `sub` not `userId`) — it must never authorize protected routes.
+        if (decoded.scope === '2fa' || typeof decoded.userId !== 'number') {
+            logAudit(env, ctx, null, 'AUTH_FAILURE', { reason: 'Non-session token' }, ipAddress, userAgent);
+            return jsonResponse({ message: "Unauthorized: Invalid or expired token." }, 401);
+        }
+        request.user = decoded as { userId: number; email: string; iat: number; exp: number };
         return null; // Continue to the next handler/middleware
     } catch (error: any) {
         console.error("JWT verification failed:", error);
