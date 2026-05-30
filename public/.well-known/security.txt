@@ -1,5 +1,5 @@
 Contact: https://github.com/PierreFouquet/Passflares/security/advisories/new
-Contact: mailto:pierrefouquet93@proton.me
+Contact: mailto:admin@passflares.com
 Expires: 2027-05-26T00:00:00.000Z
 Preferred-Languages: en
 Canonical: https://passflares.pierrefouquet.co.uk/.well-known/security.txt
