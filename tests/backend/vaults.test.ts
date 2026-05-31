@@ -51,6 +51,80 @@ describe('handleCreateVault', () => {
         expect(res.status).toBe(403);
     });
 
+    // The org creator is seeded as 'super_admin'; vault creation must accept it.
+    // Regression test for the "creating an org vault logs you out" bug, where
+    // gating on the literal 'admin' role returned 403 to the owner.
+    it('lets an organization super_admin create an org-owned vault', async () => {
+        const db = createMockDB({
+            'SELECT role FROM user_organizations': { first: { role: 'super_admin' } },
+            'INSERT INTO vaults': { run: { success: true, last_row_id: 7 } },
+            'INSERT INTO vault_access_controls': { run: { success: true } }
+        });
+        const env = createMockEnv({ DB: db });
+        const req = authedRequest('POST', '/api/vaults', {
+            name: 'Team Vault',
+            ownerId: 'org_3',
+            ownerType: 'organization',
+            initialPermissionLevel: 'manage'
+        });
+
+        const res = await handleCreateVault(req, env, mockCtx);
+        expect(res.status).toBe(201);
+        const body = await res.json() as any;
+        expect(body.owner_id).toBe('org_3');
+        expect(body.owner_type).toBe('organization');
+    });
+
+    it('lets an organization admin create an org-owned vault', async () => {
+        const db = createMockDB({
+            'SELECT role FROM user_organizations': { first: { role: 'admin' } },
+            'INSERT INTO vaults': { run: { success: true, last_row_id: 8 } },
+            'INSERT INTO vault_access_controls': { run: { success: true } }
+        });
+        const env = createMockEnv({ DB: db });
+        const req = authedRequest('POST', '/api/vaults', {
+            name: 'Team Vault',
+            ownerId: 'org_3',
+            ownerType: 'organization',
+            initialPermissionLevel: 'manage'
+        });
+
+        const res = await handleCreateVault(req, env, mockCtx);
+        expect(res.status).toBe(201);
+    });
+
+    it('returns 403 when a non-admin member creates an org-owned vault', async () => {
+        const db = createMockDB({
+            'SELECT role FROM user_organizations': { first: { role: 'member' } }
+        });
+        const env = createMockEnv({ DB: db });
+        const req = authedRequest('POST', '/api/vaults', {
+            name: 'Team Vault',
+            ownerId: 'org_3',
+            ownerType: 'organization',
+            initialPermissionLevel: 'manage'
+        });
+
+        const res = await handleCreateVault(req, env, mockCtx);
+        expect(res.status).toBe(403);
+    });
+
+    it('returns 403 when a non-member creates an org-owned vault', async () => {
+        const db = createMockDB({
+            'SELECT role FROM user_organizations': { first: null }
+        });
+        const env = createMockEnv({ DB: db });
+        const req = authedRequest('POST', '/api/vaults', {
+            name: 'Team Vault',
+            ownerId: 'org_3',
+            ownerType: 'organization',
+            initialPermissionLevel: 'manage'
+        });
+
+        const res = await handleCreateVault(req, env, mockCtx);
+        expect(res.status).toBe(403);
+    });
+
     it('returns 400 for an invalid owner type', async () => {
         const env = createMockEnv();
         const req = authedRequest('POST', '/api/vaults', {

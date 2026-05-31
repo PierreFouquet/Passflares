@@ -1,6 +1,6 @@
 // src/vaults.ts
 
-import { CustomRequest, Env, VaultMetadata, EncryptedVaultBlob } from './types.js'; // Ensure correct path and .js extension
+import { CustomRequest, Env, VaultMetadata, EncryptedVaultBlob, OrgRole, ADMIN_ROLES } from './types.js'; // Ensure correct path and .js extension
 import { logAudit } from './auditLog.js'; // Ensure correct path and .js extension
 import { jsonResponse } from './utils.js'; // Ensure correct path and .js extension
 
@@ -44,12 +44,15 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
                 logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Invalid orgId format' }, ipAddress, userAgent);
                 return jsonResponse({ message: "Invalid organization ID format." }, 400);
             }
-            // Check if user is an admin of this organization
+            // Check if user is an admin of this organization. Accept any
+            // administrative role — the org creator is seeded as 'super_admin',
+            // so gating on 'admin' alone returned 403 to owners creating a vault
+            // for their own org, which the client surfaced as a forced logout.
             const orgMember: { role: string } | null = await env.DB.prepare(
                 `SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?`
             ).bind(user.userId, orgId).first();
 
-            if (!orgMember || orgMember.role !== 'admin') {
+            if (!orgMember || !ADMIN_ROLES.includes(orgMember.role as OrgRole)) {
                 logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Not organization admin', orgId }, ipAddress, userAgent);
                 return jsonResponse({ message: "You must be an admin of the organization to create a vault for it." }, 403);
             }
