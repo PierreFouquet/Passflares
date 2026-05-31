@@ -34,8 +34,10 @@ import {
     removeMember,
     deleteOrganization,
     getOrganizations,
-    addMemberToOrganization
+    addMemberToOrganization,
+    getVaults
 } from '../../public/js/api.js';
+import { clearSession } from '../../public/js/session.js';
 
 function mockOkResponse(body, status = 200) {
     mockFetch.mockResolvedValueOnce({
@@ -47,6 +49,7 @@ function mockOkResponse(body, status = 200) {
 
 beforeEach(() => {
     mockFetch.mockReset();
+    clearSession.mockClear();
 });
 
 describe('getOrgMembers', () => {
@@ -124,9 +127,6 @@ describe('addMemberToOrganization', () => {
     });
 
     it('throws on a non-ok response', async () => {
-        // api.js calls alert() on 401/403 — stub it in the test environment
-        vi.stubGlobal('alert', vi.fn());
-        vi.stubGlobal('location', { reload: vi.fn() });
         mockFetch.mockResolvedValueOnce({
             ok: false,
             status: 403,
@@ -134,6 +134,44 @@ describe('addMemberToOrganization', () => {
             text: () => Promise.resolve(JSON.stringify({ message: 'Forbidden: not admin' }))
         });
         await expect(addMemberToOrganization(5, 'a@b.com', 'member')).rejects.toThrow('Forbidden: not admin');
+    });
+});
+
+// A 403 (forbidden) is an authorization failure on an otherwise-valid session,
+// so it must NOT log the user out — only a 401 (expired/invalid token) should.
+// Regression guard for the "creating an org vault logs you out" bug.
+describe('apiCall auth handling (401 vs 403)', () => {
+    it('does NOT clear the session or reload on a 403', async () => {
+        const reload = vi.fn();
+        vi.stubGlobal('alert', vi.fn());
+        vi.stubGlobal('location', { reload });
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            status: 403,
+            statusText: 'Forbidden',
+            text: () => Promise.resolve(JSON.stringify({ message: 'You must be an admin of the organization to create a vault for it.' }))
+        });
+
+        await expect(getVaults()).rejects.toThrow('You must be an admin');
+        expect(clearSession).not.toHaveBeenCalled();
+        expect(reload).not.toHaveBeenCalled();
+        vi.unstubAllGlobals();
+    });
+
+    it('clears the session and reloads on a 401', async () => {
+        const reload = vi.fn();
+        vi.stubGlobal('alert', vi.fn());
+        vi.stubGlobal('location', { reload });
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            status: 401,
+            statusText: 'Unauthorized',
+            text: () => Promise.resolve(JSON.stringify({ message: 'Unauthorized: Invalid or expired token.' }))
+        });
+
+        await expect(getVaults()).rejects.toThrow('Invalid or expired token');
+        expect(clearSession).toHaveBeenCalledTimes(1);
+        expect(reload).toHaveBeenCalledTimes(1);
         vi.unstubAllGlobals();
     });
 });

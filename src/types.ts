@@ -81,12 +81,20 @@ export interface Organization {
     created_at: string;
 }
 
+export type OrgRole = 'member' | 'admin' | 'super_admin';
+
 export interface UserOrganization {
     user_id: number;
     organization_id: number;
-    role: 'member' | 'admin' | 'super_admin';
+    role: OrgRole;
     joined_at: string;
 }
+
+// Org roles that grant administrative privileges (creating org-owned vaults,
+// managing members, deleting the org, etc.). The org creator is seeded as
+// 'super_admin' (see handleCreateOrganization), so any admin gate must accept
+// BOTH roles — checking 'admin' alone locks owners out of their own org.
+export const ADMIN_ROLES: readonly OrgRole[] = ['admin', 'super_admin'];
 
 export interface VaultAccessControl {
     id: number;

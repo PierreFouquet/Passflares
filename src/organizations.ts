@@ -1,10 +1,8 @@
 // src/organizations.ts
 
-import { CustomRequest, Env, Organization, UserOrganization, User } from './types.js';
+import { CustomRequest, Env, Organization, UserOrganization, User, ADMIN_ROLES } from './types.js';
 import { logAudit } from './auditLog.js';
 import { jsonResponse } from './utils.js';
-
-const ADMIN_ROLES = ['admin', 'super_admin'] as const;
 
 export async function handleCreateOrganization(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { name, description } = await request.json() as { name: string; description?: string };

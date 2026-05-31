@@ -38,9 +38,14 @@ export async function apiCall(endpoint, method = 'GET', data = null, needsAuth =
             }
             console.error(`Error during ${method} ${endpoint}:`, errorBody);
 
-            if ((response.status === 401 || response.status === 403) && !suppressAuthRedirect) {
+            // Only a 401 means the session itself is invalid/expired — re-auth
+            // in that case. A 403 means the request was authenticated but not
+            // permitted (e.g. acting on a resource you lack rights to); surface
+            // it as an error rather than destroying a still-valid session, so a
+            // permission denial never masquerades as a forced logout.
+            if (response.status === 401 && !suppressAuthRedirect) {
                 clearSession();
-                alert("Your session expired or you don't have access. Please log in again.");
+                alert("Your session has expired. Please log in again.");
                 window.location.reload(); // Force refresh to re-render login
             }
             throw new Error(errorMessage);
