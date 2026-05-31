@@ -52,12 +52,14 @@
         });
     }
 
-    // Highlight the current page in the nav.
-    const here = location.pathname.split('/').pop() || 'docs.html';
+    // Highlight the current page in the nav. Normalise both the current path
+    // and each link's resolved path to a canonical key (drop index.html, the
+    // .html extension, and any trailing slash) so highlighting works whether
+    // or not the server strips extensions or adds a trailing slash.
+    const canon = (path) => path.replace(/index\.html$/, '').replace(/\.html$/, '').replace(/\/$/, '');
+    const here = canon(location.pathname);
     document.querySelectorAll('.docs-bar__nav a').forEach(a => {
-        const target = a.getAttribute('href');
-        if (target === here) a.classList.add('is-active');
-        else a.classList.remove('is-active');
+        a.classList.toggle('is-active', canon(a.pathname) === here);
     });
 
     // Respond to OS theme flip when on `system`.

@@ -35,7 +35,7 @@ Passflares/
 │   │   ├── app-shell.css            # App bar, nav rail, page container
 │   │   └── components/              # Per-component stylesheets (button, card, dialog, drawer, etc.)
 │   ├── docs/                        # User and admin documentation site
-│   │   ├── docs.html                # Documentation landing page
+│   │   ├── index.html               # Documentation landing page (served at /docs/)
 │   │   ├── user-guide.html          # Account / sign-in / master password guide
 │   │   ├── vaults-guide.html        # Vault and entry management guide
 │   │   ├── organisations-guide.html # Organisations, roles, and sharing guide
@@ -99,7 +99,7 @@ Passflares/
 
 For detailed usage instructions for a user or admin, please refer to the dedicated documentation pages:
 
-[Go to Documentation Site](https://passflares.com/docs/docs.html "Passflares' Documentation Site")
+[Go to Documentation Site](https://passflares.com/docs/ "Passflares' Documentation Site")
 
 ## Development
 
