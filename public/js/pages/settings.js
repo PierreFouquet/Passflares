@@ -272,7 +272,7 @@ function openEnrollDialog(isChange, onDone) {
         actions: [
             { label: 'Cancel', variant: 'text' },
             {
-                label: isChange ? 'Confirm' : 'Continue',
+                label: isChange ? 'Confirm' : 'Verify',
                 variant: 'filled',
                 closeOnClick: false,
                 onClick: (ctx) => {
@@ -282,6 +282,12 @@ function openEnrollDialog(isChange, onDone) {
             }
         ]
     });
+
+    // First-time enable needs no re-auth, so fetch and show the QR immediately —
+    // otherwise the dialog reads "Scan this QR code" above an empty slot until the
+    // user clicks the action button. Change-authenticator keeps the QR gated behind
+    // the master-password + current-code confirmation, so it starts on confirm.
+    if (!isChange) startEnroll();
 }
 
 function openRegenerateDialog(onDone) {
