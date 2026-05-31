@@ -5,6 +5,48 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] — 2026-05-31
+
+Bug-fix release. Two issues found in the live 1.1.1 app — both first noticed
+on mobile — plus a regression guard so neither class recurs.
+
+### Fixed
+
+- **Creating an organisation-owned vault no longer logs you out** (#38).
+  Organisation creators are seeded with the `super_admin` role, but vault
+  creation only accepted the literal `admin` role, so an owner creating a
+  vault for their own org got a `403` — which the client treated as a lost
+  session and reloaded to the login screen. Vault creation now accepts any
+  administrative role via a shared `ADMIN_ROLES` constant
+  ([src/types.ts](src/types.ts), [src/vaults.ts](src/vaults.ts),
+  [src/organizations.ts](src/organizations.ts)). The cause is server-side, so
+  desktop and mobile behaved identically.
+- **A `403 Forbidden` no longer destroys the session**
+  ([public/js/api.js](public/js/api.js)). The client re-authenticates only on
+  `401` (a genuinely invalid/expired token); a `403` is surfaced as an inline
+  error, so a permission denial can't masquerade as a forced logout.
+- **Two-factor settings icons render correctly** (#39). The Material Symbols
+  font is a subset, and the 2FA buttons use `sync` / `password` /
+  `remove_moderator` — three glyphs never added to the subset when 2FA shipped
+  in 1.1.0, so they rendered as their literal ligature text ("SYNC",
+  "PASSWORD", "REMOVE_MODERATOR"). Regenerated the subset `.woff2`
+  ([public/fonts/material-symbols/](public/fonts/material-symbols/MaterialSymbolsRounded.woff2))
+  and updated the documented icon list
+  ([public/fonts/README.md](public/fonts/README.md)).
+- **First-time 2FA enrolment shows its QR immediately**
+  ([public/js/pages/settings.js](public/js/pages/settings.js)) instead of an
+  empty slot until the action button was clicked; the action now reads "Verify".
+
+### Tests
+
+- Org-owned vault creation across `super_admin` / `admin` / `member` /
+  non-member, and the client `401`-vs-`403` distinction
+  ([tests/backend/vaults.test.ts](tests/backend/vaults.test.ts),
+  [tests/frontend/api.test.js](tests/frontend/api.test.js)).
+- New icon-subset guardrail that fails when any icon used in the shipped
+  HTML/JS is missing from the bundled font subset
+  ([tests/backend/icon-subset.test.ts](tests/backend/icon-subset.test.ts)).
+
 ## [1.1.1] — 2026-05-30
 
 Production domain migration to **passflares.com**. The app moves off its
