@@ -142,7 +142,7 @@ body {
     line-height: var(--line-snug);
 }
 
-/* ── Docs.html landing cards ─────────────────────────────────────── */
+/* ── index.html landing cards ────────────────────────────────────── */
 .guide-grid {
     display: grid;
     gap: var(--space-4);
@@ -420,7 +420,7 @@ body {
     line-height: var(--line-snug);
 }
 
-/* ── Security highlights list (docs.html) ────────────────────────── */
+/* ── Security highlights list (index.html) ───────────────────────── */
 .security-list {
     list-style: none;
     padding: 0;
