@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/PierreFouquet/Passflares/security/advisories/new
+    about: Report security issues privately via GitHub Security Advisories — please do not open a public issue.
+  - name: Documentation
+    url: https://passflares.com/docs/
+    about: User, vault, organisation, and admin guides.
