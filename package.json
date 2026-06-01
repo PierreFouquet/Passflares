@@ -17,15 +17,15 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260527.1",
+    "@cloudflare/workers-types": "^4.20260601.1",
     "@playwright/test": "^1.60.0",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.19.41",
     "happy-dom": "^20.9.0",
     "http-server": "^14.1.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.7",
-    "wrangler": "^4.93.0"
+    "vitest": "^4.1.8",
+    "wrangler": "^4.96.0"
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",
