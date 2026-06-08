@@ -34,3 +34,44 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  security-headers:
+    runs-on: ubuntu-latest
+    name: Security-header probes
+    # Boots the worker built from THIS commit via `wrangler dev` (local mode,
+    # emulated bindings — no real Cloudflare resources, no secrets) and runs the
+    # `security-headers-live` probes against it. Those headers are emitted by
+    # src/worker.ts, so a local worker serves byte-for-byte what production does
+    # — giving us real header coverage per commit without minting a public
+    # preview URL or touching production D1/R2/KV.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Local-only dev secrets: the always-pass Turnstile test key + dummy
+      # values. .dev.vars is read automatically by `wrangler dev`.
+      - run: cp .dev.vars.example .dev.vars
+      - name: Boot the built worker and probe its security headers
+        run: |
+          npx wrangler dev --port 8787 --local > /tmp/wrangler-dev.log 2>&1 &
+          echo "Waiting for the worker to come up..."
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:8787/; then
+              echo "worker up after ~$((i * 2))s"; break
+            fi
+            sleep 2
+          done
+          if ! curl -fsS -o /dev/null http://localhost:8787/; then
+            echo "::error::worker failed to start within 120s"
+            cat /tmp/wrangler-dev.log
+            exit 1
+          fi
+          # The probes use Playwright's APIRequestContext (plain HTTP), so no
+          # browser binary is needed. PASSFLARES_BASE_URL is set only to skip the
+          # config's hermetic http-server, which this job doesn't use.
+          LIVE_HOST=http://localhost:8787 \
+          PASSFLARES_BASE_URL=http://localhost:8787 \
+            npx playwright test security-headers-live --project=chromium-desktop
