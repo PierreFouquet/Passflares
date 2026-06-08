@@ -33,29 +33,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-
-  security-headers:
-    runs-on: ubuntu-latest
-    name: Security-header probes
-    # Boots the worker built from THIS commit via `wrangler dev` (local mode,
-    # emulated bindings — no real Cloudflare resources, no secrets) and runs the
-    # `security-headers-live` probes against it. Those headers are emitted by
-    # src/worker.ts, so a local worker serves byte-for-byte what production does
-    # — giving us real header coverage per commit without minting a public
-    # preview URL or touching production D1/R2/KV.
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      # Local-only dev secrets: the always-pass Turnstile test key + dummy
-      # values. .dev.vars is read automatically by `wrangler dev`.
+      # Local-only dev secrets so `wrangler dev` can boot: the always-pass
+      # Turnstile test key + dummy values. .dev.vars is gitignored and auto-read.
       - run: cp .dev.vars.example .dev.vars
-      - name: Boot the built worker and probe its security headers
+      - name: Run E2E suite (incl. live security-header probes)
         run: |
+          # Boot the worker built from THIS commit (local mode, emulated
+          # bindings — no real Cloudflare resources). The security-headers-live
+          # probes hit it directly; the browser specs keep using the Playwright
+          # config's hermetic http-server on :4173.
           npx wrangler dev --port 8787 --local > /tmp/wrangler-dev.log 2>&1 &
           echo "Waiting for the worker to come up..."
           for i in $(seq 1 60); do
@@ -69,9 +55,7 @@ jobs:
             cat /tmp/wrangler-dev.log
             exit 1
           fi
-          # The probes use Playwright's APIRequestContext (plain HTTP), so no
-          # browser binary is needed. PASSFLARES_BASE_URL is set only to skip the
-          # config's hermetic http-server, which this job doesn't use.
-          LIVE_HOST=http://localhost:8787 \
-          PASSFLARES_BASE_URL=http://localhost:8787 \
-            npx playwright test security-headers-live --project=chromium-desktop
+          # LIVE_HOST un-skips the security-header probes (they hit :8787).
+          # Leave PASSFLARES_BASE_URL unset so the browser specs still run
+          # against the config's http-server on :4173.
+          LIVE_HOST=http://localhost:8787 npm run test:e2e
