@@ -1,0 +1,61 @@
+name: CI
+
+# Deployment is handled by the native Cloudflare <-> GitHub integration
+# (Workers Builds) on pushes to main. This workflow only runs the test suite
+# documented in the README's "Testing" section on PRs and pushes.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Unit & integration tests
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    name: Browser E2E
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Local-only dev secrets so `wrangler dev` can boot: the always-pass
+      # Turnstile test key + dummy values. .dev.vars is gitignored and auto-read.
+      - run: cp .dev.vars.example .dev.vars
+      - name: Run E2E suite (incl. live security-header probes)
+        run: |
+          # Boot the worker built from THIS commit (local mode, emulated
+          # bindings — no real Cloudflare resources). The security-headers-live
+          # probes hit it directly; the browser specs keep using the Playwright
+          # config's hermetic http-server on :4173.
+          npx wrangler dev --port 8787 --local > /tmp/wrangler-dev.log 2>&1 &
+          echo "Waiting for the worker to come up..."
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:8787/; then
+              echo "worker up after ~$((i * 2))s"; break
+            fi
+            sleep 2
+          done
+          if ! curl -fsS -o /dev/null http://localhost:8787/; then
+            echo "::error::worker failed to start within 120s"
+            cat /tmp/wrangler-dev.log
+            exit 1
+          fi
+          # LIVE_HOST un-skips the security-header probes (they hit :8787).
+          # Leave PASSFLARES_BASE_URL unset so the browser specs still run
+          # against the config's http-server on :4173.
+          LIVE_HOST=http://localhost:8787 npm run test:e2e

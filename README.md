@@ -121,9 +121,21 @@ To set up and run locally:
 
 ## Testing
 
-* **Unit + frontend tests (Vitest):** `npm test` (or `npm run test:watch`)
-* **End-to-end tests (Playwright):** `npm run test:e2e` (or `npm run test:e2e:ui` for the UI runner)
-* **Everything:** `npm run test:all`
+Tests come in two layers: fast **Vitest** unit/frontend tests and **Playwright**
+browser end-to-end tests. Most commands have a one-shot runner (what CI uses)
+and an interactive runner (for local development):
+
+| Command | What it runs | When to use it |
+| --- | --- | --- |
+| `npm test` | Vitest unit + frontend tests once, then exits | The default check before pushing — also run by CI on every PR |
+| `npm run test:watch` | Vitest in watch mode, re-running on each file change | While actively writing or iterating on unit/frontend tests locally |
+| `npm run test:e2e` | Playwright e2e specs headless, then exits | Verifying full browser flows — also run by CI on every PR |
+| `npm run test:e2e:ui` | Playwright UI Mode — interactive, needs a display | Debugging or authoring a failing/flaky e2e test locally |
+| `npm run test:audit` | `npm audit` at the `moderate` level | Spot-checking dependencies for known vulnerabilities |
+| `npm run test:all` | `test:audit` + Vitest + Playwright, in one shot | A full local pass before a release or large PR |
+
+CI runs `npm test` and `npm run test:e2e` on every pull request and push to
+`main`; dependency auditing is handled separately by Dependabot.
 
 ## Deployment
 
