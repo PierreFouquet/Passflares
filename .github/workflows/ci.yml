@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Unit & integration tests
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Browser E2E
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -45,8 +45,8 @@ jobs:
     # — giving us real header coverage per commit without minting a public
     # preview URL or touching production D1/R2/KV.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
