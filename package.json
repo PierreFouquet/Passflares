@@ -17,14 +17,14 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260608.1",
+    "@cloudflare/workers-types": "^4.20260615.1",
     "@playwright/test": "^1.60.0",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.19.42",
     "happy-dom": "^20.10.2",
     "http-server": "^14.1.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8",
+    "vitest": "^4.1.9",
     "wrangler": "^4.98.0"
   },
   "dependencies": {
