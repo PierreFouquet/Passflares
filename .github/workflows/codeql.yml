@@ -1,0 +1,47 @@
+name: CodeQL
+
+# Advanced-setup code scanning. We run this as a committed workflow (rather than
+# GitHub's "default setup") for one reason: default setup does NOT scan pull
+# requests opened by Dependabot or by outside forks, because those runs get a
+# read-only token and can't upload results. Code scanning makes a special
+# exception for the `pull_request` event — it always allows result uploads there
+# — so an advanced workflow triggered on `pull_request` scans every PR, from
+# anyone. (We deliberately never run on push for dependabot/** branches, where
+# the upload would fail; scoping push to main avoids that case entirely.)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly baseline scan of main, matching the previous default-setup cadence.
+    - cron: "31 6 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload CodeQL results / alerts
+      actions: read # read workflow files for the `actions` analysis pack
+      contents: read # check out the repository
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mirrors the languages the previous default setup analysed.
+        include:
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v6
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
