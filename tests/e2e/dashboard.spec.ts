@@ -19,6 +19,28 @@ test.describe('Dashboard', () => {
         const tiles = page.locator('[data-security-tiles] .tile');
         await expect(tiles).toHaveCount(4);
     });
+
+    // Regression test for issue #54: on first login the dashboard rendered
+    // before vaults were prefetched into state, so existing vaults were missing
+    // from the recent-vaults list (and the Vaults tile read 0) until the user
+    // navigated to another page and back. The vault must be visible immediately
+    // after sign-in, without any navigation.
+    test('shows existing vaults on first landing without navigating away (issue #54)', async ({ mockedPage: page, server }) => {
+        server.vaults = [{
+            id: 1, name: 'My First Vault', description: '',
+            owner_id: 'user_1', owner_type: 'user',
+            permission_level: 'manage', r2_object_key: 'r2_1', current_key_version: 'v1'
+        }];
+
+        await gotoAndSeedLogin(page);
+
+        await expect(page.locator('[data-recent-vaults]')).toContainText('My First Vault');
+        await expect(page.locator('[data-recent-vaults] .empty-state')).toHaveCount(0);
+
+        // The "Vaults" security tile counts state vaults — it must read 1, not 0.
+        const vaultsTile = page.locator('[data-security-tiles] .tile', { hasText: 'Vaults' });
+        await expect(vaultsTile.locator('.tile__value')).toHaveText('1');
+    });
 });
 
 test.describe('Navigation between pages', () => {

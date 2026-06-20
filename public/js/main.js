@@ -14,8 +14,8 @@ import { renderSettingsPage } from './pages/settings.js';
 import { attachShortcut as attachSearchShortcut, attachAppBarSearch, buildIndex, setOnSelect, open as openPalette, close as closePalette } from './search.js';
 import { reset as resetState, getVaults, getAllDecryptedEntries, hasKey, setKey } from './state.js';
 import { closeEntryDrawer } from './drawer.js';
-import { getOrganizations } from './api.js';
-import { setOrgs } from './state.js';
+import { getOrganizations, getVaults as apiGetVaults } from './api.js';
+import { setOrgs, setVaults } from './state.js';
 
 document.addEventListener('DOMContentLoaded', boot);
 
@@ -74,13 +74,17 @@ async function showApp() {
 }
 
 async function prefetchVaults() {
-    // Quietly load vaults + orgs so the dashboard and palette have data.
+    // Quietly load vaults + orgs so the dashboard and palette have data on the
+    // very first render. The dashboard reads getVaults()/getOrgs() straight
+    // from state, so without seeding both here the home page renders before any
+    // page has populated state — the recent-vaults list and Vaults tile stay
+    // empty until you visit another page and come back (issue #54).
     try {
-        const orgs = await getOrganizations();
+        const [orgs, vaults] = await Promise.all([getOrganizations(), apiGetVaults()]);
         setOrgs(orgs);
-        // Vaults metadata loaded by the vaults page on first render; not blocking here.
+        setVaults(vaults);
     } catch (err) {
-        console.warn('Failed to prefetch organisations:', err);
+        console.warn('Failed to prefetch vaults/organisations:', err);
     }
 }
 
