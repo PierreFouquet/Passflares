@@ -5,6 +5,28 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] — 2026-06-20
+
+Bug-fix release addressing a first-login rendering issue on the home dashboard.
+
+### Fixed
+
+- **Vaults now appear on Home immediately after signing in** (#54). On first
+  login the dashboard rendered before any vault data had been loaded into
+  state: `prefetchVaults()` only seeded organisations, leaving the recent-vaults
+  list empty and the "Vaults" tile reading `0` until the user navigated to
+  another page (which loaded vaults as a side effect) and back. Boot now
+  prefetches both organisations **and** vaults into shared state before the
+  first render, so the dashboard — and the global search palette, which reads
+  the same state — have their data up front
+  ([public/js/main.js](public/js/main.js)).
+
+### Tests
+
+- E2E regression test that seeds a vault, signs in, and asserts it is visible
+  in the recent-vaults list and counted by the Vaults tile *without* navigating
+  away first ([tests/e2e/dashboard.spec.ts](tests/e2e/dashboard.spec.ts)).
+
 ## [1.1.2] — 2026-05-31
 
 Bug-fix release. Two issues found in the live 1.1.1 app — both first noticed
