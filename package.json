@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --env=\"\"",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -20,26 +21,21 @@
     "@cloudflare/workers-types": "^5.20260727.1",
     "@playwright/test": "^1.62.0",
     "@types/jsonwebtoken": "^9.0.6",
-    "@types/node": "^20.19.42",
+    "@types/node": "^26.1.2",
     "happy-dom": "^20.11.1",
     "http-server": "^14.1.1",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10",
     "wrangler": "^4.114.0"
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",
-    "itty-router": "^4.2.2",
+    "itty-router": "^5.0.24",
     "jsonwebtoken": "^9.0.2",
     "otpauth": "^9.5.1",
     "qrcode-svg": "^1.1.0"
   },
   "overrides": {
     "esbuild": "^0.28.1"
-  },
-  "allowScripts": {
-    "esbuild@0.28.1": true,
-    "sharp@0.34.5": true,
-    "workerd@1.20260710.1": true
   }
 }

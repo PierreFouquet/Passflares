@@ -220,7 +220,13 @@ export default {
                 return handleCorsPreflight(request);
             }
 
-            const response = await router.handle(request, env, ctx);
+            // itty-router v5 removed the `handle` alias — only `fetch` invokes
+            // the router. Because the router's proto is a Proxy that turns any
+            // unknown property into a route-registration call, `router.handle(...)`
+            // silently registers a bogus "HANDLE" route and returns the router
+            // itself instead of a Response. That is not a type error either
+            // (RouterType has an index signature), so it fails only at runtime.
+            const response = await router.fetch(request, env, ctx);
             const isApi = url.pathname.startsWith('/api/');
 
             const secured = withSecurityHeaders(response, isApi);

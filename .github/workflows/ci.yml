@@ -25,6 +25,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Runs before the tests so a type/tsconfig break fails fast. Nothing
+      # else in CI invokes tsc: wrangler bundles with esbuild, which strips
+      # types without checking them, so type errors are otherwise invisible
+      # until they surface at runtime.
+      - run: npm run typecheck
       - run: npm test
 
   e2e:
