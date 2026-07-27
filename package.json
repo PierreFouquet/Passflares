@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",
-    "itty-router": "^4.2.2",
+    "itty-router": "^5.0.24",
     "jsonwebtoken": "^9.0.2",
     "otpauth": "^9.5.1",
     "qrcode-svg": "^1.1.0"
