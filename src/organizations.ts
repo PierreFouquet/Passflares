@@ -2,7 +2,7 @@
 
 import { CustomRequest, Env, Organization, UserOrganization, User, ADMIN_ROLES } from './types.js';
 import { logAudit } from './auditLog.js';
-import { jsonResponse } from './utils.js';
+import { jsonResponse, parseId, normalizeEmail } from './utils.js';
 
 export async function handleCreateOrganization(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { name, description } = await request.json() as { name: string; description?: string };
@@ -91,8 +91,8 @@ export async function handleGetOrgMembers(request: CustomRequest, env: Env, ctx:
 
     if (!user?.userId) return jsonResponse({ message: "Unauthorized." }, 401);
 
-    const orgId = parseInt(orgIdParam ?? '');
-    if (isNaN(orgId)) return jsonResponse({ message: "Bad Request: Invalid organization ID." }, 400);
+    const orgId = parseId(orgIdParam);
+    if (orgId === null) return jsonResponse({ message: "Bad Request: Invalid organization ID." }, 400);
 
     try {
         const callerMembership: { role: string } | null = await env.DB.prepare(
@@ -131,9 +131,9 @@ export async function handleUpdateMemberRole(request: CustomRequest, env: Env, c
 
     if (!user?.userId) return jsonResponse({ message: "Unauthorized." }, 401);
 
-    const orgId = parseInt(orgIdParam ?? '');
-    const targetUserId = parseInt(memberUserIdParam ?? '');
-    if (isNaN(orgId) || isNaN(targetUserId))
+    const orgId = parseId(orgIdParam);
+    const targetUserId = parseId(memberUserIdParam);
+    if (orgId === null || targetUserId === null)
         return jsonResponse({ message: "Bad Request: Invalid ID format." }, 400);
 
     if (!['member', 'admin', 'super_admin'].includes(role))
@@ -192,9 +192,9 @@ export async function handleRemoveMember(request: CustomRequest, env: Env, ctx: 
 
     if (!user?.userId) return jsonResponse({ message: "Unauthorized." }, 401);
 
-    const orgId = parseInt(orgIdParam ?? '');
-    const targetUserId = parseInt(memberUserIdParam ?? '');
-    if (isNaN(orgId) || isNaN(targetUserId))
+    const orgId = parseId(orgIdParam);
+    const targetUserId = parseId(memberUserIdParam);
+    if (orgId === null || targetUserId === null)
         return jsonResponse({ message: "Bad Request: Invalid ID format." }, 400);
 
     if (user.userId === targetUserId)
@@ -233,12 +233,35 @@ export async function handleRemoveMember(request: CustomRequest, env: Env, ctx: 
             }
         }
 
-        await env.DB.prepare(
-            `DELETE FROM user_organizations WHERE user_id = ? AND organization_id = ?`
-        ).bind(targetUserId, orgId).run();
+        // Vaults the removed member could open via this organisation. Their key
+        // shares must go with the membership, or the row keeps unwrapping the
+        // vault key long after access was revoked.
+        const affectedVaults = await env.DB.prepare(
+            `SELECT v.id FROM vaults v
+             JOIN vault_access_controls vac ON v.id = vac.vault_id
+             WHERE vac.entity_id = 'org_' || ? AND vac.entity_type = 'organization'`
+        ).bind(orgId).all().then(r => r.results as unknown as { id: number }[]);
 
-        logAudit(env, ctx, user.userId, 'ORG_REMOVE_MEMBER_SUCCESS', { orgId, targetUserId }, ipAddress, userAgent);
-        return new Response(null, { status: 204 });
+        const statements = [
+            env.DB.prepare(`DELETE FROM user_organizations WHERE user_id = ? AND organization_id = ?`)
+                .bind(targetUserId, orgId)
+        ];
+        const dropShare = env.DB.prepare("DELETE FROM vault_key_shares WHERE vault_id = ? AND user_id = ?");
+        for (const vault of affectedVaults) {
+            statements.push(dropShare.bind(vault.id, targetUserId));
+        }
+        await env.DB.batch(statements);
+
+        logAudit(env, ctx, user.userId, 'ORG_REMOVE_MEMBER_SUCCESS',
+            { orgId, targetUserId, sharesRevoked: affectedVaults.length }, ipAddress, userAgent);
+        // Deleting the share is necessary but not sufficient: the removed member
+        // may have cached the vault key while they had access. The client is told
+        // which vaults now need their key rotated and re-wrapped for the members
+        // who remain.
+        return jsonResponse({
+            message: "Member removed.",
+            rotateVaultIds: affectedVaults.map(v => v.id)
+        });
     } catch (error: any) {
         console.error("Remove member error:", error);
         logAudit(env, ctx, user.userId, 'ORG_REMOVE_MEMBER_FAILURE', { orgId, error: error.message }, ipAddress, userAgent);
@@ -254,8 +277,8 @@ export async function handleDeleteOrganization(request: CustomRequest, env: Env,
 
     if (!user?.userId) return jsonResponse({ message: "Unauthorized." }, 401);
 
-    const orgId = parseInt(orgIdParam ?? '');
-    if (isNaN(orgId)) return jsonResponse({ message: "Bad Request: Invalid organization ID." }, 400);
+    const orgId = parseId(orgIdParam);
+    if (orgId === null) return jsonResponse({ message: "Bad Request: Invalid organization ID." }, 400);
 
     try {
         const callerRole: { role: string } | null = await env.DB.prepare(
@@ -303,8 +326,49 @@ export async function handleDeleteOrganization(request: CustomRequest, env: Env,
     }
 }
 
+/**
+ * GET /api/organizations/:orgId/member-keys
+ *
+ * Every member's public key, so an admin who holds a vault key can wrap it for
+ * all of them in one pass. Restricted to members of the organisation.
+ *
+ * `publicKey: null` means that member has not yet completed the auth_version 2
+ * upgrade, so nothing can be wrapped for them yet — the caller should say so
+ * rather than silently skipping them.
+ */
+export async function handleGetOrgMemberKeys(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const user = request.user!;
+    const orgId = parseId(request.params?.orgId);
+    if (orgId === null) return jsonResponse({ message: "Bad Request: Invalid organization ID format." }, 400);
+
+    try {
+        const membership = await env.DB.prepare(
+            `SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?`
+        ).bind(user.userId, orgId).first<{ role: string }>();
+
+        if (!membership) {
+            return jsonResponse({ message: "Forbidden: You are not a member of this organization." }, 403);
+        }
+
+        const members = await env.DB.prepare(
+            `SELECT u.id AS userId, u.email, uo.role, uk.public_key AS publicKey
+             FROM user_organizations uo
+             JOIN users u ON u.id = uo.user_id
+             LEFT JOIN user_keys uk ON uk.user_id = u.id
+             WHERE uo.organization_id = ?`
+        ).bind(orgId).all().then(r => r.results);
+
+        return jsonResponse({ members });
+    } catch (error: any) {
+        console.error("Get org member keys error:", error);
+        return jsonResponse({ message: "Internal Server Error while fetching member keys." }, 500);
+    }
+}
+
 export async function handleAddMemberToOrganization(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const { memberEmail, role } = await request.json() as { memberEmail: string; role: 'member' | 'admin' };
+    const body = await request.json() as { memberEmail: string; role: 'member' | 'admin' };
+    const memberEmail = normalizeEmail(body.memberEmail);
+    const { role } = body;
     const orgIdParam = request.params?.orgId;
     const user = request.user;
     const ipAddress = request.headers.get('CF-Connecting-IP');
@@ -319,8 +383,8 @@ export async function handleAddMemberToOrganization(request: CustomRequest, env:
         return jsonResponse({ message: "Organization ID, member email, and a valid role (member or admin) are required." }, 400);
     }
 
-    const organizationId = parseInt(orgIdParam);
-    if (isNaN(organizationId)) {
+    const organizationId = parseId(orgIdParam);
+    if (organizationId === null) {
         logAudit(env, ctx, user.userId, 'ORG_ADD_MEMBER_FAILURE', { orgId: orgIdParam, reason: 'Invalid orgId format' }, ipAddress, userAgent);
         return jsonResponse({ message: "Bad Request: Invalid organization ID format." }, 400);
     }

@@ -45,7 +45,7 @@ export default defineConfig({
     ],
 
     webServer: process.env.PASSFLARES_BASE_URL ? undefined : {
-        command: `npx http-server public -p ${PORT} -c-1 --silent`,
+        command: `node scripts/static-server.mjs public ${PORT}`,
         port: PORT,
         reuseExistingServer: !process.env.CI,
         stdout: 'pipe',

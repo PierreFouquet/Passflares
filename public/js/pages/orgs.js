@@ -9,6 +9,7 @@ import { snack } from '../snackbar.js';
 import { openDialog, confirmDialog } from '../dialog.js';
 import { setOrgs, getOrgs } from '../state.js';
 import { getUserInfo } from '../session.js';
+import { shareOrgVaultsWithNewMember, rotateOrgVaultsAfterRemoval } from '../org-keys.js';
 
 const ROLE_LABEL = { member: 'Member', admin: 'Admin', super_admin: 'Owner' };
 const ROLE_CHIP_CLASS = { member: 'chip--neutral', admin: 'chip--info', super_admin: 'chip--purple' };
@@ -165,8 +166,22 @@ function renderMemberRow(member, currentUserId, isSuper, isAdmin, orgId) {
         if (ok) {
             try {
                 showLoading('Removing member…');
-                await removeMember(orgId, member.userId);
+                const { rotateVaultIds } = await removeMember(orgId, member.userId) ?? {};
                 snack.success(`Removed ${member.email}.`);
+
+                // Their key shares are gone, but they may have cached the keys
+                // themselves — so rotate every vault they could reach and
+                // re-wrap for the members who remain.
+                if (rotateVaultIds?.length) {
+                    showLoading('Rotating shared vault keys…');
+                    const { rotated, failed } = await rotateOrgVaultsAfterRemoval(orgId, rotateVaultIds);
+                    if (rotated > 0) snack.success(`Rotated keys for ${rotated} shared vault(s).`);
+                    if (failed.length > 0) {
+                        snack.warning(
+                            `Could not rotate: ${failed.join(', ')}. An admin who can open ${failed.length === 1 ? 'it' : 'them'} should sign in and revisit this page.`
+                        );
+                    }
+                }
                 await loadAndRender(document.getElementById('page-root'));
             } catch (err) {
                 snack.error(err.message ?? 'Failed to remove member.');
@@ -253,6 +268,24 @@ function openAddMemberDialog(org) {
                         showLoading('Adding member…');
                         await addMemberToOrganization(org.id, email, role);
                         snack.success(`Added ${email} as ${ROLE_LABEL[role]}.`);
+
+                        // Membership alone doesn't make vaults readable — the
+                        // key has to be wrapped for them, and only someone who
+                        // already holds it can do that (#69).
+                        showLoading('Sharing vault keys…');
+                        const members = await getOrgMembers(org.id);
+                        const added = members.find(m => m.email === email.toLowerCase());
+                        if (added) {
+                            const { granted, pending, notUpgraded } =
+                                await shareOrgVaultsWithNewMember(org.id, added.userId);
+                            if (granted > 0) snack.success(`Shared ${granted} vault key(s) with ${email}.`);
+                            if (notUpgraded) {
+                                snack.warning(`${email} needs to sign in once before vault keys can be shared with them.`);
+                            } else if (pending.length > 0) {
+                                snack.warning(`Could not share: ${pending.join(', ')}. Another admin who can open ${pending.length === 1 ? 'it' : 'them'} will need to.`);
+                            }
+                        }
+
                         close();
                         await loadAndRender(document.getElementById('page-root'));
                     } catch (err) {

@@ -1,13 +1,15 @@
 // public/js/pages/auth.js — login + register flow.
 
-import { registerUser, loginUser, verifyLogin2fa } from '../api.js';
-import { deriveKey } from '../crypto.js';
+import { verifyLogin2fa } from '../api.js';
+import {
+    enrollNewAccount, signIn, establishKeySession, upgradeLegacyAccount,
+    AUTH_VERSION_LEGACY
+} from '../auth-flow.js';
 import { storeSession } from '../session.js';
-import { setKey } from '../state.js';
 import { snack } from '../snackbar.js';
 import { showLoading, hideLoading } from '../ui.js';
 import { openDialog } from '../dialog.js';
-import { checkPasswordStrength, generateSalt, uint8ArrayToHexString } from '../utils.js';
+import { checkPasswordStrength } from '../utils.js';
 
 let onLoggedIn = null;
 
@@ -124,10 +126,10 @@ async function handleRegister(e) {
         return;
     }
 
-    showLoading('Creating your account…');
+    // Argon2id runs before the request, so this is the slow step, not the network.
+    showLoading('Creating your account… deriving your encryption keys.');
     try {
-        const encryptionSalt = generateSalt();
-        await registerUser(email, masterPassword, uint8ArrayToHexString(encryptionSalt), turnstileToken);
+        await enrollNewAccount({ email, password: masterPassword, turnstileToken });
         snack.success('Account created. You can now sign in.');
         e.target.reset();
         document.querySelector('.auth-tabs button[data-tab="login"]')?.click();
@@ -152,18 +154,18 @@ async function handleLogin(e) {
         return;
     }
 
-    showLoading('Signing in…');
+    showLoading('Signing in… unlocking your keys.');
     try {
-        const resp = await loginUser(email, masterPassword, turnstileToken);
-        // Two-step login: the server withholds the session + encryption salt
-        // until the second factor is verified. Keep the master password in
-        // memory (closure) so we can derive the vault key after step 2.
-        if (resp?.requires2FA) {
+        const { response, kek } = await signIn({ email, password: masterPassword, turnstileToken });
+        // Two-step login: the server withholds the session and key material
+        // until the second factor is verified. Keep the password and the KEK in
+        // memory (closure) so the keys can be unwrapped after step 2.
+        if (response?.requires2FA) {
             hideLoading();
-            promptSecondFactor(resp.tempToken, masterPassword, e.target);
+            promptSecondFactor(response.tempToken, masterPassword, kek, e.target);
             return;
         }
-        await completeLogin(resp, masterPassword);
+        await completeLogin(response, kek, masterPassword);
         e.target.reset();
     } catch (err) {
         console.error('Login failed:', err);
@@ -174,20 +176,56 @@ async function handleLogin(e) {
     }
 }
 
-// Derives the vault key, stores the session, and hands off to the app. Shared
-// by the single-step (no 2FA) and two-step (post-2FA) login paths.
-async function completeLogin({ userId, email: userEmail, encryptionSalt, token }, masterPassword) {
-    const key = await deriveKey(masterPassword, encryptionSalt);
-    setKey(key);
-    storeSession(token, { userId, email: userEmail, encryptionSalt });
-    snack.success(`Welcome back, ${userEmail}`);
+/**
+ * Establishes the session and hands off to the app. Shared by the single-step
+ * (no 2FA) and two-step (post-2FA) login paths.
+ *
+ * For an account still on auth_version 1 this is also where the one-shot upgrade
+ * happens — the password is in memory exactly once per sign-in, which is the only
+ * moment both the old PBKDF2 key and the new hierarchy can be derived. The user
+ * sees a slightly longer sign-in and nothing else.
+ */
+async function completeLogin(response, kek, masterPassword) {
+    const { userId, email: userEmail, token } = response;
+
+    if (response.authVersion === AUTH_VERSION_LEGACY) {
+        showLoading('Upgrading your account security… do not close this window.');
+        // Store the session first: the upgrade calls authenticated endpoints.
+        storeSession(token, { userId, email: userEmail, authVersion: AUTH_VERSION_LEGACY });
+        try {
+            const { publicKey, legacyVaultsPending } =
+                await upgradeLegacyAccount(response, masterPassword);
+            storeSession(token, {
+                userId, email: userEmail, authVersion: 2,
+                publicKey, legacyVaultsPending
+            });
+            snack.success(`Welcome back, ${userEmail} — your account now uses end-to-end key protection.`);
+        } finally {
+            hideLoading();
+        }
+    } else {
+        await establishKeySession(response, kek, masterPassword);
+        // Only publicKey is persisted — it is public, and creating a vault
+        // needs it to wrap the vault key for ourselves. Neither the unwrapped
+        // private key nor its sealed form goes to localStorage; both live in
+        // memory for the life of the session (see state.js).
+        storeSession(token, {
+            userId,
+            email: userEmail,
+            authVersion: response.authVersion,
+            publicKey: response.publicKey,
+            legacyVaultsPending: response.legacyVaultsPending ?? 0
+        });
+        snack.success(`Welcome back, ${userEmail}`);
+    }
+
     onLoggedIn?.();
 }
 
 // Second-factor prompt. Built with DOM APIs (no innerHTML interpolation) so it
 // satisfies the static XSS audit. Accepts a 6-digit TOTP code or a recovery
 // code; the temp token proves the password step already passed.
-function promptSecondFactor(tempToken, masterPassword, loginForm) {
+function promptSecondFactor(tempToken, masterPassword, kek, loginForm) {
     const body = document.createElement('div');
 
     const intro = document.createElement('p');
@@ -241,7 +279,7 @@ function promptSecondFactor(tempToken, masterPassword, loginForm) {
         showLoading('Verifying…');
         try {
             const resp = await verifyLogin2fa(tempToken, code);
-            await completeLogin(resp, masterPassword);
+            await completeLogin(resp, kek, masterPassword);
             if (resp?.recoveryCodeUsed) {
                 snack.warning(`Recovery code used. ${resp.remainingRecoveryCodes ?? 0} remaining.`);
             }

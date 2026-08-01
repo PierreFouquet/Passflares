@@ -1,18 +1,23 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
-import { deriveKey, encryptData, decryptData } from '../../public/js/crypto.js';
+import { deriveLegacyKey, encryptData, decryptData } from '../../public/js/crypto.js';
 import { uint8ArrayToHexString, generateSalt } from '../../public/js/utils.js';
 
 const MASTER_PASSWORD = 'TestMasterPassword123!';
 
 async function freshKey() {
     const salt = uint8ArrayToHexString(generateSalt());
-    return { key: await deriveKey(MASTER_PASSWORD, salt), salt };
+    return { key: await deriveLegacyKey(MASTER_PASSWORD, salt), salt };
 }
 
-// --- deriveKey ---
+// --- deriveLegacyKey ---
+//
+// The auth_version 1 derivation. Kept, and kept tested, because unmigrated
+// accounts still depend on it to read their vaults one last time during the
+// upgrade — and because organisation vaults created before the key hierarchy
+// can only be rescued with it (#69). New key material comes from keys.js.
 
-describe('deriveKey', () => {
+describe('deriveLegacyKey', () => {
     it('returns a CryptoKey', async () => {
         const { key } = await freshKey();
         expect(key).toBeDefined();
@@ -21,8 +26,8 @@ describe('deriveKey', () => {
 
     it('produces the same key from the same password and salt', async () => {
         const salt = uint8ArrayToHexString(generateSalt());
-        const key1 = await deriveKey(MASTER_PASSWORD, salt);
-        const key2 = await deriveKey(MASTER_PASSWORD, salt);
+        const key1 = await deriveLegacyKey(MASTER_PASSWORD, salt);
+        const key2 = await deriveLegacyKey(MASTER_PASSWORD, salt);
 
         // Export both keys and compare raw bytes
         const raw1 = await crypto.subtle.exportKey('raw', key1);
@@ -32,8 +37,8 @@ describe('deriveKey', () => {
 
     it('produces different keys for different passwords', async () => {
         const salt = uint8ArrayToHexString(generateSalt());
-        const key1 = await deriveKey('PasswordA!!1', salt);
-        const key2 = await deriveKey('PasswordB!!2', salt);
+        const key1 = await deriveLegacyKey('PasswordA!!1', salt);
+        const key2 = await deriveLegacyKey('PasswordB!!2', salt);
 
         const raw1 = await crypto.subtle.exportKey('raw', key1);
         const raw2 = await crypto.subtle.exportKey('raw', key2);
@@ -41,8 +46,8 @@ describe('deriveKey', () => {
     });
 
     it('produces different keys for different salts', async () => {
-        const key1 = await deriveKey(MASTER_PASSWORD, uint8ArrayToHexString(generateSalt()));
-        const key2 = await deriveKey(MASTER_PASSWORD, uint8ArrayToHexString(generateSalt()));
+        const key1 = await deriveLegacyKey(MASTER_PASSWORD, uint8ArrayToHexString(generateSalt()));
+        const key2 = await deriveLegacyKey(MASTER_PASSWORD, uint8ArrayToHexString(generateSalt()));
 
         const raw1 = await crypto.subtle.exportKey('raw', key1);
         const raw2 = await crypto.subtle.exportKey('raw', key2);

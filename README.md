@@ -4,16 +4,17 @@ A modern and secure password manager which runs on the Cloudflare Stack.
 
 ## Features
 
-* **Client-Side Encryption:** All sensitive vault data is encrypted in your browser with AES-256-GCM before being sent to Cloudflare R2. Your Master Password never leaves your device.
-* **Strong Password Hashing:** Master Passwords are securely hashed server-side using Scrypt.
+* **Zero-knowledge key hierarchy:** your master password never leaves your browser. It is stretched with Argon2id, then split into two independent values: an authentication secret sent to the server, and a key-encryption key that stays local. The server cannot derive any vault key from what it stores. See [Security model](#security-model).
+* **Client-Side Encryption:** All sensitive vault data is encrypted in your browser with AES-256-GCM before being sent to Cloudflare R2.
 * **Serverless Architecture:** Cloudflare Workers for backend logic, D1 for metadata, R2 for encrypted vault blobs, and KV for rate-limit counters — global performance with no servers to run.
-* **Organisations & Shared Vaults:** Create organisations, invite members, assign Member / Admin / Owner roles, and share vaults across a team.
+* **Organisations & Shared Vaults:** Create organisations, invite members, assign Member / Admin / Owner roles, and share vaults across a team. Each vault has its own key, wrapped separately for every member.
 * **Password Generator:** Built-in cryptographically-strong generator inside the entry composer.
 * **Password Strength & Re-use Detection:** Dashboard surfaces weak and re-used passwords across decrypted vaults.
-* **Master Password Change with Re-encryption:** Change your master password — all stored data is re-encrypted client-side.
+* **Safe Master Password Change:** Changing your master password re-seals a single key blob. Vault contents are never rewritten, so an interrupted change cannot damage your data.
+* **Two-Factor Authentication:** TOTP authenticator apps with single-use recovery codes.
 * **Inactivity Logout:** Automatic session termination (5 minutes) for enhanced security.
 * **Rate Limiting:** Failed login attempts are rate-limited via KV to prevent brute-force attacks.
-* **Audit Logging:** Sensitive actions are logged server-side and available to admins.
+* **Audit Logging:** Sensitive actions are written to a server-side audit log. (There is no admin UI for reading it yet — see [#73](https://github.com/PierreFouquet/Passflares/issues/73).)
 * **Data Export:** Export your encrypted vault data for backup.
 * **Theme & Density Preferences:** Dark / light / system themes, comfortable / compact density, accent colour, and shape — persisted per user.
 * **Self-hosted Fonts:** No third-party font CDN calls; Inter and a Material Symbols subset are served from the worker.
@@ -48,8 +49,7 @@ Passflares/
 │       ├── main.js                  # App bootstrap, route registration, session wiring
 │       ├── router.js                # Hash-based router
 │       ├── api.js                   # Fetch wrappers for the Worker API
-│       ├── crypto.js                # Client-side AES-GCM encrypt/decrypt + key derivation
-│       ├── state.js                 # In-memory app state (vaults, orgs, key, decrypted entries)
+│       ├── state.js                 # In-memory key material + cached vaults / decrypted entries
 │       ├── session.js               # Inactivity timer, user info, sign-out
 │       ├── ui.js                    # Template cloning, escaping, shared UI helpers
 │       ├── menu.js                  # App-bar menu (theme, preferences, sign out)
@@ -59,28 +59,42 @@ Passflares/
 │       ├── drawer.js                # Entry detail drawer
 │       ├── search.js                # Cross-vault search (Ctrl+K)
 │       ├── clipboard.js             # Copy-to-clipboard with auto-clear
-│       ├── constants.js             # Shared frontend constants
+│       ├── constants.js             # Shared frontend constants (KDF params, HKDF info strings)
+│       ├── crypto.js                # AES-256-GCM seal/open for vault contents
+│       ├── keys.js                  # Key hierarchy: Argon2id, HKDF, keypairs, vault key wrapping
+│       ├── kdf-worker.js            # Argon2id in a Web Worker, off the UI thread
+│       ├── auth-flow.js             # Register / sign-in / legacy upgrade / password rotation
+│       ├── vault-keys.js            # Vault key resolution, org vault rescue, rotation
+│       ├── org-keys.js              # Re-wrapping vault keys on membership changes
 │       ├── utils.js                 # Password strength, generator, helpers
 │       └── pages/                   # Per-route page modules
 │           ├── auth.js              # Sign-in / register
 │           ├── dashboard.js         # Landing page after sign-in
 │           ├── vaults.js            # Vault list + detail + entry composer
 │           ├── orgs.js              # Organisations + member management
-│           └── settings.js          # Account settings, master password change, export
+│           └── settings.js          # Account settings, master password change, 2FA, export
+│   └── vendor/
+│       └── noble-hashes/            # Vendored @noble/hashes Argon2id closure (public/ has no build step)
 ├── src/                             # Cloudflare Worker (TypeScript)
 │   ├── worker.ts                    # Worker entry point + itty-router routes
-│   ├── auth.ts                      # Register, login, master-password change
-│   ├── middleware.ts                # JWT verification + role checks
-│   ├── organizations.ts             # Organisation CRUD and membership
-│   ├── vaults.ts                    # Vault metadata (D1) + encrypted blob storage (R2)
+│   ├── auth.ts                      # Auth params, register, login, upgrade, password change
+│   ├── middleware.ts                # JWT verification + vault permission resolution
+│   ├── organizations.ts             # Organisation CRUD, membership, member public keys
+│   ├── vaults.ts                    # Vault metadata (D1), versioned blobs (R2), key shares
+│   ├── totp.ts                      # TOTP enrollment, verification, recovery codes
 │   ├── preferences.ts               # Per-user UI preferences
 │   ├── auditLog.ts                  # Audit log writes / reads
-│   ├── utils.ts                     # Scrypt hashing, hex/base64 helpers
+│   ├── utils.ts                     # Scrypt hashing, constant-time compare, hex helpers
 │   └── types.ts                     # Shared TypeScript types
 ├── migrations/                      # D1 schema migrations
 │   ├── 0001_init.sql
 │   ├── 0002_super_admin_role.sql
-│   └── 0003_user_preferences.sql
+│   ├── 0003_user_preferences.sql
+│   ├── 0004_totp_2fa.sql
+│   └── 0005_key_hierarchy.sql
+├── scripts/
+│   ├── static-server.mjs            # Zero-dependency static server for the E2E run
+│   └── vendor-noble.mjs             # Syncs the vendored Argon2id files from node_modules
 ├── tests/
 │   ├── backend/                     # Vitest unit tests for Worker modules
 │   ├── frontend/                    # Vitest tests for frontend modules (happy-dom)
@@ -114,6 +128,7 @@ To set up and run locally:
 6. **Configure local secrets:** copy `.dev.vars.example` to `.dev.vars` and fill in:
    * `JWT_SECRET` — generate with `openssl rand -base64 64`
    * `TURNSTILE_KEY` — the example file contains the Cloudflare always-passes test key, which is fine for local dev
+   * `TOTP_ENC_KEY` — generate with `openssl rand -base64 32`. Required: `src/totp.ts` fails closed without it, so 2FA enrollment returns 500 if it is unset.
    * `.dev.vars` is gitignored and read automatically by `wrangler dev`.
 7. **Update `wrangler.toml`** with your own D1 `database_id`, R2 bucket, and KV namespace id if you're deploying.
 8. **Run the dev server:** `npm run dev` (wraps `wrangler dev`).
@@ -132,10 +147,40 @@ and an interactive runner (for local development):
 | `npm run test:e2e` | Playwright e2e specs headless, then exits | Verifying full browser flows — also run by CI on every PR |
 | `npm run test:e2e:ui` | Playwright UI Mode — interactive, needs a display | Debugging or authoring a failing/flaky e2e test locally |
 | `npm run test:audit` | `npm audit` at the `moderate` level | Spot-checking dependencies for known vulnerabilities |
-| `npm run test:all` | `test:audit` + Vitest + Playwright, in one shot | A full local pass before a release or large PR |
+| `npm run test:security` | The security-regression subset only | A fast check after touching auth, crypto, or anything parsing untrusted input |
+| `npm run preflight` | `typecheck` + `test:audit` + Vitest + Playwright | **Run this before opening a PR** |
 
-CI runs `npm test` and `npm run test:e2e` on every pull request and push to
-`main`; dependency auditing is handled separately by Dependabot.
+### Layers, and what each one is for
+
+Backend tests come in two flavours, deliberately:
+
+- **Unit** (`tests/backend/*.test.ts`) drive handlers against a mock D1 that
+  returns canned rows keyed by a SQL substring. Fast, good for branch coverage —
+  but structurally unable to catch a misspelled column, a broken `ON CONFLICT`,
+  or a `D1.batch()` that isn't really atomic.
+- **Integration** (`tests/backend/integration/`) build a real in-memory SQLite
+  database with `node:sqlite`, apply every migration in `migrations/`, and run
+  the real SQL. This is where the `auth_version` upgrade's atomicity and
+  rollback behaviour are actually proven, because a live account only gets one
+  attempt at it.
+
+**CodeQL runs on every pull request** and is part of the gate — do not merge a
+red run. It is not reproducible locally without the CodeQL CLI, so anything it
+catches should also gain a behavioural test here, so the next occurrence fails
+before the push rather than after it. Two such tests exist because CodeQL found
+what the local suite missed in 1.1.4:
+
+- `tests/backend/static-server.test.ts` — a malformed URL (`GET /%`) reached an
+  unguarded `decodeURIComponent` and killed the whole server process.
+- The "nothing sensitive is persisted" block in
+  `tests/frontend/auth-flow.test.js` — asserts no auth secret, sealed key, or
+  password ever reaches `localStorage`, after every auth operation.
+
+Both were verified to fail against the code that had the defect. A regression
+test that has never been seen red is a guess.
+
+CI runs `npm test`, `npm run test:e2e` and CodeQL on every pull request and push
+to `main`; dependency auditing is handled separately by Dependabot.
 
 ## Deployment
 
@@ -147,25 +192,95 @@ Other operational commands:
 
 * **Manual worker deploy (Wrangler CLI):** `npm run deploy`
 * **Apply D1 migrations in production:** `npx wrangler d1 migrations apply secure-password-db --remote`
-* **Set production secrets:** `npx wrangler secret put JWT_SECRET` and `npx wrangler secret put TURNSTILE_KEY`
+* **Set production secrets:** `npx wrangler secret put JWT_SECRET`, `npx wrangler secret put TURNSTILE_KEY`, and `npx wrangler secret put TOTP_ENC_KEY`
+* **Apply D1 migrations before deploying:** `npx wrangler d1 migrations apply secure-password-db --remote`. Schema changes must land ahead of the worker that depends on them.
 
-## Security overview
+## Security model
 
-* **Master password never stored:** the password is sent over HTTPS only,
-  hashed with scrypt server-side (N=32768, r=12, p=1), and only the hash is
-  persisted in D1.
-* **End-to-end vault encryption:** vault entries are encrypted in the
-  browser with AES-256-GCM using a key derived from the master password
-  (PBKDF2, 600k iterations) before the ciphertext ever reaches R2. The
-  server never sees plaintext entries.
+This section describes what the implementation actually does, and what each
+control does and does not defend against. For a password manager the security
+documentation is part of the product — you make trust decisions from it — so it
+is written as an explicit threat model rather than a list of adjectives.
+
+### The key hierarchy
+
+Your master password is stretched, then split, and neither half can produce the
+other:
+
+```plaintext
+masterKey  = Argon2id(password, kdfSalt, m=47104 KiB, t=1, p=1, 32 bytes)
+authSecret = HKDF-SHA256(masterKey, info="passflares:auth:v2")   -> sent to the server
+kek        = HKDF-SHA256(masterKey, info="passflares:kek:v2")    -> never leaves the browser
+```
+
+The server stores `scrypt(authSecret)` (N=32768, r=12, p=1). Because HKDF is
+one-way and the two outputs use different `info` strings, an attacker holding
+everything the server has still cannot derive `kek` — and therefore cannot
+decrypt anything.
+
+Below that sit two more layers:
+
+* **User keypair.** Each account has a P-256 ECDH keypair. The public key is
+  readable by anyone sharing an organisation with you; the private key is stored
+  only as `AES-256-GCM(kek, privateKey)` and is decrypted in your browser alone.
+* **Per-vault keys.** Every vault has its own random AES-256-GCM key. Entries are
+  encrypted with it, and it is wrapped separately for each member via ECIES over
+  their public key. Granting access writes one row; it never re-encrypts vault
+  contents, and never requires the recipient to be online.
+
+Two consequences worth stating plainly:
+
+* Changing your master password re-seals **one** key blob. Vault ciphertext is
+  never read or rewritten, so an interrupted password change cannot damage data.
+* Nobody, including the operator, can recover your vaults if you forget your
+  master password. That is inherent to the design, not an oversight.
+
+### Threat model
+
+| Threat | Defended? |
+| --- | --- |
+| R2 or D1 exfiltrated without code execution | **Yes** — blobs are AES-256-GCM and no key is stored |
+| Network attacker / passive TLS observer | **Yes** — TLS, plus the password is never transmitted |
+| Brute force against a stolen D1 dump | **Yes** — Argon2id client-side, then scrypt (N=32768, r=12) server-side |
+| Compromised Worker / malicious deploy / rogue dependency | **Yes** for upgraded accounts — the worker only ever sees an auth verifier |
+| Compromised *static asset* delivery (malicious JS served to the browser) | **No** — code that runs in your tab can read your keys. This is inherent to any browser-based password manager |
+| XSS in the app shell | **Partially** — strict CSP with no `unsafe-inline` and no inline scripts, but the in-memory key is reachable from JS |
+| Forgotten master password | **No** — by design, see above |
+| Malicious or coerced organisation admin | **No** — an admin who can already open a shared vault can share its key onward |
+
+### Migration status
+
+Accounts created before v1.1.4 used a weaker model in which the master password
+was sent to the worker and the vault key was `PBKDF2(password, storedSalt)` — so
+the server held both derivation inputs. That is the subject of
+`GHSA-pqm6-r3vj-mhvq`.
+
+Those accounts upgrade automatically and silently the next time they sign in.
+Until then, and only for them, the legacy behaviour still applies.
+
+One residue is worth calling out: organisation vaults created before the upgrade
+can only be re-keyed by the member who created them, because nobody else was ever
+able to decrypt them ([#69](https://github.com/PierreFouquet/Passflares/issues/69)).
+They are repaired the next time that member opens them. While any remain, the
+account's legacy `encryption_salt` is retained server-side, so such an account is
+not yet fully zero-knowledge. Once the last one is re-keyed the salt is cleared.
+
+### Other controls
+
 * **HSTS + tight CSP:** `Strict-Transport-Security: max-age=31536000` on
-  every API response, plus a Content Security Policy that disallows inline
-  scripts on the app shell.
+  every API response, plus a `default-src 'none'` Content Security Policy that
+  disallows inline scripts and styles on the app shell. Argon2id runs in a Web
+  Worker (`worker-src 'self'`) with no WASM and no `unsafe-eval`.
+* **Two-factor authentication:** optional TOTP with single-use recovery codes.
+  TOTP secrets are encrypted at rest with a key derived from `TOTP_ENC_KEY`.
 * **Bot protection:** Cloudflare Turnstile is enforced server-side on both
   `/api/register` and `/api/login` — a missing or invalid token blocks the
   request before any DB or scrypt work happens.
-* **Rate limiting:** both `/api/login` and `/api/register` lock an IP out
-  after 5 failed attempts within 15 minutes (KV-backed).
+* **Rate limiting:** `/api/login`, `/api/register` and `/api/auth/params` are
+  KV-backed rate limited per IP. `/api/auth/params` returns deterministic decoy
+  parameters for unknown emails, so it cannot be used to enumerate accounts.
+* **Constant-time comparison:** stored verifiers are compared with a
+  branch-free routine rather than `===`.
 * **Audit logging:** every authentication, vault-management, and
   organisation event is written to the D1 `audit_logs` table.
 * **Auto sign-out:** the client signs the user out after 5 minutes of

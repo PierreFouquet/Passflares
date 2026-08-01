@@ -26,9 +26,12 @@ import {
     deriveScryptHash,
     hexStringToUint8Array,
     uint8ArrayToHexString,
-    jsonResponse
+    jsonResponse,
+    timingSafeEqualHex,
+    parseCounter
 } from './utils.js';
 import { logAudit } from './auditLog.js';
+import { buildLoginResponse } from './auth.js';
 
 const FAILED_ATTEMPTS_LIMIT = 5;
 const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes (matches auth.ts)
@@ -179,12 +182,20 @@ async function consumeRecoveryCode(env: Env, userId: number, code: string): Prom
     return true;
 }
 
-async function verifyMasterPassword(env: Env, userId: number, masterPassword: string): Promise<boolean> {
+/**
+ * Re-authenticates the user for a sensitive 2FA change.
+ *
+ * The presented value is the auth secret for auth_version 2 accounts and the
+ * master password itself for the legacy ones — either way it is whatever scrypt
+ * was applied to at registration, so this comparison is version-agnostic.
+ * Constant-time, per GHSA-jrh6-9qp8-rfgf.
+ */
+async function verifyReauthSecret(env: Env, userId: number, presentedSecret: string): Promise<boolean> {
     const u = await env.DB.prepare('SELECT password_hash, password_salt FROM users WHERE id = ?')
         .bind(userId).first<{ password_hash: string; password_salt: string }>();
     if (!u) return false;
-    const { hash } = await deriveScryptHash(masterPassword, u.password_salt);
-    return hash === u.password_hash;
+    const { hash } = await deriveScryptHash(presentedSecret, u.password_salt);
+    return timingSafeEqualHex(hash, u.password_hash);
 }
 
 // Accepts the active TOTP code or an unused recovery code (consuming the latter).
@@ -201,12 +212,12 @@ async function verifyActiveSecondFactor(env: Env, userId: number, row: TotpRow, 
 
 async function isRateLimited(env: Env, key: string): Promise<boolean> {
     const v = await env.RATE_LIMIT.get(key);
-    return !!v && parseInt(v) >= FAILED_ATTEMPTS_LIMIT;
+    return parseCounter(v) >= FAILED_ATTEMPTS_LIMIT;
 }
 
 async function bumpFailure(env: Env, key: string): Promise<void> {
     const v = await env.RATE_LIMIT.get(key);
-    const n = v ? parseInt(v) + 1 : 1;
+    const n = parseCounter(v) + 1;
     await env.RATE_LIMIT.put(key, String(n), { expirationTtl: LOCKOUT_DURATION / 1000 });
 }
 
@@ -249,11 +260,12 @@ export async function handleTotpEnroll(request: CustomRequest, env: Env, ctx: Ex
         // (master password + a current code). The active secret stays valid
         // until the new one is confirmed, so there's no lockout window.
         if (row?.enabled === 1) {
-            const { masterPassword, code } = await safeJson(request);
-            if (!masterPassword || !code) {
+            const { authSecret, masterPassword, code } = await safeJson(request);
+            const reauthSecret = authSecret ?? masterPassword;
+            if (!reauthSecret || !code) {
                 return jsonResponse({ message: 'Master password and a current code are required to change your authenticator.' }, 400);
             }
-            if (!(await verifyMasterPassword(env, userId, masterPassword))) {
+            if (!(await verifyReauthSecret(env, userId, reauthSecret))) {
                 logAudit(env, ctx, userId, 'TOTP_ENROLL_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
                 return jsonResponse({ message: 'Master password is incorrect.' }, 401);
             }
@@ -328,15 +340,16 @@ export async function handleTotpDisable(request: CustomRequest, env: Env, ctx: E
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
     try {
-        const { masterPassword, code } = await safeJson(request);
-        if (!masterPassword || !code) {
+        const { authSecret, masterPassword, code } = await safeJson(request);
+        const reauthSecret = authSecret ?? masterPassword;
+        if (!reauthSecret || !code) {
             return jsonResponse({ message: 'Master password and a current code are required.' }, 400);
         }
         const row = await getTotpRow(env, userId);
         if (row?.enabled !== 1) {
             return jsonResponse({ message: 'Two-factor authentication is not enabled.' }, 400);
         }
-        if (!(await verifyMasterPassword(env, userId, masterPassword))) {
+        if (!(await verifyReauthSecret(env, userId, reauthSecret))) {
             logAudit(env, ctx, userId, 'TOTP_DISABLE_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: 'Master password is incorrect.' }, 401);
         }
@@ -361,15 +374,16 @@ export async function handleRegenerateRecoveryCodes(request: CustomRequest, env:
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
     try {
-        const { masterPassword } = await safeJson(request);
-        if (!masterPassword) {
+        const { authSecret, masterPassword } = await safeJson(request);
+        const reauthSecret = authSecret ?? masterPassword;
+        if (!reauthSecret) {
             return jsonResponse({ message: 'Master password is required.' }, 400);
         }
         const row = await getTotpRow(env, userId);
         if (row?.enabled !== 1) {
             return jsonResponse({ message: 'Two-factor authentication is not enabled.' }, 400);
         }
-        if (!(await verifyMasterPassword(env, userId, masterPassword))) {
+        if (!(await verifyReauthSecret(env, userId, reauthSecret))) {
             logAudit(env, ctx, userId, 'RECOVERY_CODES_REGENERATE_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: 'Master password is incorrect.' }, 401);
         }
@@ -424,8 +438,12 @@ export async function handleLoginVerify2fa(request: CustomRequest, env: Env, ctx
     }
 
     try {
-        const user = await env.DB.prepare('SELECT id, email, encryption_salt FROM users WHERE id = ?')
-            .bind(userId).first<{ id: number; email: string; encryption_salt: string }>();
+        const user = await env.DB.prepare(
+            'SELECT id, email, encryption_salt, auth_version, legacy_vaults_pending FROM users WHERE id = ?'
+        ).bind(userId).first<{
+            id: number; email: string; encryption_salt: string;
+            auth_version: 1 | 2; legacy_vaults_pending: number;
+        }>();
         const row = await getTotpRow(env, userId);
 
         if (!user || row?.enabled !== 1 || !row.secret_enc) {
@@ -455,12 +473,11 @@ export async function handleLoginVerify2fa(request: CustomRequest, env: Env, ctx
         const token = sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL });
         const remainingRecoveryCodes = recoveryCodeUsed ? await countUnusedRecoveryCodes(env, userId) : undefined;
         logAudit(env, ctx, userId, 'LOGIN_SUCCESS', { via: recoveryCodeUsed ? 'recovery_code' : 'totp' }, ipAddress, userAgent);
+        // Same payload shape as the single-step path — a 2FA user must receive
+        // their wrapped keypair too, or they land in the app with no way to
+        // decrypt anything.
         return jsonResponse({
-            message: 'Login successful.',
-            userId: user.id,
-            email: user.email,
-            encryptionSalt: user.encryption_salt,
-            token,
+            ...(await buildLoginResponse(env, user, token)),
             recoveryCodeUsed,
             remainingRecoveryCodes
         });

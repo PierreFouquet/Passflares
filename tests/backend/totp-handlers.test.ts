@@ -7,15 +7,24 @@ import { sign } from 'jsonwebtoken';
 import { TOTP, Secret } from 'otpauth';
 
 vi.mock('../../src/auditLog.js', () => ({ logAudit: vi.fn() }));
-// scrypt is slow; the master-password check only needs deterministic equality.
+// scrypt is slow; the re-auth check only needs deterministic equality. The
+// stand-in must still be valid hex — timingSafeEqualHex decodes both sides
+// before comparing and treats non-hex as a mismatch.
+function fakeHash(secret: string): string {
+    let h = 0;
+    for (let i = 0; i < secret.length; i++) h = (h * 31 + secret.charCodeAt(i)) >>> 0;
+    return h.toString(16).padStart(8, '0').repeat(4);
+}
+
 vi.mock('../../src/utils.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../src/utils.js')>();
     return {
         ...actual,
-        deriveScryptHash: vi.fn(async (pw: string, salt?: string | null) => ({
-            hash: `hash:${pw}`,
-            salt: salt ?? 'salt'
-        }))
+        deriveScryptHash: vi.fn(async (secret: string, salt?: string | null) => {
+            let h = 0;
+            for (let i = 0; i < secret.length; i++) h = (h * 31 + secret.charCodeAt(i)) >>> 0;
+            return { hash: h.toString(16).padStart(8, '0').repeat(4), salt: salt ?? 'salt' };
+        })
     };
 });
 
@@ -54,8 +63,17 @@ function makeDB(world: World) {
                 if (sql.includes('password_hash, password_salt FROM users')) {
                     return world.user ? { password_hash: world.user.password_hash, password_salt: world.user.password_salt } : null;
                 }
-                if (sql.includes('encryption_salt FROM users')) {
-                    return world.user ? { id: world.user.id, email: world.user.email, encryption_salt: world.user.encryption_salt } : null;
+                if (sql.includes('encryption_salt, auth_version')) {
+                    return world.user
+                        ? {
+                            id: world.user.id, email: world.user.email,
+                            encryption_salt: world.user.encryption_salt,
+                            auth_version: 2, legacy_vaults_pending: 0
+                        }
+                        : null;
+                }
+                if (sql.includes('SELECT public_key, private_key_enc FROM user_keys')) {
+                    return { public_key: 'PUBKEY', private_key_enc: 'iv:ct' };
                 }
                 if (sql.includes('COUNT(*) AS cnt FROM user_recovery_codes')) {
                     return { cnt: world.recovery.filter(r => r.used_at === null).length };
@@ -132,7 +150,7 @@ function authedReq(userId: number, email: string, body: any) {
 
 function freshWorld(): World {
     return {
-        user: { id: 1, email: 'u@example.com', password_hash: `hash:${CORRECT_PW}`, password_salt: 'salt', encryption_salt: 'enc-salt' },
+        user: { id: 1, email: 'u@example.com', password_hash: fakeHash(CORRECT_PW), password_salt: 'salt', encryption_salt: 'enc-salt' },
         totp: null,
         recovery: [],
         nextRecoveryId: 1
@@ -194,7 +212,7 @@ describe('Removing 2FA (disable)', () => {
         const world = freshWorld();
         const env = makeEnv(world);
         const { secret } = await enableFresh(world, env);
-        const res = await handleTotpDisable(authedReq(1, 'u@example.com', { masterPassword: 'wrong', code: code(secret) }), env, mockCtx);
+        const res = await handleTotpDisable(authedReq(1, 'u@example.com', { authSecret: 'wrong-secret', code: code(secret) }), env, mockCtx);
         expect(res.status).toBe(401);
         expect(world.totp).not.toBeNull();
     });
@@ -203,7 +221,7 @@ describe('Removing 2FA (disable)', () => {
         const world = freshWorld();
         const env = makeEnv(world);
         const { secret } = await enableFresh(world, env);
-        const res = await handleTotpDisable(authedReq(1, 'u@example.com', { masterPassword: CORRECT_PW, code: code(secret) }), env, mockCtx);
+        const res = await handleTotpDisable(authedReq(1, 'u@example.com', { authSecret: CORRECT_PW, code: code(secret) }), env, mockCtx);
         expect(res.status).toBe(200);
         expect(world.totp).toBeNull();
         expect(world.recovery).toHaveLength(0);
@@ -213,7 +231,7 @@ describe('Removing 2FA (disable)', () => {
         const world = freshWorld();
         const env = makeEnv(world);
         const { recoveryCodes } = await enableFresh(world, env);
-        const res = await handleTotpDisable(authedReq(1, 'u@example.com', { masterPassword: CORRECT_PW, code: recoveryCodes[0] }), env, mockCtx);
+        const res = await handleTotpDisable(authedReq(1, 'u@example.com', { authSecret: CORRECT_PW, code: recoveryCodes[0] }), env, mockCtx);
         expect(res.status).toBe(200);
         expect(world.totp).toBeNull();
     });
@@ -224,7 +242,7 @@ describe('Changing authenticator (enroll while enabled → enable)', () => {
         const world = freshWorld();
         const env = makeEnv(world);
         const { secret } = await enableFresh(world, env);
-        const res = await handleTotpEnroll(authedReq(1, 'u@example.com', { masterPassword: 'wrong', code: code(secret) }), env, mockCtx);
+        const res = await handleTotpEnroll(authedReq(1, 'u@example.com', { authSecret: 'wrong-secret', code: code(secret) }), env, mockCtx);
         expect(res.status).toBe(401);
     });
 
@@ -233,7 +251,7 @@ describe('Changing authenticator (enroll while enabled → enable)', () => {
         const env = makeEnv(world);
         const { secret: oldSecret } = await enableFresh(world, env);
 
-        const enroll = await handleTotpEnroll(authedReq(1, 'u@example.com', { masterPassword: CORRECT_PW, code: code(oldSecret) }), env, mockCtx);
+        const enroll = await handleTotpEnroll(authedReq(1, 'u@example.com', { authSecret: CORRECT_PW, code: code(oldSecret) }), env, mockCtx);
         const { secret: newSecret } = await enroll.json() as any;
         // Old secret is still active until confirm.
         expect(world.totp?.enabled).toBe(1);
@@ -250,7 +268,7 @@ describe('Changing authenticator (enroll while enabled → enable)', () => {
         const world = freshWorld();
         const env = makeEnv(world);
         const { secret: oldSecret } = await enableFresh(world, env);
-        const enroll = await handleTotpEnroll(authedReq(1, 'u@example.com', { masterPassword: CORRECT_PW, code: code(oldSecret) }), env, mockCtx);
+        const enroll = await handleTotpEnroll(authedReq(1, 'u@example.com', { authSecret: CORRECT_PW, code: code(oldSecret) }), env, mockCtx);
         const { secret: newSecret } = await enroll.json() as any;
         await handleTotpEnable(authedReq(1, 'u@example.com', { code: code(newSecret) }), env, mockCtx);
 
@@ -273,7 +291,7 @@ describe('Recovery code lifecycle', () => {
         const bad = await handleRegenerateRecoveryCodes(authedReq(1, 'u@example.com', { masterPassword: 'nope' }), env, mockCtx);
         expect(bad.status).toBe(401);
 
-        const res = await handleRegenerateRecoveryCodes(authedReq(1, 'u@example.com', { masterPassword: CORRECT_PW }), env, mockCtx);
+        const res = await handleRegenerateRecoveryCodes(authedReq(1, 'u@example.com', { authSecret: CORRECT_PW }), env, mockCtx);
         const body = await res.json() as any;
         expect(body.recoveryCodes).toHaveLength(__testables.RECOVERY_CODE_COUNT);
         // Old codes no longer present.
@@ -311,7 +329,13 @@ describe('handleLoginVerify2fa', () => {
         expect(res.status).toBe(200);
         const body = await res.json() as any;
         expect(body.token).toBeTruthy();
-        expect(body.encryptionSalt).toBe('enc-salt');
+        // The post-2FA payload must carry the same key material as the
+        // single-step path, or a 2FA user lands in the app unable to decrypt
+        // anything. For an upgraded account that is the wrapped keypair — and
+        // explicitly not the legacy salt.
+        expect(body.publicKey).toBe('PUBKEY');
+        expect(body.privateKeyEnc).toBe('iv:ct');
+        expect(body.encryptionSalt).toBeUndefined();
     });
 
     it('consumes a recovery code (works once, rejected on reuse)', async () => {
