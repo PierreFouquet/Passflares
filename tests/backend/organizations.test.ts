@@ -193,7 +193,39 @@ describe('handleRemoveMember', () => {
         const env = createMockEnv({ DB: db });
         const req = authedRequest('DELETE', '/api/organizations/1/members/2', undefined, { orgId: '1', memberUserId: '2' });
         const res = await handleRemoveMember(req, env, mockCtx);
-        expect(res.status).toBe(204);
+        // 200, not 204: removal now reports which vault keys the client must
+        // rotate. Deleting the member's key shares stops them fetching a key
+        // again, but they may already have cached it, so the key itself has to
+        // change — and only a client that can decrypt the vault can do that.
+        expect(res.status).toBe(200);
+        expect((await res.json() as any).rotateVaultIds).toEqual([]);
+    });
+
+    it('drops the removed member\'s vault key shares in the same batch', async () => {
+        let callCount = 0;
+        const db = createMockDB({});
+        (db as any).prepare = vi.fn((sql: string) => ({
+            bind: vi.fn(() => ({
+                first: vi.fn(() => {
+                    callCount++;
+                    if (callCount === 1) return Promise.resolve({ role: 'admin' });
+                    if (callCount === 2) return Promise.resolve({ role: 'member' });
+                    return Promise.resolve(null);
+                }),
+                run: vi.fn(() => Promise.resolve({ success: true, meta: { last_row_id: 1 }, results: [] })),
+                all: vi.fn(() => Promise.resolve({ results: [{ id: 11 }, { id: 12 }], success: true }))
+            }))
+        }));
+        (db as any).batch = vi.fn(() => Promise.resolve([]));
+
+        const env = createMockEnv({ DB: db });
+        const req = authedRequest('DELETE', '/api/organizations/1/members/2', undefined, { orgId: '1', memberUserId: '2' });
+        const res = await handleRemoveMember(req, env, mockCtx);
+
+        expect(res.status).toBe(200);
+        expect((await res.json() as any).rotateVaultIds).toEqual([11, 12]);
+        // membership delete + one share delete per reachable vault
+        expect((db as any).batch.mock.calls[0][0]).toHaveLength(3);
     });
 
     it('returns 403 when trying to remove self', async () => {

@@ -1,8 +1,17 @@
 // src/vaults.ts
 
-import { CustomRequest, Env, VaultMetadata, EncryptedVaultBlob, OrgRole, ADMIN_ROLES } from './types.js'; // Ensure correct path and .js extension
-import { logAudit } from './auditLog.js'; // Ensure correct path and .js extension
-import { jsonResponse } from './utils.js'; // Ensure correct path and .js extension
+import {
+    CustomRequest, Env, VaultMetadata, EncryptedVaultBlob, OrgRole, ADMIN_ROLES,
+    versionedObjectKey, VALID_KEY_VERSIONS
+} from './types.js';
+import { logAudit } from './auditLog.js';
+import { jsonResponse, parseId } from './utils.js';
+import { resolveVaultAccess, permissionSatisfies } from './middleware.js';
+
+// Note on the SELECT lists below: r2_object_key is deliberately never returned
+// to clients. It is an internal storage identifier nothing client-side addresses
+// anything by (every vault operation goes through /api/vaults/:id), and it leaks
+// the user_N/org_N owner prefix plus a UUID for no benefit (#80).
 
 export async function handleCreateVault(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { name, description, ownerId, ownerType, initialPermissionLevel } = await request.json() as {
@@ -32,6 +41,12 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
         logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Invalid permission level', initialPermissionLevel }, ipAddress, userAgent);
         return jsonResponse({ message: "Invalid initial permission level." }, 400);
     }
+    // Note: no key share arrives with this request. A vault key is wrapped with
+    // the vault's id as the ECIES binding (so a share can't be replayed onto
+    // another vault), and that id doesn't exist until the row below is inserted.
+    // The client therefore creates, then immediately PUTs its share — and
+    // deletes the vault if that second call fails, so no unopenable vault is
+    // left behind. The window is harmless: the vault is empty throughout.
 
     try {
         // Validate ownerId based on ownerType
@@ -39,8 +54,8 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
             logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Unauthorized user owner ID' }, ipAddress, userAgent);
             return jsonResponse({ message: "Unauthorized: Cannot create vault for another user." }, 403);
         } else if (ownerType === 'organization') {
-            const orgId = parseInt(ownerId.split('_')[1]);
-            if (isNaN(orgId)) {
+            const orgId = parseId(ownerId.split('_')[1]);
+            if (orgId === null) {
                 logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Invalid orgId format' }, ipAddress, userAgent);
                 return jsonResponse({ message: "Invalid organization ID format." }, 400);
             }
@@ -59,7 +74,9 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
         }
 
         const r2ObjectKey = `${ownerId}_${crypto.randomUUID()}`;
-        const currentKeyVersion = 'v1';
+        // New vaults are born under the key hierarchy — their contents are
+        // encrypted with a random per-vault key, not anything password-derived.
+        const currentKeyVersion = 'v2';
 
         const vaultInsertResult = await env.DB.prepare(
             `INSERT INTO vaults (name, description, owner_id, owner_type, r2_object_key, current_key_version)
@@ -94,7 +111,6 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
             description: description || null,
             owner_id: ownerId,
             owner_type: ownerType,
-            r2_object_key: r2ObjectKey,
             current_key_version: currentKeyVersion
         }, 201);
     } catch (error: any) {
@@ -117,7 +133,7 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
     try {
         // Get vaults owned directly by the user or where the user has explicit access
         const vaults: VaultMetadata[] = await env.DB.prepare(
-            `SELECT v.id, v.name, v.description, v.owner_id, v.owner_type, v.r2_object_key, v.current_key_version,
+            `SELECT v.id, v.name, v.description, v.owner_id, v.owner_type, v.current_key_version,
                     CASE
                         WHEN v.owner_id = ? AND v.owner_type = 'user' THEN 'manage'
                         ELSE vac.permission_level
@@ -132,7 +148,7 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
 
         // Get vaults accessible via organizations the user is a member of
         const orgVaults: VaultMetadata[] = await env.DB.prepare(
-            `SELECT v.id, v.name, v.description, v.owner_id, v.owner_type, v.r2_object_key, v.current_key_version,
+            `SELECT v.id, v.name, v.description, v.owner_id, v.owner_type, v.current_key_version,
                     vac.permission_level
              FROM vaults v
              JOIN vault_access_controls vac ON v.id = vac.vault_id
@@ -142,6 +158,15 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
             .bind(user.userId)
             .all()
             .then(res => res.results as unknown as VaultMetadata[]);
+
+        // Which of those the user actually holds a key for. Permission and
+        // decryptability are independent: an org admin can be authorised to open
+        // a vault and still lack a key share, which is exactly the confusing
+        // state #69 describes. Reporting it lets the UI say so honestly.
+        const shareRows = await env.DB.prepare(
+            "SELECT vault_id FROM vault_key_shares WHERE user_id = ?"
+        ).bind(user.userId).all().then(r => r.results as unknown as { vault_id: number }[]);
+        const heldKeys = new Set(shareRows.map(r => r.vault_id));
 
         // Combine and deduplicate vaults (a vault might be accessible directly and via an org)
         const allVaultsMap = new Map<number, VaultMetadata>();
@@ -154,7 +179,8 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
             }
         });
 
-        const distinctVaults = Array.from(allVaultsMap.values());
+        const distinctVaults = Array.from(allVaultsMap.values())
+            .map(v => ({ ...v, has_key_share: heldKeys.has(v.id) }));
 
         logAudit(env, ctx, user.userId, 'VAULT_LIST_SUCCESS', { count: distinctVaults.length }, ipAddress, userAgent);
         return jsonResponse(distinctVaults);
@@ -165,9 +191,24 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
     }
 }
 
+/**
+ * PUT /api/vaults/:vaultId/data
+ *
+ * Writing to a key version other than the vault's current one stages the blob
+ * beside the live one rather than replacing it — nothing the client can do here
+ * destroys readable data. The staged blob only becomes live when
+ * handleCommitKeyVersion flips vaults.current_key_version.
+ *
+ * That two-step is what closes #70: previously this overwrote in place, so an
+ * interrupted re-encryption left R2 holding ciphertext under a key D1 had never
+ * heard of.
+ */
 export async function handleUploadVault(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const vaultIdParam = request.params?.vaultId;
-    const { encryptedData } = await request.json() as { encryptedData: EncryptedVaultBlob };
+    const { encryptedData, keyVersion } = await request.json() as {
+        encryptedData: EncryptedVaultBlob;
+        keyVersion?: string;
+    };
     const user = request.user;
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
@@ -181,29 +222,112 @@ export async function handleUploadVault(request: CustomRequest, env: Env, ctx: E
         return jsonResponse({ message: "Vault ID and encrypted data (IV, ciphertext) are required." }, 400);
     }
 
-    const vaultId = parseInt(vaultIdParam);
-    if (isNaN(vaultId)) {
+    const vaultId = parseId(vaultIdParam);
+    if (vaultId === null) {
         logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_FAILURE', { vaultId: vaultIdParam, reason: 'Invalid vaultId format' }, ipAddress, userAgent);
         return jsonResponse({ message: "Bad Request: Invalid vault ID format." }, 400);
     }
+    if (keyVersion !== undefined && !VALID_KEY_VERSIONS.includes(keyVersion)) {
+        logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_FAILURE', { vaultId, reason: 'Invalid key version', keyVersion }, ipAddress, userAgent);
+        return jsonResponse({ message: "Unsupported key version." }, 400);
+    }
 
     try {
-        const vault: VaultMetadata | null = await env.DB.prepare("SELECT r2_object_key FROM vaults WHERE id = ?").bind(vaultId).first();
+        const vault = await env.DB.prepare(
+            "SELECT r2_object_key, current_key_version FROM vaults WHERE id = ?"
+        ).bind(vaultId).first<Pick<VaultMetadata, 'r2_object_key' | 'current_key_version'>>();
         if (!vault) {
             logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_FAILURE', { vaultId, reason: 'Vault not found' }, ipAddress, userAgent);
             return jsonResponse({ message: "Vault not found." }, 404);
         }
 
-        // R2 objects are stored as ArrayBuffer, so convert hex string to Uint8Array
-        const dataToStore = JSON.stringify(encryptedData);
-        await env.VAULTS.put(vault.r2_object_key, dataToStore);
+        const targetVersion = keyVersion ?? vault.current_key_version ?? 'v1';
+        const objectKey = versionedObjectKey(vault.r2_object_key, targetVersion);
+        await env.VAULTS.put(objectKey, JSON.stringify(encryptedData));
 
-        logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_SUCCESS', { vaultId }, ipAddress, userAgent);
-        return new Response(null, { status: 204 }); // No Content
+        const staged = targetVersion !== (vault.current_key_version ?? 'v1');
+        logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_SUCCESS', { vaultId, keyVersion: targetVersion, staged }, ipAddress, userAgent);
+        // 200 with a body when staging, so the client knows the write is not yet
+        // live and a commit is still owed; 204 for a plain in-place save.
+        return staged
+            ? jsonResponse({ message: "Staged.", keyVersion: targetVersion, staged: true })
+            : new Response(null, { status: 204 });
     } catch (error: any) {
         console.error("Upload vault error:", error);
         logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while uploading vault data." }, 500);
+    }
+}
+
+/**
+ * POST /api/vaults/key-version/commit
+ *
+ * Atomically promotes staged blobs to live for a set of vaults. Every vault is
+ * permission-checked before anything is written, and the flips go through one
+ * D1.batch() — so a re-encryption either takes effect everywhere or nowhere.
+ *
+ * Superseded blobs are swept afterwards; a sweep failure is harmless (an orphan
+ * object) whereas failing the request after a successful commit would not be.
+ */
+export async function handleCommitKeyVersion(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const user = request.user!;
+    const ipAddress = request.headers.get('CF-Connecting-IP');
+    const userAgent = request.headers.get('User-Agent');
+
+    const { vaults } = await request.json() as {
+        vaults?: Array<{ vaultId: number; keyVersion: string }>;
+    };
+
+    if (!Array.isArray(vaults) || vaults.length === 0) {
+        return jsonResponse({ message: "A non-empty list of vaults is required." }, 400);
+    }
+    for (const entry of vaults) {
+        if (!Number.isInteger(entry?.vaultId) || entry.vaultId <= 0 || !VALID_KEY_VERSIONS.includes(entry?.keyVersion)) {
+            return jsonResponse({ message: "Each entry needs a valid vaultId and keyVersion." }, 400);
+        }
+    }
+
+    try {
+        // Check everything before mutating anything — a partial commit is the
+        // exact failure this endpoint exists to prevent.
+        const previous = new Map<number, string>();
+        for (const { vaultId } of vaults) {
+            const access = await resolveVaultAccess(env, user.userId, vaultId);
+            if (!access || !permissionSatisfies(access, 'write')) {
+                logAudit(env, ctx, user.userId, 'VAULT_KEY_COMMIT_FAILURE', { vaultId, reason: 'Insufficient permission' }, ipAddress, userAgent);
+                return jsonResponse({ message: `Forbidden: no write access to vault ${vaultId}.` }, 403);
+            }
+            const row = await env.DB.prepare(
+                "SELECT r2_object_key, current_key_version FROM vaults WHERE id = ?"
+            ).bind(vaultId).first<Pick<VaultMetadata, 'r2_object_key' | 'current_key_version'>>();
+            if (!row) return jsonResponse({ message: `Vault ${vaultId} not found.` }, 404);
+            previous.set(vaultId, versionedObjectKey(row.r2_object_key, row.current_key_version ?? 'v1'));
+        }
+
+        const update = env.DB.prepare("UPDATE vaults SET current_key_version = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        await env.DB.batch(vaults.map(v => update.bind(v.keyVersion, v.vaultId)));
+
+        // Sweep the superseded blobs now that the new ones are authoritative.
+        for (const { vaultId, keyVersion } of vaults) {
+            const oldKey = previous.get(vaultId)!;
+            const newKeyRow = await env.DB.prepare("SELECT r2_object_key FROM vaults WHERE id = ?")
+                .bind(vaultId).first<{ r2_object_key: string }>();
+            const newKey = versionedObjectKey(newKeyRow!.r2_object_key, keyVersion);
+            if (oldKey !== newKey) {
+                try {
+                    await env.VAULTS.delete(oldKey);
+                } catch (sweepError) {
+                    console.error(`Failed to sweep superseded blob for vault ${vaultId}:`, sweepError);
+                }
+            }
+        }
+
+        logAudit(env, ctx, user.userId, 'VAULT_KEY_COMMIT_SUCCESS', { vaultIds: vaults.map(v => v.vaultId) }, ipAddress, userAgent);
+        return jsonResponse({ message: "Key versions committed.", committed: vaults.length });
+    } catch (error: any) {
+        console.error("Commit key version error:", error);
+        logAudit(env, ctx, user.userId, 'VAULT_KEY_COMMIT_FAILURE', { error: error.message }, ipAddress, userAgent);
+        return jsonResponse({ message: "Internal Server Error while committing key versions." }, 500);
     }
 }
 
@@ -222,20 +346,23 @@ export async function handleDownloadVault(request: CustomRequest, env: Env, ctx:
         return jsonResponse({ message: "Vault ID is required." }, 400);
     }
 
-    const vaultId = parseInt(vaultIdParam);
-    if (isNaN(vaultId)) {
+    const vaultId = parseId(vaultIdParam);
+    if (vaultId === null) {
         logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_FAILURE', { vaultId: vaultIdParam, reason: 'Invalid vaultId format' }, ipAddress, userAgent);
         return jsonResponse({ message: "Bad Request: Invalid vault ID format." }, 400);
     }
 
     try {
-        const vault: VaultMetadata | null = await env.DB.prepare("SELECT r2_object_key FROM vaults WHERE id = ?").bind(vaultId).first();
+        const vault = await env.DB.prepare(
+            "SELECT r2_object_key, current_key_version FROM vaults WHERE id = ?"
+        ).bind(vaultId).first<Pick<VaultMetadata, 'r2_object_key' | 'current_key_version'>>();
         if (!vault) {
             logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_FAILURE', { vaultId, reason: 'Vault not found' }, ipAddress, userAgent);
             return jsonResponse({ message: "Vault not found." }, 404);
         }
 
-        const object = await env.VAULTS.get(vault.r2_object_key);
+        const keyVersion = vault.current_key_version ?? 'v1';
+        const object = await env.VAULTS.get(versionedObjectKey(vault.r2_object_key, keyVersion));
         if (object === null) {
             // If the R2 object doesn't exist, it means the vault is new/empty
             logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_SUCCESS', { vaultId, status: 'empty' }, ipAddress, userAgent);
@@ -245,12 +372,124 @@ export async function handleDownloadVault(request: CustomRequest, env: Env, ctx:
         // R2 object content is usually a ReadableStream or ArrayBuffer
         const encryptedData: EncryptedVaultBlob = await object.json();
 
-        logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_SUCCESS', { vaultId }, ipAddress, userAgent);
-        return jsonResponse({ encryptedData });
+        logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_SUCCESS', { vaultId, keyVersion }, ipAddress, userAgent);
+        return jsonResponse({ encryptedData, keyVersion });
     } catch (error: any) {
         console.error("Download vault error:", error);
         logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while downloading vault data." }, 500);
+    }
+}
+
+/**
+ * GET /api/vaults/:vaultId/share
+ *
+ * The caller's own wrapped copy of the vault key. Useless to anyone else — it
+ * only opens with the private key that never leaves their browser.
+ */
+export async function handleGetVaultShare(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const user = request.user!;
+    const vaultId = parseId(request.params?.vaultId);
+    if (vaultId === null) return jsonResponse({ message: "Bad Request: Invalid vault ID format." }, 400);
+
+    try {
+        const share = await env.DB.prepare(
+            "SELECT wrapped_key, ephemeral_pubkey, key_version FROM vault_key_shares WHERE vault_id = ? AND user_id = ?"
+        ).bind(vaultId, user.userId).first<{ wrapped_key: string; ephemeral_pubkey: string; key_version: string }>();
+
+        if (!share) {
+            // Authorised but keyless. The client must say "an admin hasn't shared
+            // the key with you yet", not "check your password" (#69).
+            return jsonResponse({ share: null, reason: 'no_key_share' }, 200);
+        }
+        return jsonResponse({ share });
+    } catch (error: any) {
+        console.error("Get vault share error:", error);
+        return jsonResponse({ message: "Internal Server Error while fetching the vault key." }, 500);
+    }
+}
+
+/**
+ * PUT /api/vaults/:vaultId/shares
+ *
+ * Replaces the set of members holding this vault's key. Requires `manage`, since
+ * it is the grant/revoke primitive.
+ *
+ * The server can only shuffle opaque ciphertext here: it cannot verify that a
+ * wrapped key is well-formed or that it wraps the right vault key, because
+ * checking would require the plaintext key — which is the whole point. What it
+ * *can* enforce is that every recipient is genuinely entitled to the vault, so a
+ * caller cannot quietly hand a key to an outsider.
+ */
+export async function handlePutVaultShares(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const user = request.user!;
+    const ipAddress = request.headers.get('CF-Connecting-IP');
+    const userAgent = request.headers.get('User-Agent');
+    const vaultId = parseId(request.params?.vaultId);
+    if (vaultId === null) return jsonResponse({ message: "Bad Request: Invalid vault ID format." }, 400);
+
+    const { shares, keyVersion, replace } = await request.json() as {
+        shares?: Array<{ userId: number; wrappedKey: string; ephemeralPubkey: string }>;
+        keyVersion?: string;
+        replace?: boolean;
+    };
+
+    if (!Array.isArray(shares) || shares.length === 0) {
+        return jsonResponse({ message: "A non-empty list of key shares is required." }, 400);
+    }
+    if (keyVersion !== undefined && !VALID_KEY_VERSIONS.includes(keyVersion)) {
+        return jsonResponse({ message: "Unsupported key version." }, 400);
+    }
+    for (const share of shares) {
+        if (!Number.isInteger(share?.userId) || share.userId <= 0 ||
+            typeof share?.wrappedKey !== 'string' || share.wrappedKey.length === 0 || share.wrappedKey.length > 4096 ||
+            typeof share?.ephemeralPubkey !== 'string' || share.ephemeralPubkey.length === 0 || share.ephemeralPubkey.length > 1024) {
+            return jsonResponse({ message: "Each share needs a userId, wrappedKey and ephemeralPubkey." }, 400);
+        }
+    }
+
+    try {
+        // Every recipient must independently have access to this vault. Without
+        // this check, "manage" on a vault would let someone mint a key share for
+        // an arbitrary account.
+        for (const share of shares) {
+            const access = await resolveVaultAccess(env, share.userId, vaultId);
+            if (!access) {
+                logAudit(env, ctx, user.userId, 'VAULT_SHARE_FAILURE',
+                    { vaultId, recipient: share.userId, reason: 'Recipient has no vault access' }, ipAddress, userAgent);
+                return jsonResponse({ message: `User ${share.userId} does not have access to this vault.` }, 403);
+            }
+        }
+
+        const version = keyVersion ?? 'v2';
+        const statements = [];
+
+        // On a rotation the old shares must go, or a removed member keeps a row
+        // that still unwraps the previous key.
+        if (replace) {
+            statements.push(env.DB.prepare("DELETE FROM vault_key_shares WHERE vault_id = ?").bind(vaultId));
+        }
+
+        const insert = env.DB.prepare(
+            `INSERT INTO vault_key_shares (vault_id, user_id, wrapped_key, ephemeral_pubkey, key_version, created_by)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(vault_id, user_id) DO UPDATE SET wrapped_key = excluded.wrapped_key,
+                 ephemeral_pubkey = excluded.ephemeral_pubkey, key_version = excluded.key_version,
+                 created_by = excluded.created_by`
+        );
+        for (const share of shares) {
+            statements.push(insert.bind(vaultId, share.userId, share.wrappedKey, share.ephemeralPubkey, version, user.userId));
+        }
+
+        await env.DB.batch(statements);
+
+        logAudit(env, ctx, user.userId, 'VAULT_SHARE_SUCCESS',
+            { vaultId, recipients: shares.map(s => s.userId), replace: !!replace }, ipAddress, userAgent);
+        return jsonResponse({ message: "Vault key shares updated.", count: shares.length });
+    } catch (error: any) {
+        console.error("Put vault shares error:", error);
+        logAudit(env, ctx, user.userId, 'VAULT_SHARE_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
+        return jsonResponse({ message: "Internal Server Error while updating vault key shares." }, 500);
     }
 }
 
@@ -269,14 +508,16 @@ export async function handleDeleteVault(request: CustomRequest, env: Env, ctx: E
         return jsonResponse({ message: "Vault ID is required." }, 400);
     }
 
-    const vaultId = parseInt(vaultIdParam);
-    if (isNaN(vaultId)) {
+    const vaultId = parseId(vaultIdParam);
+    if (vaultId === null) {
         logAudit(env, ctx, user.userId, 'VAULT_DELETE_FAILURE', { vaultId: vaultIdParam, reason: 'Invalid vaultId format' }, ipAddress, userAgent);
         return jsonResponse({ message: "Bad Request: Invalid vault ID format." }, 400);
     }
 
     try {
-        const vaultToDelete: VaultMetadata | null = await env.DB.prepare("SELECT r2_object_key, owner_id, owner_type FROM vaults WHERE id = ?").bind(vaultId).first();
+        const vaultToDelete = await env.DB.prepare(
+            "SELECT r2_object_key, owner_id, owner_type, current_key_version FROM vaults WHERE id = ?"
+        ).bind(vaultId).first<Pick<VaultMetadata, 'r2_object_key' | 'owner_id' | 'owner_type' | 'current_key_version'>>();
         if (!vaultToDelete) {
             logAudit(env, ctx, user.userId, 'VAULT_DELETE_FAILURE', { vaultId, reason: 'Vault not found' }, ipAddress, userAgent);
             return jsonResponse({ message: "Vault not found." }, 404);
@@ -286,14 +527,23 @@ export async function handleDeleteVault(request: CustomRequest, env: Env, ctx: E
         // The middleware `checkVaultPermission` for 'manage' should have already run.
         // This handler assumes permission is already verified.
 
-        // D1 batch() ensures these two deletes are atomic
+        // D1 batch() ensures these deletes are atomic
         await env.DB.batch([
             env.DB.prepare("DELETE FROM vault_access_controls WHERE vault_id = ?").bind(vaultId),
+            env.DB.prepare("DELETE FROM vault_key_shares WHERE vault_id = ?").bind(vaultId),
             env.DB.prepare("DELETE FROM vaults WHERE id = ?").bind(vaultId)
         ]);
 
-        // Delete R2 object after DB records are removed
-        await env.VAULTS.delete(vaultToDelete.r2_object_key);
+        // Delete every key version's object after DB records are removed. A
+        // migrated vault may still have its superseded blob if the sweep failed.
+        for (const version of VALID_KEY_VERSIONS) {
+            const key = versionedObjectKey(vaultToDelete.r2_object_key, version);
+            try {
+                await env.VAULTS.delete(key);
+            } catch (deleteError) {
+                console.error(`Failed to delete R2 object ${key}:`, deleteError);
+            }
+        }
 
         logAudit(env, ctx, user.userId, 'VAULT_DELETE_SUCCESS', { vaultId }, ipAddress, userAgent);
         return new Response(null, { status: 204 });

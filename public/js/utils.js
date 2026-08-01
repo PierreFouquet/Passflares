@@ -14,7 +14,7 @@ export function hexStringToUint8Array(hexString) {
     }
     const bytes = [];
     for (let i = 0; i < hexString.length; i += 2) {
-        bytes.push(parseInt(hexString.substr(i, 2), 16));
+        bytes.push(parseInt(hexString.slice(i, i + 2), 16));
     }
     return new Uint8Array(bytes);
 }

@@ -5,6 +5,133 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] — 2026-08-01
+
+Security release. Passflares was **server-trusting rather than zero-knowledge**:
+the master password was sent to the Worker on every authentication, and the
+vault key was derived from that same password using a salt the server stored.
+Anyone able to run code in the Worker request path could therefore harvest
+plaintext master passwords and decrypt every vault.
+
+This release replaces that with a proper key hierarchy. **Existing accounts
+upgrade automatically and silently the next time they sign in** — no user action
+is required, and no data is re-encrypted from the user's point of view.
+
+### Security
+
+- **The master password no longer leaves the browser**
+  (`GHSA-pqm6-r3vj-mhvq`). It is stretched with Argon2id (m=47104 KiB, t=1, p=1)
+  and split by HKDF into two independent values: an `authSecret` sent to the
+  server, and a key-encryption key that stays local. The server stores
+  `scrypt(authSecret)` and cannot derive any vault key from it. Argon2id also
+  replaces PBKDF2-SHA256/600k, which was memory-less and cheap to attack on GPUs
+  ([public/js/keys.js](public/js/keys.js),
+  [public/js/auth-flow.js](public/js/auth-flow.js), [src/auth.ts](src/auth.ts)).
+- **Per-vault keys with per-member wrapping.** Each vault now has its own random
+  AES-256-GCM key, wrapped for each member via ECIES over P-256 ECDH. Granting
+  access writes one row and never re-encrypts vault contents
+  ([migrations/0005_key_hierarchy.sql](migrations/0005_key_hierarchy.sql),
+  [public/js/vault-keys.js](public/js/vault-keys.js)).
+- **Constant-time verifier comparison** (`GHSA-jrh6-9qp8-rfgf`). Password and
+  recovery-hash comparisons used `!==`, which short-circuits on the first
+  differing byte ([src/utils.ts](src/utils.ts), [src/totp.ts](src/totp.ts)).
+- **`/api/auth/params` is not an account-existence oracle.** Unknown emails
+  receive deterministic decoy Argon2id parameters, indistinguishable in shape and
+  stable across retries, and the endpoint is rate-limited per IP.
+- **Email is normalised and validated server-side.** `Foo@example.com` and
+  `foo@example.com` were previously two separate accounts with two separate
+  vault sets; the only validation was the browser's `type="email"`, bypassed by
+  calling the API directly.
+- **`r2_object_key` is no longer disclosed to clients** (#80). It is an internal
+  storage identifier nothing client-side addresses anything by, and it leaked the
+  `user_N`/`org_N` owner prefix plus a UUID.
+- **Web Worker CSP.** `worker-src 'self'` added so Argon2id can run off the UI
+  thread. Still no `unsafe-eval` and no WASM — the implementation is vendored
+  plain ES modules ([src/worker.ts](src/worker.ts)).
+
+### Fixed
+
+- **Changing your master password can no longer destroy vault data** (#70). The
+  old flow decrypted and re-uploaded *every vault the user could see* — including
+  organisation vaults where they held only `read` — before telling the server the
+  password had changed. A `403` partway through the upload loop was swallowed by a
+  snackbar, leaving R2 holding ciphertext under a key D1 had never heard of. That
+  was the default path for any org member, not an edge case. Password rotation now
+  re-seals a single key blob and never touches vault ciphertext at all
+  ([public/js/pages/settings.js](public/js/pages/settings.js)).
+- **Shared and organisation vaults are now decryptable by their members** (#69).
+  Vault contents were encrypted with a key derived from one individual's master
+  password, so no member other than the vault's creator could ever read them —
+  and the error told them their *credentials* were wrong, when the real problem
+  was that the data had never been encrypted for them. Vaults created before this
+  release are re-keyed and shared with the whole organisation the next time their
+  creator opens them ([public/js/vault-keys.js](public/js/vault-keys.js),
+  [public/js/org-keys.js](public/js/org-keys.js)).
+- **Removing an organisation member now revokes their key access.** Their key
+  shares are deleted, and the client rotates and re-wraps the affected vault keys
+  for the remaining members — revocation has to assume the removed member cached
+  the old key ([src/organizations.ts](src/organizations.ts)).
+- **Vault writes are non-destructive under re-encryption** (#70). A write under a
+  new key version is staged beside the live blob; it only becomes authoritative
+  when the server flips `vaults.current_key_version` in a single atomic batch.
+  That column existed since `0001_init.sql` but was hardcoded to `'v1'` and never
+  read ([src/vaults.ts](src/vaults.ts)).
+- **ID parsing no longer coerces** (#80). `parseInt('12abc', 10)` returned `12`
+  and `Number('0x10')` returned `16`, so two different URLs could address the same
+  row. Only plain decimal digits are accepted ([src/utils.ts](src/utils.ts)).
+- Deprecated `String.prototype.substr()` replaced with `slice()`, and the
+  triplicated hex helpers consolidated to one implementation per side (#80).
+
+### Changed
+
+- **`npm audit` and `npm install` are clean of deprecation warnings.**
+  `http-server` was unmaintained and pulled in a deprecated dependency chain
+  (`html-encoding-sniffer@3` → `whatwg-encoding@2`). Replaced with a ~50-line
+  zero-dependency Node static server for the E2E run, removing 46 packages
+  ([scripts/static-server.mjs](scripts/static-server.mjs)).
+- **README rewritten around an explicit threat model** (#79). The previous
+  security section claimed "Your Master Password never leaves your device", which
+  was not true of the implementation; it is now, and the documentation says
+  precisely what each control does and does not defend against. Structural drift
+  fixed: `src/totp.ts`, migrations `0004`/`0005`, and the required `TOTP_ENC_KEY`
+  secret are all documented.
+- `package.json` license corrected from `ISC` to `GPL-3.0-or-later` to match
+  `LICENSE` and the README (#80).
+- Dead Argon2id constants (`KDF_MEMORY`, `KDF_PARALLELISM`) removed from
+  `public/js/constants.js` — they were imported but never used, and the file's
+  header comment claimed an algorithm the code did not use (#80).
+
+### Tests
+
+- Key hierarchy round-trips: a vault key wrapped for one member opens for them
+  and for nobody else, and a share cannot be replayed onto another vault
+  ([tests/frontend/keys.test.js](tests/frontend/keys.test.js)).
+- Wire-format assertions that inspect every request body for the master password
+  itself — the property that actually closes the advisory
+  ([tests/frontend/auth-flow.test.js](tests/frontend/auth-flow.test.js)).
+- Upgrade atomicity: a single `D1.batch()`, idempotent on re-run, and refusing to
+  re-key a vault the caller does not own
+  ([tests/backend/auth.test.ts](tests/backend/auth.test.ts)).
+- Staged writes never overwrite the live blob; the version flip is atomic; a
+  `manage` holder cannot mint a key share for an outsider
+  ([tests/backend/vault-keys.test.ts](tests/backend/vault-keys.test.ts)).
+- A guardrail asserting the vendored Argon2id files stay byte-identical to the
+  installed `@noble/hashes`
+  ([tests/backend/vendor-integrity.test.ts](tests/backend/vendor-integrity.test.ts)).
+
+### Upgrade notes
+
+- **Run `npx wrangler d1 migrations apply secure-password-db --remote` before
+  merging.** `main` auto-deploys, and the Worker requires migration `0005`.
+  The migration is additive only — no column is dropped, and every v1 account
+  keeps working until its owner next signs in.
+- Accounts still on `auth_version = 1` retain their legacy `encryption_salt`
+  until their pre-upgrade organisation vaults have been re-keyed. Until then such
+  an account is not yet fully zero-knowledge; this is stated in the README rather
+  than glossed.
+- The legacy columns are retired in a later migration, once the
+  `auth_version = 1` population reaches zero.
+
 ## [1.1.3] — 2026-06-20
 
 Bug-fix release addressing a first-login rendering issue on the home dashboard.

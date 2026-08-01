@@ -5,13 +5,28 @@ import { getPrefs, setPrefs, ALLOWED } from '../prefs.js';
 import { snack } from '../snackbar.js';
 import { confirmDialog, openDialog } from '../dialog.js';
 import { getUserInfo, clearSession } from '../session.js';
-import { reset as resetState, getKey, getVaults } from '../state.js';
-import { deleteAccount, updateMasterPassword, loadEncryptedVaultData, saveEncryptedVaultData, getVaults as apiGetVaults } from '../api.js';
+import { reset as resetState, hasPrivateKey, getVaults } from '../state.js';
+import { deleteAccount, loadEncryptedVaultData, getVaults as apiGetVaults } from '../api.js';
 import { getTotpStatus, enrollTotp, enableTotp, disableTotp, regenerateRecoveryCodes } from '../api.js';
-import { deriveKey, encryptData, decryptData } from '../crypto.js';
-import { checkPasswordStrength, generateSalt, uint8ArrayToHexString } from '../utils.js';
+import { deriveExistingHierarchy, rotateMasterPassword } from '../auth-flow.js';
+import { checkPasswordStrength } from '../utils.js';
 import { storeSession, getSessionToken } from '../session.js';
 import { copyToClipboard } from '../clipboard.js';
+
+/**
+ * Turns a typed master password into the value the server actually checks.
+ *
+ * Every "confirm your master password" prompt in this file routes through here,
+ * so none of them puts the password on the wire — they send
+ * HKDF(Argon2id(password, kdfSalt), "auth"), the same verifier login uses.
+ * Costs an Argon2id derivation, hence the loading states around the callers.
+ */
+async function reauthSecret(password) {
+    const userInfo = getUserInfo();
+    if (!userInfo?.email) throw new Error('Please sign in again.');
+    const { authSecret } = await deriveExistingHierarchy(userInfo.email, password);
+    return authSecret;
+}
 
 export function renderSettingsPage({ mount }) {
     mount.appendChild(cloneTemplate('tpl-page-settings'));
@@ -210,7 +225,10 @@ function openEnrollDialog(isChange, onDone) {
         showLoading('Setting up…');
         try {
             const reauth = isChange
-                ? { masterPassword: reauthInputs.pw.value, code: reauthInputs.code.value.trim() }
+                ? {
+                    authSecret: await reauthSecret(reauthInputs.pw.value),
+                    code: reauthInputs.code.value.trim()
+                }
                 : null;
             const { secret, qrDataUri } = await enrollTotp(reauth);
             const img = document.createElement('img');
@@ -319,7 +337,7 @@ function openRegenerateDialog(onDone) {
                     if (!pw.value) { snack.error('Enter your master password.'); return; }
                     showLoading('Generating…');
                     try {
-                        const { recoveryCodes } = await regenerateRecoveryCodes(pw.value);
+                        const { recoveryCodes } = await regenerateRecoveryCodes(await reauthSecret(pw.value));
                         const btn = document.querySelector('.dialog__actions .btn--filled');
                         body.replaceChildren(renderRecoveryCodes(recoveryCodes, {
                             onAcknowledge: (checked) => { if (btn) btn.disabled = !checked; }
@@ -375,7 +393,7 @@ function openDisableDialog(onDone) {
                     if (!pw.value || !code.value.trim()) { snack.error('Both fields are required.'); return; }
                     showLoading('Disabling…');
                     try {
-                        await disableTotp(pw.value, code.value.trim());
+                        await disableTotp(await reauthSecret(pw.value), code.value.trim());
                         snack.success('Two-factor authentication disabled.');
                         onDone?.();
                         close();
@@ -449,31 +467,22 @@ function openChangePasswordDialog() {
                     const userInfo = getUserInfo();
                     if (!userInfo?.userId) { snack.error('Please sign in again.'); return; }
 
-                    showLoading('Re-encrypting all vault data… do not close this window.');
+                    // Argon2id runs twice — once over the old password to prove
+                    // it, once over the new one to replace it. No vault is
+                    // fetched, decrypted or rewritten: the vault keys are
+                    // independent of the password, so only the blob that wraps
+                    // the user's private key changes. That is what removes the
+                    // interrupted-re-encryption data loss described in #70.
+                    showLoading('Re-sealing your keys…');
                     try {
-                        // 1. Derive old key from current salt
-                        const oldKey = await deriveKey(old, userInfo.encryptionSalt);
-                        // 2. Pull and decrypt every vault
-                        const vaults = await apiGetVaults();
-                        const decryptedVaults = [];
-                        for (const v of vaults) {
-                            const raw = await loadEncryptedVaultData(v.id);
-                            const data = raw?.encryptedData ? await decryptData(raw.encryptedData, oldKey) : [];
-                            decryptedVaults.push({ id: v.id, data });
-                        }
-                        // 3. Generate new salt + key
-                        const newSalt = generateSalt();
-                        const newSaltHex = uint8ArrayToHexString(newSalt);
-                        const newKey = await deriveKey(next, newSaltHex);
-                        // 4. Re-encrypt + upload
-                        for (const v of decryptedVaults) {
-                            const enc = await encryptData(v.data, newKey);
-                            await saveEncryptedVaultData(v.id, enc);
-                        }
-                        // 5. Tell the server about the new password + salt
-                        await updateMasterPassword(userInfo.userId, old, next, newSaltHex);
-                        // 6. Update local session
-                        storeSession(getSessionToken(), { ...userInfo, encryptionSalt: newSaltHex });
+                        const { privateKeyEnc } = await rotateMasterPassword({
+                            email: userInfo.email,
+                            userId: userInfo.userId,
+                            oldPassword: old,
+                            newPassword: next,
+                            privateKeyEnc: userInfo.privateKeyEnc
+                        });
+                        storeSession(getSessionToken(), { ...userInfo, privateKeyEnc });
                         snack.success('Master password changed successfully.');
                         close();
                     } catch (err) {
@@ -490,7 +499,10 @@ function openChangePasswordDialog() {
 
 // ── Export ─────────────────────────────────────
 async function handleExport() {
-    if (!getKey()) { snack.error('No encryption key available — sign in again.'); return; }
+    // The export is ciphertext, so it needs no key to produce — but requiring a
+    // live session keeps it from silently emitting blobs the user can no longer
+    // decrypt.
+    if (!hasPrivateKey()) { snack.error('No encryption key available — sign in again.'); return; }
     showLoading('Exporting vault data…');
     try {
         const vaults = await apiGetVaults();
@@ -501,7 +513,7 @@ async function handleExport() {
             exportData.metadata.push({
                 id: v.id, name: v.name, description: v.description,
                 owner_id: v.owner_id, owner_type: v.owner_type,
-                r2_object_key: v.r2_object_key, current_key_version: v.current_key_version
+                current_key_version: v.current_key_version
             });
         }
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -547,7 +559,7 @@ function openDeleteAccountDialog() {
                     if (!userInfo?.userId) { snack.error('Please sign in again.'); return; }
                     showLoading('Deleting account…');
                     try {
-                        await deleteAccount(userInfo.userId, mp);
+                        await deleteAccount(userInfo.userId, await reauthSecret(mp));
                         clearSession();
                         resetState();
                         snack.info('Account deleted.');

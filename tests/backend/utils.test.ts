@@ -4,7 +4,13 @@ import {
     hexStringToUint8Array,
     jsonResponse,
     deriveScryptHash,
-    verifyTurnstile
+    verifyTurnstile,
+    timingSafeEqualHex,
+    parseId,
+    parseCounter,
+    normalizeEmail,
+    isValidEmail,
+    decoyKdfSalt
 } from '../../src/utils.js';
 
 describe('uint8ArrayToHexString', () => {
@@ -119,5 +125,137 @@ describe('verifyTurnstile', () => {
     it('returns false when fetch throws', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network'); }));
         expect(await verifyTurnstile('token', 'secret')).toBe(false);
+    });
+});
+
+// --- timingSafeEqualHex (GHSA-jrh6-9qp8-rfgf) ---
+
+describe('timingSafeEqualHex', () => {
+    const HASH = 'deadbeefdeadbeefdeadbeefdeadbeef';
+
+    it('accepts identical hex digests', () => {
+        expect(timingSafeEqualHex(HASH, HASH)).toBe(true);
+    });
+
+    it('rejects a digest differing only in the final byte', () => {
+        // The case a short-circuiting `!==` would answer fastest.
+        expect(timingSafeEqualHex(HASH, 'deadbeefdeadbeefdeadbeefdeadbeff')).toBe(false);
+    });
+
+    it('rejects a digest differing only in the first byte', () => {
+        expect(timingSafeEqualHex(HASH, 'aeadbeefdeadbeefdeadbeefdeadbeef')).toBe(false);
+    });
+
+    it('is case-sensitive about encoding but not about value', () => {
+        // hexStringToUint8Array decodes both cases, so 'DE' and 'de' are equal
+        // bytes — which is correct, they are the same digest.
+        expect(timingSafeEqualHex('deadbeef', 'DEADBEEF')).toBe(true);
+    });
+
+    it('fails closed on malformed or mismatched input instead of throwing', () => {
+        expect(timingSafeEqualHex(HASH, '')).toBe(false);
+        expect(timingSafeEqualHex('', '')).toBe(false);
+        expect(timingSafeEqualHex(HASH, HASH + 'aa')).toBe(false);
+        expect(timingSafeEqualHex('zz', 'zz')).toBe(false);
+        expect(timingSafeEqualHex(null as any, HASH)).toBe(false);
+        expect(timingSafeEqualHex(undefined as any, undefined as any)).toBe(false);
+    });
+});
+
+// --- parseId (#80) ---
+
+describe('parseId', () => {
+    it('accepts a plain positive decimal id', () => {
+        expect(parseId('1')).toBe(1);
+        expect(parseId('4242')).toBe(4242);
+    });
+
+    it('rejects the coercion surprises that make two URLs address one row', () => {
+        // parseInt('12abc', 10) === 12 and Number('0x10') === 16 — either would
+        // let /vaults/0x10 and /vaults/16 be the same vault.
+        expect(parseId('0x10')).toBeNull();
+        expect(parseId('12abc')).toBeNull();
+        expect(parseId('1e3')).toBeNull();
+        expect(parseId(' 1 ')).toBeNull();
+        expect(parseId('1.5')).toBeNull();
+        expect(parseId('+1')).toBeNull();
+    });
+
+    it('rejects zero, negatives and non-strings', () => {
+        expect(parseId('0')).toBeNull();
+        expect(parseId('-1')).toBeNull();
+        expect(parseId('')).toBeNull();
+        expect(parseId(undefined)).toBeNull();
+        expect(parseId(null)).toBeNull();
+    });
+
+    it('rejects ids beyond safe integer precision', () => {
+        expect(parseId('9007199254740993')).toBeNull();
+    });
+});
+
+// --- parseCounter ---
+
+describe('parseCounter', () => {
+    it('reads a stored KV counter', () => {
+        expect(parseCounter('5')).toBe(5);
+    });
+
+    it('treats anything unparseable as zero so rate limiting fails open, not closed', () => {
+        expect(parseCounter(null)).toBe(0);
+        expect(parseCounter(undefined)).toBe(0);
+        expect(parseCounter('')).toBe(0);
+        expect(parseCounter('abc')).toBe(0);
+        expect(parseCounter('-3')).toBe(0);
+    });
+});
+
+// --- email normalisation (#80) ---
+
+describe('normalizeEmail / isValidEmail', () => {
+    it('lowercases and trims, so one address is one account', () => {
+        // SQLite UNIQUE is case-sensitive; without this, Foo@example.com and
+        // foo@example.com are two accounts with two separate vault sets.
+        expect(normalizeEmail('  Foo@Example.COM ')).toBe('foo@example.com');
+    });
+
+    it('returns an empty string for non-strings', () => {
+        expect(normalizeEmail(undefined)).toBe('');
+        expect(normalizeEmail(null)).toBe('');
+        expect(normalizeEmail(42)).toBe('');
+    });
+
+    it('accepts ordinary addresses', () => {
+        expect(isValidEmail('user@example.com')).toBe(true);
+        expect(isValidEmail('first.last+tag@sub.example.co.uk')).toBe(true);
+    });
+
+    it('rejects what the browser type="email" check would have caught', () => {
+        // That check was the only validation, and calling the API directly
+        // bypassed it entirely.
+        expect(isValidEmail('not an email')).toBe(false);
+        expect(isValidEmail('no-at-sign.com')).toBe(false);
+        expect(isValidEmail('user@nodot')).toBe(false);
+        expect(isValidEmail('user@@example.com')).toBe(false);
+        expect(isValidEmail('a@b.c' + 'd'.repeat(300))).toBe(false);
+    });
+});
+
+// --- decoyKdfSalt ---
+
+describe('decoyKdfSalt', () => {
+    it('is stable for the same email, so retries look consistent', () => {
+        // An unstable decoy would itself be the oracle: a real account's salt
+        // never changes between calls.
+        expect(decoyKdfSalt('a@b.com', 'secret')).toBe(decoyKdfSalt('a@b.com', 'secret'));
+    });
+
+    it('differs per email and per server secret', () => {
+        expect(decoyKdfSalt('a@b.com', 'secret')).not.toBe(decoyKdfSalt('c@d.com', 'secret'));
+        expect(decoyKdfSalt('a@b.com', 'secret')).not.toBe(decoyKdfSalt('a@b.com', 'other'));
+    });
+
+    it('is indistinguishable in shape from a real salt', () => {
+        expect(decoyKdfSalt('a@b.com', 'secret')).toMatch(/^[0-9a-f]{32}$/);
     });
 });

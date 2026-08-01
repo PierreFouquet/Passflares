@@ -1,25 +1,36 @@
-// public/js/crypto.js
+// public/js/crypto.js — symmetric encryption of vault contents.
+//
+// Vault entries are sealed with AES-256-GCM under a *vault key* (see keys.js),
+// not under anything derived directly from the master password. This file only
+// knows how to seal and open a payload given a CryptoKey; where that key comes
+// from, and who is allowed to hold it, is keys.js's problem.
+//
+// The one exception is deriveLegacyKey below, which reproduces the auth_version 1
+// scheme (PBKDF2 straight from the master password) purely so that accounts which
+// have not yet been upgraded can still be read — and migrated.
 
 import {
     AES_IV_LENGTH,
     ENCRYPTION_ALGORITHM,
     KDF_ITERATIONS,
-    KDF_MEMORY,
-    KDF_PARALLELISM,
     AUTH_TAG_LENGTH
 } from './constants.js';
+import { uint8ArrayToHexString, hexStringToUint8Array } from './utils.js';
 
-// Derive an encryption key from the master password using Argon2id (client-side)
-// Note: This PBKDF2 fallback is only if WebCrypto's subtle.deriveKey doesn't support Argon2.
-// Browsers typically support PBKDF2 for deriveKey with 'HKDF' or 'PBKDF2' algorithm.
-// For Argon2id, we'll use a separate library like argon2-browser if needed, or rely on server-side hashing
-// for authentication and use PBKDF2 for client-side encryption key derivation.
-// For this project, we are using PBKDF2 for client-side encryption key derivation
-// and Argon2id for server-side master password hashing.
-
-
-
-export async function deriveKey(masterPassword, saltHex) {
+/**
+ * auth_version 1 vault key: PBKDF2-SHA256 over the master password itself.
+ *
+ * DEPRECATED — do not use for new data. This is the derivation that made the
+ * service server-trusting (GHSA-pqm6-r3vj-mhvq): the server received the
+ * password and stored the salt, so it held both PBKDF2 inputs. It survives only
+ * to decrypt pre-upgrade ciphertext during migration. New keys come from
+ * keys.js (Argon2id -> HKDF -> per-vault keys).
+ *
+ * @param {string} masterPassword
+ * @param {string} saltHex  users.encryption_salt
+ * @returns {Promise<CryptoKey>} AES-256-GCM
+ */
+export async function deriveLegacyKey(masterPassword, saltHex) {
     const passwordBytes = new TextEncoder().encode(masterPassword);
     const saltBytes = hexStringToUint8Array(saltHex);
 
@@ -31,7 +42,7 @@ export async function deriveKey(masterPassword, saltHex) {
         ['deriveKey']
     );
 
-    const derivedKey = await crypto.subtle.deriveKey(
+    return crypto.subtle.deriveKey(
         {
             name: 'PBKDF2',
             salt: saltBytes,
@@ -43,8 +54,6 @@ export async function deriveKey(masterPassword, saltHex) {
         true, // extractable
         ['encrypt', 'decrypt']
     );
-
-    return derivedKey;
 }
 
 export async function encryptData(data, encryptionKey) {
@@ -66,7 +75,15 @@ export async function encryptData(data, encryptionKey) {
     };
 }
 
-export async function decryptData(encryptedData, encryptionKey) {
+/**
+ * @param {{iv: string, ciphertext: string}} encryptedData
+ * @param {CryptoKey} encryptionKey  The vault key, not the user's key.
+ * @param {string} [context]  Appended to the failure message. Callers that know
+ *   *why* decryption could legitimately fail (e.g. a shared vault the user has
+ *   no key share for) should pass an explanation — the old blanket "verify your
+ *   credentials" told org members their password was wrong when it wasn't (#69).
+ */
+export async function decryptData(encryptedData, encryptionKey, context = '') {
     if (!encryptionKey) {
         throw new Error('Encryption key not available — please sign in again to unlock your vaults.');
     }
@@ -83,25 +100,6 @@ export async function decryptData(encryptedData, encryptionKey) {
         return JSON.parse(new TextDecoder().decode(decrypted));
     } catch (error) {
         console.error('Decryption failed');
-        throw new Error('Failed to decrypt data. Please verify your credentials.');
+        throw new Error(context || 'Failed to decrypt this vault. Its contents may have been encrypted with a different key.');
     }
-}
-
-
-// --- Helper functions (can be moved to utils.js if shared) ---
-function uint8ArrayToHexString(uint8array) {
-    return Array.from(uint8array)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-function hexStringToUint8Array(hexString) {
-    if (hexString.length % 2 !== 0) {
-        throw new Error("Hex string must have an even number of characters.");
-    }
-    const bytes = [];
-    for (let i = 0; i < hexString.length; i += 2) {
-        bytes.push(parseInt(hexString.substr(i, 2), 16));
-    }
-    return new Uint8Array(bytes);
 }

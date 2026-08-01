@@ -31,13 +31,63 @@ export interface Env {
     TOTP_ENC_KEY: string; // encrypts TOTP secrets at rest (AES-GCM key material)
 }
 
+/**
+ * 1 — legacy. The master password was POSTed to the worker and the vault key was
+ *     PBKDF2(password, encryption_salt), both inputs known server-side. This is
+ *     the model GHSA-pqm6-r3vj-mhvq describes; accounts are upgraded in place on
+ *     next login and no new account is ever created at this version.
+ * 2 — key hierarchy. The server receives only
+ *     authSecret = HKDF(Argon2id(password, kdf_salt), "passflares:auth:v2")
+ *     and stores scrypt(authSecret). It cannot derive any vault key.
+ */
+export type AuthVersion = 1 | 2;
+
+export const AUTH_VERSION_LEGACY: AuthVersion = 1;
+export const AUTH_VERSION_KEY_HIERARCHY: AuthVersion = 2;
+
+/** Argon2id cost, stored per-user so it can be raised without breaking old accounts. */
+export interface KdfParams {
+    m: number;   // memory, KiB
+    t: number;   // time (passes)
+    p: number;   // parallelism
+    len: number; // output bytes
+}
+
 // Interfaces for database entities (optional but good practice)
 export interface User {
     id: number;
     email: string;
-    password_hash: string;
+    password_hash: string;   // v1: scrypt(password). v2: scrypt(authSecret).
     password_salt: string;
-    encryption_salt: string; // client-side encryption salt
+    encryption_salt: string; // v1 PBKDF2 salt; retained while legacy_vaults_pending > 0, then ''
+    auth_version: AuthVersion;
+    kdf_salt: string | null;    // Argon2id salt (v2)
+    kdf_params: string | null;  // JSON KdfParams (v2)
+    legacy_vaults_pending: number;
+    created_at: string;
+}
+
+/** Per-user asymmetric identity. The private key is only ever decrypted client-side. */
+export interface UserKeys {
+    user_id: number;
+    public_key: string;      // P-256 ECDH SPKI, base64
+    private_key_enc: string; // AES-256-GCM(kek, PKCS#8), "ivHex:ctHex"
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * A vault key wrapped to one member's public key. This is the primitive that
+ * makes shared vaults work (#69) — access is granted by writing a row, without
+ * the recipient being online and without touching vault ciphertext.
+ */
+export interface VaultKeyShare {
+    vault_id: number;
+    user_id: number;
+    wrapped_key: string;      // AES-256-GCM(wrapKey, vaultKey), "ivHex:ctHex"
+    ephemeral_pubkey: string; // sender's per-share P-256 SPKI, base64
+    key_version: string;
+    created_by: number | null;
     created_at: string;
 }
 
@@ -120,6 +170,22 @@ export interface EncryptedVaultBlob {
     iv: string;         // Hex string of IV
     ciphertext: string; // Hex string of encrypted data
 }
+
+/**
+ * R2 object key for a given vault key version.
+ *
+ * 'v1' maps to the bare key so every object written before the key hierarchy
+ * landed stays reachable without a bulk R2 rename. Later versions get a suffix,
+ * which is what makes re-encryption non-destructive: the new blob is written
+ * beside the old one and only becomes live when the server flips
+ * vaults.current_key_version (#70).
+ */
+export function versionedObjectKey(r2ObjectKey: string, keyVersion: string | null | undefined): string {
+    return !keyVersion || keyVersion === 'v1' ? r2ObjectKey : `${r2ObjectKey}.${keyVersion}`;
+}
+
+/** Vault key versions the server will accept a write for. */
+export const VALID_KEY_VERSIONS: readonly string[] = ['v1', 'v2'];
 
 export type ThemePref   = 'light' | 'dark' | 'system';
 export type DensityPref = 'compact' | 'comfortable' | 'spacious';

@@ -63,17 +63,41 @@ export async function apiCall(endpoint, method = 'GET', data = null, needsAuth =
 }
 
 // --- Auth Endpoints ---
-export async function registerUser(email, masterPassword, encryptionSalt, turnstileToken) {
+//
+// Note what is absent from every call below: the master password. Under
+// auth_version 2 the browser derives an Argon2id master key locally and sends
+// only `authSecret = HKDF(masterKey, "auth")`, which cannot produce the key that
+// decrypts vault contents. The single exception is loginUser's legacy branch,
+// used once per unmigrated account so it can be upgraded.
+
+/**
+ * Which authentication flow this email needs, plus the Argon2id inputs for it.
+ * Returns plausible decoy parameters for unknown emails, so a caller cannot use
+ * it to test whether an account exists.
+ */
+export async function getAuthParams(email) {
+    return apiCall(`/auth/params?email=${encodeURIComponent(email)}`, 'GET', null, false);
+}
+
+export async function registerUser({ email, authSecret, kdfSalt, kdfParams, publicKey, privateKeyEnc, turnstileToken }) {
     return apiCall('/register', 'POST', {
-        email,
-        masterPassword,
-        encryptionSalt,
-        turnstileToken
+        email, authSecret, kdfSalt, kdfParams, publicKey, privateKeyEnc, turnstileToken
     }, false); // No auth needed for registration
 }
 
-export async function loginUser(email, masterPassword, turnstileToken) {
-    return apiCall('/login', 'POST', { email, masterPassword, turnstileToken }, false); // No auth needed for login
+export async function loginUser(email, credentials, turnstileToken) {
+    // credentials is { authSecret } for v2 and { masterPassword } for legacy
+    // accounts that have not been upgraded yet.
+    return apiCall('/login', 'POST', { email, ...credentials, turnstileToken }, false);
+}
+
+/**
+ * One-shot auth_version 1 -> 2 upgrade. Everything the server needs arrives in a
+ * single request so it can be applied in one D1 batch — either the account is
+ * fully migrated or entirely untouched.
+ */
+export async function upgradeAccount(payload) {
+    return apiCall('/auth/upgrade', 'POST', payload);
 }
 
 // Second login step: exchange the temp token + a TOTP/recovery code for a real
@@ -95,30 +119,36 @@ export async function enableTotp(code) {
     return apiCall('/2fa/enable', 'POST', { code }, true, { suppressAuthRedirect: true });
 }
 
-export async function disableTotp(masterPassword, code) {
-    return apiCall('/2fa/disable', 'POST', { masterPassword, code }, true, { suppressAuthRedirect: true });
+export async function disableTotp(authSecret, code) {
+    return apiCall('/2fa/disable', 'POST', { authSecret, code }, true, { suppressAuthRedirect: true });
 }
 
-export async function regenerateRecoveryCodes(masterPassword) {
-    return apiCall('/2fa/recovery-codes/regenerate', 'POST', { masterPassword }, true, { suppressAuthRedirect: true });
+export async function regenerateRecoveryCodes(authSecret) {
+    return apiCall('/2fa/recovery-codes/regenerate', 'POST', { authSecret }, true, { suppressAuthRedirect: true });
 }
 
 export async function getUserEncryptionSalt(userId) {
     return apiCall(`/users/${userId}/encryption-salt`, 'GET');
 }
 
-export async function updateMasterPassword(userId, oldMasterPassword, newMasterPassword, newEncryptionSalt) {
-    return apiCall(`/users/${userId}/update-password`, 'PUT', {
-        oldMasterPassword,
-        newMasterPassword,
-        newEncryptionSalt
-    });
+/** A member's public key, so a vault key can be wrapped for them. */
+export async function getUserPublicKey(userId) {
+    return apiCall(`/users/${userId}/public-key`, 'GET');
+}
+
+/**
+ * Rotating the master password re-derives the Argon2id salt, the auth verifier
+ * and the wrapped private key. Vault ciphertext is untouched — which is what
+ * removes the data-loss window in #70.
+ */
+export async function updateMasterPassword(userId, payload) {
+    return apiCall(`/users/${userId}/update-password`, 'PUT', payload);
 }
 
 // --- Vault Endpoints ---
-export async function createVault(name, description, ownerId, ownerType, r2_object_key, initialPermissionLevel) {
+export async function createVault(name, description, ownerId, ownerType, initialPermissionLevel, keyShare) {
     return apiCall('/vaults', 'POST', {
-        name, description, ownerId, ownerType, r2_object_key, initialPermissionLevel
+        name, description, ownerId, ownerType, initialPermissionLevel, keyShare
     });
 }
 
@@ -126,9 +156,20 @@ export async function getVaults() {
     return apiCall('/vaults', 'GET');
 }
 
-export async function saveEncryptedVaultData(vaultId, encryptedData) {
+/**
+ * @param {string} [keyVersion] When it differs from the vault's live version the
+ *   blob is *staged* beside the current one rather than replacing it, and only
+ *   goes live once commitKeyVersions() succeeds. That two-step is what makes
+ *   re-encryption non-destructive (#70).
+ */
+export async function saveEncryptedVaultData(vaultId, encryptedData, keyVersion) {
     // encryptedData should be { iv: hexString, ciphertext: hexString }
-    return apiCall(`/vaults/${vaultId}/data`, 'PUT', { encryptedData });
+    return apiCall(`/vaults/${vaultId}/data`, 'PUT', { encryptedData, keyVersion });
+}
+
+/** Promotes staged blobs to live for several vaults in one atomic server batch. */
+export async function commitKeyVersions(vaults) {
+    return apiCall('/vaults/key-version/commit', 'POST', { vaults });
 }
 
 export async function loadEncryptedVaultData(vaultId) {
@@ -136,12 +177,22 @@ export async function loadEncryptedVaultData(vaultId) {
     return apiCall(`/vaults/${vaultId}/data`, 'GET');
 }
 
+/** This user's wrapped copy of a vault key; { share: null } if none was granted. */
+export async function getVaultKeyShare(vaultId) {
+    return apiCall(`/vaults/${vaultId}/share`, 'GET');
+}
+
+/** Grants (or, with replace, rotates) the set of members holding a vault key. */
+export async function putVaultKeyShares(vaultId, shares, { replace = false, keyVersion = 'v2' } = {}) {
+    return apiCall(`/vaults/${vaultId}/shares`, 'PUT', { shares, replace, keyVersion });
+}
+
 export async function deleteVault(vaultId) {
     return apiCall(`/vaults/${vaultId}`, 'DELETE');
 }
 
-export async function deleteAccount(userId, masterPassword) {
-    return apiCall(`/users/${userId}`, 'DELETE', { masterPassword });
+export async function deleteAccount(userId, authSecret) {
+    return apiCall(`/users/${userId}`, 'DELETE', { authSecret });
 }
 
 // --- Organization Endpoints ---
@@ -159,6 +210,15 @@ export async function addMemberToOrganization(orgId, memberEmail, role) {
 
 export async function getOrgMembers(orgId) {
     return apiCall(`/organizations/${orgId}/members`, 'GET');
+}
+
+/**
+ * Every member's public key in one call, so an admin holding a vault key can
+ * wrap it for the whole organisation without a round trip per member.
+ * `publicKey: null` marks a member who hasn't upgraded yet.
+ */
+export async function getOrgMemberKeys(orgId) {
+    return apiCall(`/organizations/${orgId}/member-keys`, 'GET');
 }
 
 export async function updateMemberRole(orgId, userId, role) {

@@ -1,4 +1,4 @@
-import { test, expect, gotoAndSeedLogin } from './fixtures';
+import { test, expect, gotoAndSeedLogin, E2E_PUBLIC_KEY, E2E_PRIVATE_KEY_ENC } from './fixtures';
 import type { Page } from '@playwright/test';
 
 // Mutable 2FA state shared by the route handlers within a single test.
@@ -59,11 +59,16 @@ async function submitLogin(page: Page) {
     await page.locator('#login-form button[type="submit"]').click();
 }
 
+// Same shape the single-step path returns: the post-2FA payload must carry the
+// wrapped keypair, or the user lands in the app unable to decrypt anything.
 const SESSION_BODY = JSON.stringify({
     message: 'Login successful.',
     userId: 1,
     email: 'tester@example.com',
-    encryptionSalt: 'aabbccddeeff00112233445566778899',
+    authVersion: 2,
+    publicKey: E2E_PUBLIC_KEY,
+    privateKeyEnc: E2E_PRIVATE_KEY_ENC,
+    legacyVaultsPending: 0,
     token: 'fake-test-jwt'
 });
 

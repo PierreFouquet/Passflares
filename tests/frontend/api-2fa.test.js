@@ -126,24 +126,26 @@ describe('enableTotp', () => {
     });
 });
 
+// Re-authentication now presents the derived auth secret, never the master
+// password — see the wire-format assertions at the bottom of this file.
 describe('disableTotp', () => {
-    it('POSTs master password + code to /api/2fa/disable', async () => {
+    it('POSTs the auth secret + code to /api/2fa/disable', async () => {
         mockOk({ disabled: true });
-        await disableTotp('pw', '123456');
+        await disableTotp('deadbeef', '123456');
         expect(mockFetch).toHaveBeenCalledWith(
             '/api/2fa/disable',
-            expect.objectContaining({ method: 'POST', body: JSON.stringify({ masterPassword: 'pw', code: '123456' }) })
+            expect.objectContaining({ method: 'POST', body: JSON.stringify({ authSecret: 'deadbeef', code: '123456' }) })
         );
     });
 });
 
 describe('regenerateRecoveryCodes', () => {
-    it('POSTs the master password to /api/2fa/recovery-codes/regenerate', async () => {
+    it('POSTs the auth secret to /api/2fa/recovery-codes/regenerate', async () => {
         mockOk({ recoveryCodes: ['AAAAA-BBBBB', 'CCCCC-DDDDD'] });
-        const res = await regenerateRecoveryCodes('pw');
+        const res = await regenerateRecoveryCodes('deadbeef');
         expect(mockFetch).toHaveBeenCalledWith(
             '/api/2fa/recovery-codes/regenerate',
-            expect.objectContaining({ method: 'POST', body: JSON.stringify({ masterPassword: 'pw' }) })
+            expect.objectContaining({ method: 'POST', body: JSON.stringify({ authSecret: 'deadbeef' }) })
         );
         expect(res.recoveryCodes).toHaveLength(2);
     });

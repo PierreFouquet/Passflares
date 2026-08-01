@@ -2,14 +2,19 @@
 
 import {
     createVault, getVaults as apiGetVaults, getOrganizations,
-    saveEncryptedVaultData, loadEncryptedVaultData, deleteVault as apiDeleteVault
+    saveEncryptedVaultData, deleteVault as apiDeleteVault
 } from '../api.js';
-import { encryptData, decryptData } from '../crypto.js';
+import { encryptData } from '../crypto.js';
 import { cloneTemplate, escapeHTML, resolveOrgName, showLoading, hideLoading, populateOrganizationDropdown } from '../ui.js';
 import {
-    getKey, getVaults, setVaults, getOrgs, setOrgs,
+    getVaults, setVaults, getOrgs, setOrgs, hasPrivateKey, getVaultKey,
     setDecryptedVault, getDecryptedVault, setCurrentVault
 } from '../state.js';
+import {
+    decryptVaultContents, provisionVaultKey, rescueLegacyOrgVault,
+    VaultKeyUnavailableError
+} from '../vault-keys.js';
+import { getUserInfo } from '../session.js';
 import { snack } from '../snackbar.js';
 import { confirmDialog } from '../dialog.js';
 import { openEntryDrawer, closeEntryDrawer } from '../drawer.js';
@@ -77,7 +82,7 @@ async function handleCreateVault(composer) {
 
     if (!name) { snack.error('Vault name cannot be empty.'); return; }
 
-    const userInfo = JSON.parse(localStorage.getItem('userInfo') ?? '{}');
+    const userInfo = getUserInfo() ?? {};
     let ownerId = `user_${userInfo.userId}`;
     if (ownerType === 'organization') {
         const selected = composer.querySelector('#select-organization').value;
@@ -85,19 +90,39 @@ async function handleCreateVault(composer) {
         ownerId = `org_${selected}`;
     }
 
-    if (!getKey()) { snack.error('Vault unlocked session lost — please sign in again.'); return; }
+    if (!hasPrivateKey()) { snack.error('Vault unlocked session lost — please sign in again.'); return; }
 
     showLoading('Creating vault…');
+    let newVault = null;
     try {
-        const newVault = await createVault(name, description, ownerId, ownerType, 'auto-generated', 'manage');
-        const encryptedInitial = await encryptData([], getKey());
-        await saveEncryptedVaultData(newVault.id, encryptedInitial);
+        newVault = await createVault(name, description, ownerId, ownerType, 'manage');
+
+        // The vault key is wrapped against the vault's id, so it can only be
+        // provisioned once the row exists. If this fails the vault would be
+        // unopenable, so remove it rather than leave a broken shell behind — it
+        // is still empty, so nothing is lost.
+        const { skipped } = await provisionVaultKey(newVault, {
+            selfUserId: userInfo.userId,
+            selfPublicKey: userInfo.publicKey
+        });
+
+        const vaultKey = getVaultKey(newVault.id);
+        await saveEncryptedVaultData(newVault.id, await encryptData([], vaultKey), 'v2');
+
         snack.success(`Vault "${newVault.name}" created.`);
+        if (skipped.length > 0) {
+            snack.warning(
+                `${skipped.length} member(s) can't access it yet — they need to sign in once to set up their keys.`
+            );
+        }
         creatorOpen = false;
         composer.remove();
         await loadVaultsAndRender(document.getElementById('page-root'));
     } catch (err) {
         console.error('Create vault failed:', err);
+        if (newVault?.id) {
+            try { await apiDeleteVault(newVault.id); } catch { /* best effort */ }
+        }
         snack.error(err.message ?? 'Failed to create vault.');
     } finally {
         hideLoading();
@@ -216,12 +241,34 @@ async function openVaultDetail(vault, orgs) {
     try {
         let payload = getDecryptedVault(vault.id);
         if (!payload) {
-            const raw = await loadEncryptedVaultData(vault.id);
-            let entries = [];
-            if (raw?.encryptedData) {
-                if (!getKey()) { throw new Error('Vault unlocked session lost — please sign in again.'); }
-                entries = await decryptData(raw.encryptedData, getKey());
+            const { entries, usedLegacyKey } = await decryptVaultContents(vault);
+
+            // An organisation vault that only opened with the legacy key is one
+            // that predates the key hierarchy: it was encrypted under its
+            // creator's personal password, which is exactly why no other member
+            // could ever read it (#69). We are that creator — re-key it now and
+            // wrap the new key for everyone.
+            if (usedLegacyKey && vault.owner_type === 'organization') {
+                hideLoading();
+                showLoading(`Repairing shared access for "${vault.name}"…`);
+                try {
+                    const { granted, skipped } = await rescueLegacyOrgVault(vault, entries);
+                    vault.current_key_version = 'v2';
+                    vault.has_key_share = true;
+                    snack.success(`"${vault.name}" is now readable by ${granted} member(s).`);
+                    if (skipped.length > 0) {
+                        snack.warning(
+                            `${skipped.length} member(s) still need to sign in once before they can be granted access.`
+                        );
+                    }
+                } catch (rescueError) {
+                    // The vault is still readable by us via the legacy key, so
+                    // this is a degraded state, not a failure to open.
+                    console.error('Org vault rescue failed:', rescueError);
+                    snack.warning('Could not repair shared access for this vault. Other members still cannot open it.');
+                }
             }
+
             payload = { metadata: vault, entries };
             setDecryptedVault(vault.id, payload);
         }
@@ -235,10 +282,12 @@ async function openVaultDetail(vault, orgs) {
         renderVaultDetail(detail, payload, orgs);
     } catch (err) {
         console.error('Open vault failed:', err);
-        snack.error(err.message ?? 'Failed to decrypt vault.');
-        if (err.message?.includes('decrypt') || err.message?.includes('Master')) {
-            snack.error('Master password mismatch — please sign in again.');
-        }
+        // VaultKeyUnavailableError already carries an accurate explanation. The
+        // old code told a keyless org member their password was wrong, which was
+        // both false and unactionable.
+        snack.error(err instanceof VaultKeyUnavailableError
+            ? err.message
+            : (err.message ?? 'Failed to open vault.'));
     } finally {
         hideLoading();
     }
@@ -460,10 +509,13 @@ function handleAddEntry(container, payload) {
 }
 
 async function handleSaveVault(container, payload) {
-    if (!getKey()) { snack.error('Vault unlocked session lost — please sign in again.'); return; }
+    const vaultKey = getVaultKey(payload.metadata.id);
+    if (!vaultKey) { snack.error('Vault unlocked session lost — please sign in again.'); return; }
     showLoading('Encrypting and saving vault…');
     try {
-        const encryptedPayload = await encryptData(payload.entries, getKey());
+        const encryptedPayload = await encryptData(payload.entries, vaultKey);
+        // No keyVersion: an ordinary save writes in place at the vault's live
+        // version. Staging is only for re-encryption under a *new* key.
         await saveEncryptedVaultData(payload.metadata.id, encryptedPayload);
         snack.success('Vault saved successfully.');
     } catch (err) {

@@ -51,7 +51,7 @@ jobs:
           # Boot the worker built from THIS commit (local mode, emulated
           # bindings — no real Cloudflare resources). The security-headers-live
           # probes hit it directly; the browser specs keep using the Playwright
-          # config's hermetic http-server on :4173.
+          # config's hermetic static server on :4173.
           npx wrangler dev --port 8787 --local > /tmp/wrangler-dev.log 2>&1 &
           echo "Waiting for the worker to come up..."
           for i in $(seq 1 60); do
@@ -67,5 +67,5 @@ jobs:
           fi
           # LIVE_HOST un-skips the security-header probes (they hit :8787).
           # Leave PASSFLARES_BASE_URL unset so the browser specs still run
-          # against the config's http-server on :4173.
+          # against the config's static server on :4173.
           LIVE_HOST=http://localhost:8787 npm run test:e2e

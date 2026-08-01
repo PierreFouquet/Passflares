@@ -5,7 +5,10 @@ import { authenticateRequest, checkVaultPermission } from './middleware.js';
 import {
     handleRegister,
     handleLogin,
+    handleAuthParams,
+    handleAuthUpgrade,
     handleGetUserEncryptionSalt,
+    handleGetUserPublicKey,
     handleUpdateMasterPassword,
     handleDeleteAccount
 } from './auth.js';
@@ -14,13 +17,17 @@ import {
     handleGetVaults,
     handleUploadVault,
     handleDownloadVault,
-    handleDeleteVault
+    handleDeleteVault,
+    handleCommitKeyVersion,
+    handleGetVaultShare,
+    handlePutVaultShares
 } from './vaults.js';
 import {
     handleCreateOrganization,
     handleGetOrganizations,
     handleAddMemberToOrganization,
     handleGetOrgMembers,
+    handleGetOrgMemberKeys,
     handleUpdateMemberRole,
     handleRemoveMember,
     handleDeleteOrganization
@@ -59,6 +66,10 @@ const BASE_SECURITY_HEADERS = {
 //     blocked, not silently allowed.
 //   - script-src 'self' + Turnstile — no inline scripts (pre-paint bootstrap
 //     is an external file at public/js/prefs-bootstrap.js).
+//   - worker-src 'self' — Argon2id runs in a Web Worker (public/js/kdf-worker.js)
+//     so the ~1s master-key derivation doesn't freeze the UI. Under
+//     default-src 'none' workers are blocked unless declared. Still no
+//     'unsafe-eval' and no WASM: the implementation is plain vendored ES modules.
 //   - style-src 'self' — no 'unsafe-inline'. Closes the CSS-keylogger vector
 //     against the master-password input that an HTML-injection bug would
 //     otherwise enable. All inline `style="..."` attributes were moved to
@@ -68,6 +79,7 @@ const BASE_SECURITY_HEADERS = {
 const HTML_CSP =
     "default-src 'none'; " +
     "script-src 'self' https://challenges.cloudflare.com; " +
+    "worker-src 'self'; " +
     "style-src 'self'; " +
     "img-src 'self' data:; " +
     "font-src 'self'; " +
@@ -152,12 +164,20 @@ const withVaultPermission = (permission: 'read' | 'write' | 'manage') =>
         checkVaultPermission(req, env, permission, ctx).then((r) => r ?? undefined);
 
 // --- Public routes (no auth required) ---
+// /auth/params must be public: the client needs the Argon2id salt before it can
+// produce the auth secret that would authenticate it. It returns decoy params
+// for unknown emails so it isn't an account-existence oracle.
+router.get('/api/auth/params', handleAuthParams);
 router.post('/api/register', handleRegister);
 router.post('/api/login', handleLogin);
 router.post('/api/login/2fa', handleLoginVerify2fa);
 
 // --- Authenticated user routes ---
+// The auth_version 1 -> 2 upgrade. Authenticated, because the client has just
+// completed a legacy login and holds a session token.
+router.post('/api/auth/upgrade', withAuth, handleAuthUpgrade);
 router.get('/api/users/:userId/encryption-salt', withAuth, handleGetUserEncryptionSalt);
+router.get('/api/users/:userId/public-key', withAuth, handleGetUserPublicKey);
 router.put('/api/users/:userId/update-password', withAuth, handleUpdateMasterPassword);
 router.delete('/api/users/:userId', withAuth, handleDeleteAccount);
 
@@ -175,8 +195,13 @@ router.put('/api/users/me/preferences', withAuth, handleUpdatePreferences);
 // --- Vault routes ---
 router.post('/api/vaults', withAuth, handleCreateVault);
 router.get('/api/vaults', withAuth, handleGetVaults);
+// Registered before the /:vaultId routes so 'key-version' isn't captured as an ID.
+// Permission is checked per vault inside the handler, since it spans several.
+router.post('/api/vaults/key-version/commit', withAuth, handleCommitKeyVersion);
 router.put('/api/vaults/:vaultId/data', withAuth, withVaultPermission('write'), handleUploadVault);
 router.get('/api/vaults/:vaultId/data', withAuth, withVaultPermission('read'), handleDownloadVault);
+router.get('/api/vaults/:vaultId/share', withAuth, withVaultPermission('read'), handleGetVaultShare);
+router.put('/api/vaults/:vaultId/shares', withAuth, withVaultPermission('manage'), handlePutVaultShares);
 router.delete('/api/vaults/:vaultId', withAuth, withVaultPermission('manage'), handleDeleteVault);
 
 // --- Organization routes ---
@@ -184,6 +209,9 @@ router.post('/api/organizations', withAuth, handleCreateOrganization);
 router.get('/api/organizations', withAuth, handleGetOrganizations);
 // Member routes registered before org-level DELETE to avoid path conflicts
 router.get('/api/organizations/:orgId/members', withAuth, handleGetOrgMembers);
+// Public keys of every member, so an admin holding a vault key can wrap it for
+// them without a round trip per member.
+router.get('/api/organizations/:orgId/member-keys', withAuth, handleGetOrgMemberKeys);
 router.post('/api/organizations/:orgId/members', withAuth, handleAddMemberToOrganization);
 router.put('/api/organizations/:orgId/members/:memberUserId', withAuth, handleUpdateMemberRole);
 router.delete('/api/organizations/:orgId/members/:memberUserId', withAuth, handleRemoveMember);
