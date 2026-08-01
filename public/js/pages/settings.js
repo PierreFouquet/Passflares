@@ -5,12 +5,11 @@ import { getPrefs, setPrefs, ALLOWED } from '../prefs.js';
 import { snack } from '../snackbar.js';
 import { confirmDialog, openDialog } from '../dialog.js';
 import { getUserInfo, clearSession } from '../session.js';
-import { reset as resetState, hasPrivateKey, getVaults } from '../state.js';
+import { reset as resetState, hasPrivateKey, getWrappedPrivateKey, getVaults } from '../state.js';
 import { deleteAccount, loadEncryptedVaultData, getVaults as apiGetVaults } from '../api.js';
 import { getTotpStatus, enrollTotp, enableTotp, disableTotp, regenerateRecoveryCodes } from '../api.js';
 import { deriveExistingHierarchy, rotateMasterPassword } from '../auth-flow.js';
 import { checkPasswordStrength } from '../utils.js';
-import { storeSession, getSessionToken } from '../session.js';
 import { copyToClipboard } from '../clipboard.js';
 
 /**
@@ -475,14 +474,15 @@ function openChangePasswordDialog() {
                     // interrupted-re-encryption data loss described in #70.
                     showLoading('Re-sealing your keys…');
                     try {
-                        const { privateKeyEnc } = await rotateMasterPassword({
+                        // rotateMasterPassword parks the re-sealed blob back in
+                        // state; nothing about it needs persisting.
+                        await rotateMasterPassword({
                             email: userInfo.email,
                             userId: userInfo.userId,
                             oldPassword: old,
                             newPassword: next,
-                            privateKeyEnc: userInfo.privateKeyEnc
+                            privateKeyEnc: getWrappedPrivateKey()
                         });
-                        storeSession(getSessionToken(), { ...userInfo, privateKeyEnc });
                         snack.success('Master password changed successfully.');
                         close();
                     } catch (err) {

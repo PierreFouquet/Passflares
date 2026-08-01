@@ -331,3 +331,84 @@ describe('master password rotation (#70)', () => {
         await expect(unwrapPrivateKey(oldKek, rotated.privateKeyEnc)).rejects.toThrow();
     });
 });
+
+describe('nothing sensitive is persisted', () => {
+    // CodeQL, not this suite, caught privateKeyEnc being written to
+    // localStorage. It was ciphertext the server already held, so the practical
+    // exposure was nil — but persisting it bought nothing either, since a reload
+    // clears the in-memory private key and forces a fresh sign-in anyway.
+    //
+    // These assertions pin the rule rather than the one instance: after any
+    // auth operation, storage must contain nothing that helps an attacker who
+    // has scraped it.
+    const FORBIDDEN = [
+        ['the master password', () => PASSWORD],
+        ['a derived auth secret', (bodies) => bodies.find(b => b.authSecret)?.authSecret],
+        ['the sealed private key', (bodies) => bodies.find(b => b.privateKeyEnc)?.privateKeyEnc]
+    ];
+
+    function assertStorageClean(bodies) {
+        const dump = JSON.stringify(localStorage);
+        for (const [label, extract] of FORBIDDEN) {
+            const needle = extract(bodies);
+            if (!needle) continue;
+            expect(dump, `localStorage must not contain ${label}`).not.toContain(needle);
+        }
+        // The unwrapped key never has a serialisable form to leak, but the
+        // wrapped one does — check the field name too, in case a future change
+        // stores a different blob under it.
+        expect(dump).not.toMatch(/privateKeyEnc/);
+        expect(dump).not.toMatch(/authSecret/);
+        expect(dump).not.toMatch(/\bkek\b/);
+    }
+
+    it('after registration', async () => {
+        const { enrollNewAccount } = await import('../../public/js/auth-flow.js');
+        respond({ message: 'ok' }, 201);
+        await enrollNewAccount({ email: EMAIL, password: PASSWORD, turnstileToken: 'tok' });
+        assertStorageClean(sentBodies());
+    });
+
+    it('after a legacy account upgrade', async () => {
+        const { upgradeLegacyAccount } = await import('../../public/js/auth-flow.js');
+        respond([]);
+        respond({ message: 'Account upgraded.', authVersion: 2, legacyVaultsPending: 0 });
+
+        await upgradeLegacyAccount({
+            userId: 1, email: EMAIL, authVersion: 1,
+            encryptionSalt: 'ff'.repeat(16), token: 'jwt'
+        }, PASSWORD);
+
+        assertStorageClean(sentBodies());
+    });
+
+    it('after a password rotation', { timeout: 30_000 }, async () => {
+        const { enrollNewAccount, rotateMasterPassword } = await import('../../public/js/auth-flow.js');
+        respond({ message: 'ok' }, 201);
+        await enrollNewAccount({ email: EMAIL, password: PASSWORD, turnstileToken: 'tok' });
+        const { privateKeyEnc, kdfSalt } = bodyOf('/register');
+
+        respond({ authVersion: 2, kdfSalt, kdfParams: { m: 47104, t: 1, p: 1, len: 32 } });
+        respond({ message: 'ok' });
+        await rotateMasterPassword({
+            email: EMAIL, userId: 1,
+            oldPassword: PASSWORD, newPassword: 'a whole new passphrase!1',
+            privateKeyEnc
+        });
+
+        assertStorageClean(sentBodies());
+    });
+
+    it('keeps the re-sealed key in memory, where a password change can still find it', async () => {
+        // The reason persisting it felt necessary. It isn't: state.js holds it
+        // for the life of the session, which is exactly as long as it is usable.
+        const { setWrappedPrivateKey, getWrappedPrivateKey, reset } = await import('../../public/js/state.js');
+        reset();
+        expect(getWrappedPrivateKey()).toBeNull();
+        setWrappedPrivateKey('iv:ct');
+        expect(getWrappedPrivateKey()).toBe('iv:ct');
+        expect(JSON.stringify(localStorage)).not.toContain('iv:ct');
+        reset();
+        expect(getWrappedPrivateKey()).toBeNull();
+    });
+});

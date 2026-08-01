@@ -167,7 +167,6 @@ export async function gotoAndSeedLogin(page: Page) {
             userId: 1, email: 'tester@example.com',
             authVersion: 2,
             publicKey: 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEbSJxBhqURPxNgUUzX7Y+zZoCpYF1XAvs7/r+YZ/1yaFmeOmh0aVM8In4Zh3/Pt4xzvmMFyxaKOM8fMWO5nzBlA==',
-            privateKeyEnc: '6d28a72fa73f76d885eaec22:9c2036006d4b9215fcdb81690a2ae438a555395ef51c29ad488f4cf6436775b4201e7b5e6c3d0b07803b9854c65b4adface489a9e1fe35d8def152ee8f93126aada21eb91182d2ab13f624a7c80dc09ff13ed1eccbf26bb997a3ef512d1f69984bd97c6fd5743746affa074e0b65748c91943fe7bc67417e0a414195f388e2806dd9806436124a19718fd978894c80120f8e76a5a1a2bd3c6884',
             legacyVaultsPending: 0
         }));
         // Any truthy non-null value satisfies hasPrivateKey() in state.js.

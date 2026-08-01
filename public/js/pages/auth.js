@@ -193,11 +193,11 @@ async function completeLogin(response, kek, masterPassword) {
         // Store the session first: the upgrade calls authenticated endpoints.
         storeSession(token, { userId, email: userEmail, authVersion: AUTH_VERSION_LEGACY });
         try {
-            const { publicKey, privateKeyEnc, legacyVaultsPending } =
+            const { publicKey, legacyVaultsPending } =
                 await upgradeLegacyAccount(response, masterPassword);
             storeSession(token, {
                 userId, email: userEmail, authVersion: 2,
-                publicKey, privateKeyEnc, legacyVaultsPending
+                publicKey, legacyVaultsPending
             });
             snack.success(`Welcome back, ${userEmail} — your account now uses end-to-end key protection.`);
         } finally {
@@ -205,18 +205,15 @@ async function completeLogin(response, kek, masterPassword) {
         }
     } else {
         await establishKeySession(response, kek, masterPassword);
-        // publicKey is persisted (it is public, and needed to wrap keys for
-        // ourselves when creating a vault). privateKeyEnc is persisted too, but
-        // it is ciphertext the server already stores — keeping a copy lets a
-        // password change re-seal it without another round trip. The *unwrapped*
-        // private key is deliberately never persisted: it lives in memory only,
-        // for as long as the KEK derived from the password does.
+        // Only publicKey is persisted — it is public, and creating a vault
+        // needs it to wrap the vault key for ourselves. Neither the unwrapped
+        // private key nor its sealed form goes to localStorage; both live in
+        // memory for the life of the session (see state.js).
         storeSession(token, {
             userId,
             email: userEmail,
             authVersion: response.authVersion,
             publicKey: response.publicKey,
-            privateKeyEnc: response.privateKeyEnc,
             legacyVaultsPending: response.legacyVaultsPending ?? 0
         });
         snack.success(`Welcome back, ${userEmail}`);

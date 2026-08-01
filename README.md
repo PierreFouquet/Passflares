@@ -147,10 +147,40 @@ and an interactive runner (for local development):
 | `npm run test:e2e` | Playwright e2e specs headless, then exits | Verifying full browser flows — also run by CI on every PR |
 | `npm run test:e2e:ui` | Playwright UI Mode — interactive, needs a display | Debugging or authoring a failing/flaky e2e test locally |
 | `npm run test:audit` | `npm audit` at the `moderate` level | Spot-checking dependencies for known vulnerabilities |
-| `npm run test:all` | `test:audit` + Vitest + Playwright, in one shot | A full local pass before a release or large PR |
+| `npm run test:security` | The security-regression subset only | A fast check after touching auth, crypto, or anything parsing untrusted input |
+| `npm run preflight` | `typecheck` + `test:audit` + Vitest + Playwright | **Run this before opening a PR** |
 
-CI runs `npm test` and `npm run test:e2e` on every pull request and push to
-`main`; dependency auditing is handled separately by Dependabot.
+### Layers, and what each one is for
+
+Backend tests come in two flavours, deliberately:
+
+- **Unit** (`tests/backend/*.test.ts`) drive handlers against a mock D1 that
+  returns canned rows keyed by a SQL substring. Fast, good for branch coverage —
+  but structurally unable to catch a misspelled column, a broken `ON CONFLICT`,
+  or a `D1.batch()` that isn't really atomic.
+- **Integration** (`tests/backend/integration/`) build a real in-memory SQLite
+  database with `node:sqlite`, apply every migration in `migrations/`, and run
+  the real SQL. This is where the `auth_version` upgrade's atomicity and
+  rollback behaviour are actually proven, because a live account only gets one
+  attempt at it.
+
+**CodeQL runs on every pull request** and is part of the gate — do not merge a
+red run. It is not reproducible locally without the CodeQL CLI, so anything it
+catches should also gain a behavioural test here, so the next occurrence fails
+before the push rather than after it. Two such tests exist because CodeQL found
+what the local suite missed in 1.1.4:
+
+- `tests/backend/static-server.test.ts` — a malformed URL (`GET /%`) reached an
+  unguarded `decodeURIComponent` and killed the whole server process.
+- The "nothing sensitive is persisted" block in
+  `tests/frontend/auth-flow.test.js` — asserts no auth secret, sealed key, or
+  password ever reaches `localStorage`, after every auth operation.
+
+Both were verified to fail against the code that had the defect. A regression
+test that has never been seen red is a guess.
+
+CI runs `npm test`, `npm run test:e2e` and CodeQL on every pull request and push
+to `main`; dependency auditing is handled separately by Dependabot.
 
 ## Deployment
 

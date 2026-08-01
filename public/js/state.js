@@ -15,6 +15,7 @@
 
 const state = {
     privateKey: null,
+    wrappedPrivateKey: null,
     vaultKeys: new Map(),
     legacyKey: null,
     vaults: [],
@@ -27,6 +28,19 @@ const state = {
 export function getPrivateKey() { return state.privateKey; }
 export function setPrivateKey(key) { state.privateKey = key; }
 export function hasPrivateKey() { return state.privateKey !== null; }
+
+/**
+ * The sealed form of the private key (`AES-256-GCM(kek, PKCS#8)`), needed to
+ * re-seal it under a new KEK during a password change.
+ *
+ * Held in memory, not localStorage. It is ciphertext the server already stores,
+ * so persisting it would leak nothing new — but it would also buy nothing: a
+ * reload clears `privateKey`, which locks the session and forces a fresh
+ * sign-in that returns this value again anyway. Keeping it out of storage keeps
+ * the persisted footprint to what is genuinely needed.
+ */
+export function getWrappedPrivateKey() { return state.wrappedPrivateKey; }
+export function setWrappedPrivateKey(blob) { state.wrappedPrivateKey = blob; }
 
 /** The AES key for one vault, once its share has been unwrapped. */
 export function getVaultKey(vaultId) { return state.vaultKeys.get(vaultId) ?? null; }
@@ -76,6 +90,7 @@ export function getAllDecryptedEntries() {
 
 export function reset() {
     state.privateKey = null;
+    state.wrappedPrivateKey = null;
     state.vaultKeys.clear();
     state.legacyKey = null;
     state.vaults = [];

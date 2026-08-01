@@ -12,7 +12,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:audit": "npm audit --audit-level=moderate",
-    "test:all": "npm run test:audit && vitest run && playwright test"
+    "test:all": "npm run typecheck && npm run test:audit && vitest run && playwright test",
+    "test:security": "vitest run tests/backend/static-server.test.ts tests/backend/integration tests/backend/code-security-invariants.test.ts tests/backend/static-security-audit.test.ts tests/backend/vuln-classes.test.ts tests/backend/worker-security.test.ts tests/backend/vendor-integrity.test.ts tests/frontend/keys.test.js tests/frontend/auth-flow.test.js tests/frontend/vault-keys.test.js",
+    "preflight": "npm run test:all"
   },
   "keywords": [],
   "author": "",

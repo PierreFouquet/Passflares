@@ -24,7 +24,7 @@ import {
 import { deriveLegacyKey, encryptData, decryptData } from './crypto.js';
 import { ARGON2_PARAMS } from './constants.js';
 import { generateSalt, uint8ArrayToHexString } from './utils.js';
-import { setPrivateKey, setVaultKey, setLegacyKey } from './state.js';
+import { setPrivateKey, setWrappedPrivateKey, setVaultKey, setLegacyKey } from './state.js';
 
 export const AUTH_VERSION_LEGACY = 1;
 export const AUTH_VERSION_KEY_HIERARCHY = 2;
@@ -103,6 +103,7 @@ export async function rotateMasterPassword({ email, userId, oldPassword, newPass
         newPrivateKeyEnc
     });
 
+    setWrappedPrivateKey(newPrivateKeyEnc);
     return { kdfSalt, kdfParams, privateKeyEnc: newPrivateKeyEnc };
 }
 
@@ -157,6 +158,7 @@ export async function establishKeySession(response, kek, password) {
         throw new Error('Your stored keys could not be unlocked. They may be corrupt — please contact support.');
     });
     setPrivateKey(privateKey);
+    setWrappedPrivateKey(response.privateKeyEnc);
 
     if (response.legacyVaultsPending > 0 && response.encryptionSalt) {
         setLegacyKey(await deriveLegacyKey(password, response.encryptionSalt));
@@ -234,6 +236,7 @@ export async function upgradeLegacyAccount(response, password) {
     });
 
     setPrivateKey(privateKey);
+    setWrappedPrivateKey(privateKeyEnc);
     for (const [vaultId, key] of newVaultKeys) setVaultKey(vaultId, key);
     // Retained so pre-upgrade organisation vaults can still be rescued (#69).
     if (result.legacyVaultsPending > 0) setLegacyKey(legacyKey);
