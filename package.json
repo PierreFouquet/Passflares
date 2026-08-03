@@ -37,7 +37,7 @@
     "qrcode-svg": "^1.1.0"
   },
   "overrides": {
-    "esbuild": "^0.28.1"
+    "undici": "^7.29.0"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,
