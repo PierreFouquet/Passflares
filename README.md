@@ -301,6 +301,13 @@ not yet fully zero-knowledge. Once the last one is re-keyed the salt is cleared.
   older than 90 days. Routine read events (vault list, vault open, preference
   changes) are deliberately not recorded — they described page loads rather than
   actions, on a table with no retention.
+* **Organisation key convergence:** a vault key can only be shared by someone
+  who already holds it, so membership and key access are separate facts. Any
+  member holding a key reconciles the gaps whenever they open the Organisations
+  page (`GET /api/organizations/:orgId/key-gaps` reports who is entitled but
+  keyless), which is what stops a member invited before their first sign-in from
+  being locked out permanently. The pass only adds shares, so it can never
+  revoke access.
 * **Single-use recovery codes:** redeemed by one guarded `UPDATE` whose
   `used_at IS NULL` predicate is part of the write, so concurrent presentations
   of the same code cannot both succeed (`GHSA-q9vh-jccv-9p23`).

@@ -28,6 +28,7 @@ import {
     handleAddMemberToOrganization,
     handleGetOrgMembers,
     handleGetOrgMemberKeys,
+    handleGetOrgKeyGaps,
     handleUpdateMemberRole,
     handleRemoveMember,
     handleDeleteOrganization
@@ -224,6 +225,9 @@ router.get('/api/organizations/:orgId/members', withAuth, handleGetOrgMembers);
 // Public keys of every member, so an admin holding a vault key can wrap it for
 // them without a round trip per member.
 router.get('/api/organizations/:orgId/member-keys', withAuth, handleGetOrgMemberKeys);
+// Members entitled to an org vault who hold no key share. The client uses this
+// to heal gaps left when a wrap was impossible at add-member time (#69).
+router.get('/api/organizations/:orgId/key-gaps', withAuth, handleGetOrgKeyGaps);
 router.post('/api/organizations/:orgId/members', withAuth, handleAddMemberToOrganization);
 router.put('/api/organizations/:orgId/members/:memberUserId', withAuth, handleUpdateMemberRole);
 router.delete('/api/organizations/:orgId/members/:memberUserId', withAuth, handleRemoveMember);

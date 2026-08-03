@@ -389,6 +389,82 @@ export async function handleGetOrgMemberKeys(request: CustomRequest, env: Env, c
     }
 }
 
+/**
+ * GET /api/organizations/:orgId/key-gaps
+ *
+ * Members who are entitled to an organisation vault but hold no wrapped copy of
+ * its key.
+ *
+ * Membership and key access are separate facts, and only a client that can
+ * already open a vault can close the gap — the server has never seen the key.
+ * Until now the wrap happened exactly once, at the moment a member was added, so
+ * anything that missed that instant never healed: a member invited before their
+ * first sign-in (no keypair to wrap to yet), a vault the inviting admin could not
+ * open, a dropped request. They stayed permanently locked out of vaults they were
+ * entitled to, told to "ask an administrator" with no action that would help.
+ *
+ * This endpoint is the missing half — it lets any key-holding member reconcile.
+ * It reports only entitlement metadata (who is in the org, who holds a share);
+ * no key material, wrapped or otherwise. Restricted to members, not admins, so
+ * convergence does not depend on one specific person signing in.
+ */
+export async function handleGetOrgKeyGaps(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const user = request.user!;
+    const orgId = parseId(request.params?.orgId);
+    if (orgId === null) return jsonResponse({ message: "Bad Request: Invalid organization ID format." }, 400);
+
+    try {
+        const membership = await env.DB.prepare(
+            `SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?`
+        ).bind(user.userId, orgId).first<{ role: string }>();
+
+        if (!membership) {
+            return jsonResponse({ message: "Forbidden: You are not a member of this organization." }, 403);
+        }
+
+        // One row per (org vault, member) pair that has no share. The
+        // `vks.vault_id IS NULL` anti-join is what makes it a gap.
+        const rows = await env.DB.prepare(
+            `SELECT v.id AS vaultId, v.name AS vaultName,
+                    u.id AS userId, u.email AS email, uk.public_key AS publicKey
+             FROM vaults v
+             JOIN vault_access_controls vac ON vac.vault_id = v.id
+                  AND vac.entity_type = 'organization' AND vac.entity_id = 'org_' || ?
+             JOIN user_organizations uo ON uo.organization_id = ?
+             JOIN users u ON u.id = uo.user_id
+             LEFT JOIN user_keys uk ON uk.user_id = u.id
+             LEFT JOIN vault_key_shares vks ON vks.vault_id = v.id AND vks.user_id = u.id
+             WHERE v.owner_type = 'organization' AND vks.vault_id IS NULL
+             ORDER BY v.id`
+        ).bind(orgId, orgId).all().then(r => r.results as unknown as {
+            vaultId: number; vaultName: string; userId: number; email: string; publicKey: string | null;
+        }[]);
+
+        const byVault = new Map<number, {
+            vaultId: number; vaultName: string;
+            missing: Array<{ userId: number; email: string; publicKey: string }>;
+            notUpgraded: Array<{ userId: number; email: string }>;
+        }>();
+
+        for (const row of rows) {
+            if (!byVault.has(row.vaultId)) {
+                byVault.set(row.vaultId, { vaultId: row.vaultId, vaultName: row.vaultName, missing: [], notUpgraded: [] });
+            }
+            const gap = byVault.get(row.vaultId)!;
+            // No public key means they have never signed in since the key
+            // hierarchy shipped, so there is nothing to wrap to yet. Reported
+            // separately — it needs the member to act, not an admin.
+            if (row.publicKey) gap.missing.push({ userId: row.userId, email: row.email, publicKey: row.publicKey });
+            else gap.notUpgraded.push({ userId: row.userId, email: row.email });
+        }
+
+        return jsonResponse({ gaps: Array.from(byVault.values()) });
+    } catch (error: any) {
+        console.error("Get org key gaps error:", error);
+        return jsonResponse({ message: "Internal Server Error while checking vault key access." }, 500);
+    }
+}
+
 export async function handleAddMemberToOrganization(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const body = await safeJson<{ memberEmail?: string; role?: 'member' | 'admin' }>(request);
     const orgIdParam = request.params?.orgId;

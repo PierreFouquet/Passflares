@@ -233,6 +233,16 @@ export async function getOrgMemberKeys(orgId) {
     return apiCall(`/organizations/${orgId}/member-keys`, 'GET');
 }
 
+/**
+ * Members entitled to an org vault who hold no wrapped copy of its key.
+ *
+ * Entitlement metadata only — no key material. Feeds reconcileOrgVaultKeys(),
+ * which closes the gaps this caller can reach.
+ */
+export async function getOrgKeyGaps(orgId) {
+    return apiCall(`/organizations/${orgId}/key-gaps`, 'GET');
+}
+
 export async function updateMemberRole(orgId, userId, role) {
     return apiCall(`/organizations/${orgId}/members/${userId}`, 'PUT', { role });
 }

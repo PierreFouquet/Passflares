@@ -84,6 +84,23 @@ provisioned on deploy** (see Deployment below).
   the asset handler, which served an HTML page under the *API* CSP.
 - **Vault and organisation names and descriptions are length-capped**
   (100 / 500).
+- **Organisation members are no longer stranded without vault keys**
+  ([#69](https://github.com/PierreFouquet/Passflares/issues/69) residue). Key
+  shares were wrapped exactly once, at the instant a member was added, so any
+  wrap that was impossible right then never happened at all — most often because
+  the member was invited before their first sign-in and had no keypair to wrap
+  to. They signed in, and nothing went back to finish the job; they stayed
+  locked out of vaults they were entitled to, told to "ask an administrator",
+  with no action that would actually help. The same applied if the inviting
+  admin could not open a vault, or the request was interrupted.
+  A new `GET /api/organizations/:orgId/key-gaps` reports who is entitled to an
+  org vault but holds no share (entitlement only — never key material), and
+  `reconcileOrgVaultKeys()` closes every gap the caller can reach. It runs
+  automatically whenever a key-holding member opens the Organisations page, and
+  on demand via **Re-share vault keys**. It only ever adds shares, so it can
+  never revoke, and it is safe to run repeatedly. Available to every member, not
+  just admins — making convergence depend on one specific person is what caused
+  the problem.
 
 ### Changed
 
@@ -95,14 +112,22 @@ provisioned on deploy** (see Deployment below).
 
 ### Deployment
 
-Two provisioning steps beyond a normal deploy:
+Two provisioning steps beyond a normal deploy, both completed ahead of this
+release so that shipping it is an ordinary deploy:
 
 1. `npx wrangler d1 migrations apply secure-password-db --remote` — applies
    the new `audit_logs` and `user_recovery_codes` indexes. Purely additive
    (`CREATE INDEX IF NOT EXISTS`), safe to run against the live database ahead
    of the deploy, and compatible with 1.1.4 code.
-2. `wrangler deploy` creates the `RateLimiter` Durable Object namespace from
-   the `new_sqlite_classes` migration. No manual resource creation.
+2. The `RateLimiter` Durable Object namespace was created by the
+   `new_sqlite_classes` migration in
+   [#87](https://github.com/PierreFouquet/Passflares/pull/87), landed
+   separately and deliberately: a class migration is an atomic control-plane
+   operation that only `wrangler deploy` can apply, so the `wrangler versions
+   upload` that branch builds run rejects it outright
+   (`[code: 10211]`) — no branch containing an unapplied migration can have a
+   green build. Splitting it kept that unavoidable red on a nine-file change
+   with no behavioural effect, and left this release building normally.
 
 ## [1.1.4] — 2026-08-01
 
