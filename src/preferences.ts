@@ -12,7 +12,7 @@ import {
     ShapePref,
     AccentPref
 } from './types.js';
-import { jsonResponse } from './utils.js';
+import { jsonResponse, safeJson } from './utils.js';
 import { logAudit } from './auditLog.js';
 
 function isOneOf<T extends string>(value: unknown, allowed: ReadonlyArray<T>): value is T {
@@ -49,15 +49,9 @@ export async function handleUpdatePreferences(request: CustomRequest, env: Env, 
         return jsonResponse({ message: 'Unauthorized.' }, 401);
     }
 
-    let body: Partial<{ theme: unknown; density: unknown; shape: unknown; accent: unknown }>;
-    try {
-        body = await request.json() as typeof body;
-    } catch {
+    const body = await safeJson<Partial<{ theme: unknown; density: unknown; shape: unknown; accent: unknown }>>(request);
+    if (!body) {
         return jsonResponse({ message: 'Invalid JSON body.' }, 400);
-    }
-
-    if (body === null || typeof body !== 'object') {
-        return jsonResponse({ message: 'Invalid request body.' }, 400);
     }
 
     const ipAddress = request.headers.get('CF-Connecting-IP');
@@ -98,7 +92,9 @@ export async function handleUpdatePreferences(request: CustomRequest, env: Env, 
             'SELECT user_id, theme, density, shape, accent, updated_at FROM user_preferences WHERE user_id = ?'
         ).bind(userId).first<UserPreferences>();
 
-        logAudit(env, ctx, userId, 'PREFERENCES_UPDATE', { theme, density, shape, accent }, ipAddress, userAgent);
+        // No PREFERENCES_UPDATE row: the client debounces this by only 350 ms, so
+        // dragging a theme control wrote a burst of audit rows for a cosmetic
+        // setting (#73). Nothing security-relevant is decided here.
         return jsonResponse(saved!);
     } catch (error: any) {
         console.error('Update preferences error:', error);

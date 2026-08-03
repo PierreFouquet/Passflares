@@ -49,22 +49,18 @@ run_worker_first = true
 binding = "VAULTS"
 bucket_name = "secure-vaults-r2"
 
-[[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "912ffecc0a27412ba662c890c9f9d4e2"
-
-# Durable Object for the brute-force limiter. Deployed ahead of the code that
-# uses it: a class migration is an atomic control-plane operation, so it can only
-# be applied by `wrangler deploy` — `wrangler versions upload`, which branch
-# builds run, rejects it outright. Landing it on its own also keeps the blast
-# radius of the lifecycle change to a deploy that changes no behaviour.
+# Brute-force limiter. This replaced a KV namespace: the counter needs an atomic
+# read-modify-write and strong consistency, and KV offers neither, so the "5
+# attempts per 15 minutes" lockout was bypassable by sending requests
+# concurrently (GHSA-vp89-22wm-gjr8). One instance per limiter subject — one IP
+# or one account — never a global singleton.
 [[durable_objects.bindings]]
 name = "RATE_LIMITER"
 class_name = "RateLimiter"
 
-# new_sqlite_classes, not new_classes: key-value backed Durable Object namespaces
-# can no longer be created, and the Workers Free plan has only ever supported the
-# SQLite backend.
+# new_sqlite_classes, not new_classes: key-value backed Durable Object
+# namespaces can no longer be created, and SQLite-backed objects are the only
+# kind the Workers Free plan has ever supported.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RateLimiter"]
@@ -73,6 +69,15 @@ new_sqlite_classes = ["RateLimiter"]
 binding = "DB"
 database_name = "secure-password-db"
 database_id = "b7de341a-1977-44c3-9641-9f455e87a207"
+
+# ========================
+# SCHEDULED TASKS
+# ========================
+# Nightly audit-log retention sweep (03:17 UTC — off the hour, so it isn't
+# competing with everyone else's midnight cron). See scheduled() in
+# src/worker.ts; the window is AUDIT_RETENTION_DAYS in src/auditLog.ts.
+[triggers]
+crons = ["17 3 * * *"]
 
 # ========================
 # OBSERVABILITY

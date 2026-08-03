@@ -9,7 +9,8 @@ import {
     handleGetUserPublicKey,
     handleUpdateMasterPassword
 } from '../../src/auth.js';
-import { createMockDB, createMockEnv, createMockKV, makeRequest, mockCtx } from '../mocks/cloudflare.js';
+import { createMockDB, createMockEnv, makeRequest, mockCtx } from '../mocks/cloudflare.js';
+import { recordFailure, VOLUME_POLICY } from '../../src/rateLimiter.js';
 
 // Mock scrypt — it's tested separately in utils.test.ts and is too slow here.
 // The stand-in hash must be valid hex: timingSafeEqualHex compares decoded bytes
@@ -72,9 +73,21 @@ afterEach(() => {
 function baseEnv(dbResponses = {}) {
     return createMockEnv({
         DB: createMockDB(dbResponses),
-        RATE_LIMIT: createMockKV(),
         JWT_SECRET: SECRET
     });
+}
+
+/**
+ * Drives a limiter subject to its lockout by recording real failures.
+ *
+ * These tests used to stub `RATE_LIMIT.get()` to return a fixed count, which
+ * asserted nothing about the counting itself. Running the real limiter means
+ * the threshold, the increment and the lockout are all under test.
+ */
+async function saturate(env: any, subject: string, times: number, policy = undefined as any) {
+    for (let i = 0; i < times; i++) {
+        await recordFailure(env, [subject], policy);
+    }
 }
 
 // --- handleAuthParams ---
@@ -148,14 +161,13 @@ describe('handleAuthParams', () => {
     });
 
     it('rate limits by IP', async () => {
-        const kv = createMockKV();
-        (kv as any).get = vi.fn(() => Promise.resolve('999'));
         const env = baseEnv();
-        (env as any).RATE_LIMIT = kv;
+        await saturate(env, 'authparams:ip:unknown', VOLUME_POLICY.threshold, VOLUME_POLICY);
 
         const res = await handleAuthParams(
             makeRequest('GET', '/api/auth/params?email=test@example.com') as any, env, mockCtx);
         expect(res.status).toBe(429);
+        expect(res.headers.get('Retry-After')).toMatch(/^\d+$/);
     });
 });
 
@@ -253,10 +265,8 @@ describe('handleRegister', () => {
     });
 
     it('returns 429 after 5 failed register attempts from the same IP', async () => {
-        const kv = createMockKV();
-        (kv as any).get = vi.fn(() => Promise.resolve('5'));
         const env = baseEnv({ 'SELECT id FROM users': { first: null } });
-        (env as any).RATE_LIMIT = kv;
+        await saturate(env, 'register:ip:unknown', 5);
 
         const req = makeRequest('POST', '/api/register', V2_REGISTRATION) as any;
 
@@ -410,16 +420,31 @@ describe('handleLogin', () => {
     });
 
     it('returns 429 when IP is rate limited', async () => {
-        const kv = createMockKV();
-        (kv as any).get = vi.fn(() => Promise.resolve('5')); // 5 failed attempts
         const env = baseEnv();
-        (env as any).RATE_LIMIT = kv;
+        await saturate(env, 'login:ip:unknown', 5);
 
         const req = makeRequest('POST', '/api/login', {
             email: 'test@example.com',
             authSecret: 'a'.repeat(64),
             turnstileToken: VALID_TURNSTILE_TOKEN
         }) as any;
+
+        const res = await handleLogin(req, env, mockCtx);
+        expect(res.status).toBe(429);
+    });
+
+    // The per-account limit is new in 1.1.5. An IP-only cap was the entire
+    // control before, so a distributed attacker sidestepped it completely
+    // (GHSA-vp89-22wm-gjr8).
+    it('returns 429 when the account is rate limited, even from a fresh IP', async () => {
+        const env = baseEnv();
+        await saturate(env, 'login:account:test@example.com', 5);
+
+        const req = makeRequest('POST', '/api/login', {
+            email: 'test@example.com',
+            authSecret: 'a'.repeat(64),
+            turnstileToken: VALID_TURNSTILE_TOKEN
+        }, { 'CF-Connecting-IP': '198.51.100.77' }) as any;
 
         const res = await handleLogin(req, env, mockCtx);
         expect(res.status).toBe(429);

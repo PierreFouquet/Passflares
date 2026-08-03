@@ -2,13 +2,27 @@
 
 import { CustomRequest, Env, Organization, UserOrganization, User, ADMIN_ROLES } from './types.js';
 import { logAudit } from './auditLog.js';
-import { jsonResponse, parseId, normalizeEmail } from './utils.js';
+import {
+    jsonResponse,
+    parseId,
+    normalizeEmail,
+    safeJson,
+    auditErrorCode,
+    isSaneText,
+    MAX_NAME_LENGTH,
+    MAX_DESCRIPTION_LENGTH
+} from './utils.js';
 
 export async function handleCreateOrganization(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const { name, description } = await request.json() as { name: string; description?: string };
+    const body = await safeJson<{ name?: string; description?: string }>(request);
     const user = request.user;
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
+
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+    const { name, description } = body;
 
     if (!user || !user.userId) {
         logAudit(env, ctx, null, 'ORG_CREATE_FAILURE', { reason: 'Unauthorized' }, ipAddress, userAgent);
@@ -17,6 +31,12 @@ export async function handleCreateOrganization(request: CustomRequest, env: Env,
     if (!name) {
         logAudit(env, ctx, user.userId, 'ORG_CREATE_FAILURE', { reason: 'Missing name' }, ipAddress, userAgent);
         return jsonResponse({ message: "Organization name is required." }, 400);
+    }
+    if (!isSaneText(name, MAX_NAME_LENGTH) || !isSaneText(description, MAX_DESCRIPTION_LENGTH)) {
+        logAudit(env, ctx, user.userId, 'ORG_CREATE_FAILURE', { reason: 'Field too long' }, ipAddress, userAgent);
+        return jsonResponse({
+            message: `Organization name must be at most ${MAX_NAME_LENGTH} characters and the description at most ${MAX_DESCRIPTION_LENGTH}.`
+        }, 400);
     }
 
     try {
@@ -51,7 +71,7 @@ export async function handleCreateOrganization(request: CustomRequest, env: Env,
         return jsonResponse({ id: organizationId, name, description: description || null, created_by: user.userId, role: 'super_admin' }, 201);
     } catch (error: any) {
         console.error("Create organization error:", error);
-        logAudit(env, ctx, user.userId, 'ORG_CREATE_FAILURE', { name, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'ORG_CREATE_FAILURE', { name, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while creating organization." }, 500);
     }
 }
@@ -74,11 +94,12 @@ export async function handleGetOrganizations(request: CustomRequest, env: Env, c
              WHERE uo.user_id = ?`
         ).bind(user.userId).all().then(res => res.results as unknown as Organization[]);
 
-        logAudit(env, ctx, user.userId, 'ORG_LIST_SUCCESS', { count: organizations.length }, ipAddress, userAgent);
+        // No ORG_LIST_SUCCESS row: prefetched on every app boot alongside the
+        // vault list, so it recorded page loads rather than actions (#73).
         return jsonResponse(organizations);
     } catch (error: any) {
         console.error("Get organizations error:", error);
-        logAudit(env, ctx, user.userId, 'ORG_LIST_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'ORG_LIST_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while fetching organizations." }, 500);
     }
 }
@@ -112,11 +133,11 @@ export async function handleGetOrgMembers(request: CustomRequest, env: Env, ctx:
              ORDER BY uo.joined_at ASC`
         ).bind(orgId).all().then(res => res.results as unknown as { userId: number; email: string; role: string }[]);
 
-        logAudit(env, ctx, user.userId, 'ORG_GET_MEMBERS_SUCCESS', { orgId, count: members.length }, ipAddress, userAgent);
+        // Read-only listing, fired on every visit to the members view (#73).
         return jsonResponse(members);
     } catch (error: any) {
         console.error("Get org members error:", error);
-        logAudit(env, ctx, user.userId, 'ORG_GET_MEMBERS_FAILURE', { orgId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'ORG_GET_MEMBERS_FAILURE', { orgId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while fetching members." }, 500);
     }
 }
@@ -124,10 +145,13 @@ export async function handleGetOrgMembers(request: CustomRequest, env: Env, ctx:
 export async function handleUpdateMemberRole(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const orgIdParam = request.params?.orgId;
     const memberUserIdParam = request.params?.memberUserId;
-    const { role } = await request.json() as { role: string };
+    const body = await safeJson<{ role?: string }>(request);
     const user = request.user;
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
+
+    if (!body) return jsonResponse({ message: "Invalid JSON body." }, 400);
+    const { role } = body;
 
     if (!user?.userId) return jsonResponse({ message: "Unauthorized." }, 401);
 
@@ -136,7 +160,7 @@ export async function handleUpdateMemberRole(request: CustomRequest, env: Env, c
     if (orgId === null || targetUserId === null)
         return jsonResponse({ message: "Bad Request: Invalid ID format." }, 400);
 
-    if (!['member', 'admin', 'super_admin'].includes(role))
+    if (typeof role !== 'string' || !['member', 'admin', 'super_admin'].includes(role))
         return jsonResponse({ message: "Invalid role. Must be member, admin, or super_admin." }, 400);
 
     if (user.userId === targetUserId)
@@ -178,7 +202,7 @@ export async function handleUpdateMemberRole(request: CustomRequest, env: Env, c
         return jsonResponse({ message: `Role updated to ${role}.` });
     } catch (error: any) {
         console.error("Update member role error:", error);
-        logAudit(env, ctx, user.userId, 'ORG_UPDATE_ROLE_FAILURE', { orgId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'ORG_UPDATE_ROLE_FAILURE', { orgId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while updating role." }, 500);
     }
 }
@@ -264,7 +288,7 @@ export async function handleRemoveMember(request: CustomRequest, env: Env, ctx: 
         });
     } catch (error: any) {
         console.error("Remove member error:", error);
-        logAudit(env, ctx, user.userId, 'ORG_REMOVE_MEMBER_FAILURE', { orgId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'ORG_REMOVE_MEMBER_FAILURE', { orgId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while removing member." }, 500);
     }
 }
@@ -321,7 +345,7 @@ export async function handleDeleteOrganization(request: CustomRequest, env: Env,
         return new Response(null, { status: 204 });
     } catch (error: any) {
         console.error("Delete organization error:", error);
-        logAudit(env, ctx, user.userId, 'ORG_DELETE_FAILURE', { orgId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'ORG_DELETE_FAILURE', { orgId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while deleting organization." }, 500);
     }
 }
@@ -366,19 +390,23 @@ export async function handleGetOrgMemberKeys(request: CustomRequest, env: Env, c
 }
 
 export async function handleAddMemberToOrganization(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const body = await request.json() as { memberEmail: string; role: 'member' | 'admin' };
-    const memberEmail = normalizeEmail(body.memberEmail);
-    const { role } = body;
+    const body = await safeJson<{ memberEmail?: string; role?: 'member' | 'admin' }>(request);
     const orgIdParam = request.params?.orgId;
     const user = request.user;
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
 
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+    const memberEmail = normalizeEmail(body.memberEmail);
+    const { role } = body;
+
     if (!user || !user.userId) {
         logAudit(env, ctx, null, 'ORG_ADD_MEMBER_FAILURE', { reason: 'Unauthorized' }, ipAddress, userAgent);
         return jsonResponse({ message: "Unauthorized." }, 401);
     }
-    if (!orgIdParam || !memberEmail || !['member', 'admin'].includes(role)) {
+    if (!orgIdParam || !memberEmail || typeof role !== 'string' || !['member', 'admin'].includes(role)) {
         logAudit(env, ctx, user.userId, 'ORG_ADD_MEMBER_FAILURE', { reason: 'Missing/invalid fields', orgId: orgIdParam, memberEmail, role }, ipAddress, userAgent);
         return jsonResponse({ message: "Organization ID, member email, and a valid role (member or admin) are required." }, 400);
     }
@@ -424,7 +452,7 @@ export async function handleAddMemberToOrganization(request: CustomRequest, env:
         return jsonResponse({ message: `Member ${memberEmail} added to organization ${organizationId} with role ${role}.` }, 200);
     } catch (error: any) {
         console.error("Add member to organization error:", error);
-        logAudit(env, ctx, user.userId, 'ORG_ADD_MEMBER_FAILURE', { orgId: organizationId, memberEmail, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'ORG_ADD_MEMBER_FAILURE', { orgId: organizationId, memberEmail, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while adding member." }, 500);
     }
 }

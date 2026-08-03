@@ -169,13 +169,69 @@ export function hexStringToUint8Array(hexString: string): Uint8Array {
  * Helper to create a JSON response.
  * @param body The response body object.
  * @param status HTTP status code.
+ * @param extraHeaders Additional headers (e.g. Retry-After on a 429).
  * @returns A Response object.
  */
-export function jsonResponse(body: Record<string, any>, status: number = 200): Response {
+export function jsonResponse(
+    body: Record<string, any>,
+    status: number = 200,
+    extraHeaders: Record<string, string> = {}
+): Response {
     return new Response(JSON.stringify(body), {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...extraHeaders },
         status: status
     });
+}
+
+/**
+ * Parses a JSON request body, returning null instead of throwing.
+ *
+ * Handlers used to destructure `await request.json()` as their first statement,
+ * outside any try. A malformed body therefore threw past the handler into the
+ * catch-all in worker.ts and came back as `500 Service unavailable` — a client
+ * error reported as a server error (#78). Callers turn null into a 400.
+ */
+export async function safeJson<T = Record<string, any>>(request: Request): Promise<T | null> {
+    try {
+        const body = await request.json();
+        // `null`, a bare number, or an array all parse fine but can't be
+        // destructured into the field sets every handler expects.
+        if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
+        return body as T;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * A stable, non-revealing label for an exception, for audit payloads.
+ *
+ * Audit rows are persisted for the whole retention window, so the raw
+ * `error.message` should not go in one — it can carry internal detail such as
+ * SQL fragments or storage keys (#73). The full error still reaches the Workers
+ * observability logs via the `console.error` that every call site pairs with
+ * this; only the durable copy is reduced to a code.
+ */
+export function auditErrorCode(error: unknown): string {
+    if (error instanceof Error) return error.name || 'Error';
+    return typeof error === 'string' ? 'Error' : 'UnknownError';
+}
+
+// Field length caps (#78). Nothing bounded user-supplied strings before they
+// reached D1 — or, worse, scrypt: `masterPassword` was unbounded and fed
+// straight into a memory-hard KDF doing ~48 MiB of work per call, so a large
+// body was an amplification primitive on an unauthenticated endpoint.
+export const MAX_NAME_LENGTH = 100;
+export const MAX_DESCRIPTION_LENGTH = 500;
+export const MAX_SECRET_LENGTH = 1024;
+
+/**
+ * Bounds an optional free-text field. `undefined`/`null` pass (the caller
+ * decides whether the field is required); a non-string or an over-long one fails.
+ */
+export function isSaneText(value: unknown, max: number): boolean {
+    if (value === undefined || value === null) return true;
+    return typeof value === 'string' && value.length <= max;
 }
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';

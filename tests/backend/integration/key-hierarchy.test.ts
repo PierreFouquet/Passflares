@@ -16,7 +16,8 @@
 //   - vault key shares are enforced by real foreign keys and real permissions
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createTestD1, createTestR2, createTestKV, type TestD1 } from '../../mocks/d1.js';
+import { createTestD1, createTestR2, type TestD1 } from '../../mocks/d1.js';
+import { createMockRateLimiter } from '../../mocks/cloudflare.js';
 import { makeRequest, mockCtx } from '../../mocks/cloudflare.js';
 
 vi.mock('../../../src/auditLog.js', () => ({ logAudit: vi.fn() }));
@@ -40,7 +41,7 @@ beforeEach(() => {
     env = {
         DB: d1,
         VAULTS: createTestR2(),
-        RATE_LIMIT: createTestKV(),
+        RATE_LIMITER: createMockRateLimiter(),
         JWT_SECRET: 'test-jwt-secret-32-chars-minimum!!',
         TURNSTILE_KEY: 'test-turnstile-key',
         TOTP_ENC_KEY: 'test-totp-enc-key-32-chars-minimum!!'

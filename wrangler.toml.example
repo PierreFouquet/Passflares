@@ -4,22 +4,23 @@
 #
 # Setup (one-time):
 #   1. Create a D1 database:        npx wrangler d1 create secure-password-db
-#   2. Create a KV namespace:       npx wrangler kv namespace create RATE_LIMIT
-#   3. Create an R2 bucket:         npx wrangler r2 bucket create secure-vaults-r2
-#   4. Paste the printed IDs into the fields below.
-#   5. Set the route/zone to a domain you control (or remove the `routes`
+#   2. Create an R2 bucket:         npx wrangler r2 bucket create secure-vaults-r2
+#   3. Paste the printed IDs into the fields below.
+#      (The rate limiter is a Durable Object — no resource to create, the
+#      `new_sqlite_classes` migration below provisions it on first deploy.)
+#   4. Set the route/zone to a domain you control (or remove the `routes`
 #      block to deploy to the default *.workers.dev subdomain).
-#   6. Apply migrations locally:    npx wrangler d1 migrations apply secure-password-db --local
+#   5. Apply migrations locally:    npx wrangler d1 migrations apply secure-password-db --local
 #      ...and remotely once ready:  npx wrangler d1 migrations apply secure-password-db --remote
-#   7. Set secrets:
+#   6. Set secrets:
 #         npx wrangler secret put JWT_SECRET       # openssl rand -base64 64
 #         npx wrangler secret put TURNSTILE_KEY    # secret key from your Turnstile widget
 #         npx wrangler secret put TOTP_ENC_KEY     # openssl rand -base64 48 (>= 32 chars)
 #      TOTP_ENC_KEY encrypts users' 2FA secrets at rest. Keep it stable — rotating
 #      it invalidates every existing two-factor enrollment.
-#   8. Update the Turnstile sitekey in `public/index.html` to match your widget.
+#   7. Update the Turnstile sitekey in `public/index.html` to match your widget.
 #
-# Resource IDs (database_id, KV namespace id, R2 bucket name) are not secrets
+# Resource IDs (database_id, R2 bucket name) are not secrets
 # — they only identify resources in your account, and access still requires
 # your Cloudflare credentials — but they should still be yours, not the
 # upstream maintainer's.
@@ -49,22 +50,19 @@ run_worker_first = true
 binding = "VAULTS"
 bucket_name = "REPLACE_ME"  # e.g. "secure-vaults-r2"
 
-[[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "REPLACE_ME"  # from `wrangler kv namespace create RATE_LIMIT`
-
-# Durable Object for the brute-force limiter. Deployed ahead of the code that
-# uses it: a class migration is an atomic control-plane operation, so it can only
-# be applied by `wrangler deploy` — `wrangler versions upload`, which branch
-# builds run, rejects it outright. Landing it on its own also keeps the blast
-# radius of the lifecycle change to a deploy that changes no behaviour.
+# Brute-force limiter for /api/login, /api/register and the 2FA verify paths.
+# A Durable Object rather than KV: the counter needs an atomic
+# read-modify-write and strong consistency, and KV offers neither, so the
+# lockout was bypassable by sending requests concurrently
+# (GHSA-vp89-22wm-gjr8). Nothing to create by hand — the migration below
+# provisions the namespace on your first `wrangler deploy`.
 [[durable_objects.bindings]]
 name = "RATE_LIMITER"
 class_name = "RateLimiter"
 
-# new_sqlite_classes, not new_classes: key-value backed Durable Object namespaces
-# can no longer be created, and the Workers Free plan has only ever supported the
-# SQLite backend.
+# new_sqlite_classes, not new_classes: key-value backed Durable Object
+# namespaces can no longer be created, and the Workers Free plan has only
+# ever supported the SQLite backend.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RateLimiter"]
@@ -73,6 +71,11 @@ new_sqlite_classes = ["RateLimiter"]
 binding = "DB"
 database_name = "secure-password-db"
 database_id = "REPLACE_ME"  # from `wrangler d1 create secure-password-db`
+
+# Nightly audit-log retention sweep. Without this the scheduled() handler in
+# src/worker.ts never runs and the audit_logs table grows without bound (#73).
+[triggers]
+crons = ["17 3 * * *"]
 
 [observability.logs]
 enabled = true

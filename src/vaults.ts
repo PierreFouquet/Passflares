@@ -5,7 +5,15 @@ import {
     versionedObjectKey, VALID_KEY_VERSIONS
 } from './types.js';
 import { logAudit } from './auditLog.js';
-import { jsonResponse, parseId } from './utils.js';
+import {
+    jsonResponse,
+    parseId,
+    safeJson,
+    auditErrorCode,
+    isSaneText,
+    MAX_NAME_LENGTH,
+    MAX_DESCRIPTION_LENGTH
+} from './utils.js';
 import { resolveVaultAccess, permissionSatisfies } from './middleware.js';
 
 // Note on the SELECT lists below: r2_object_key is deliberately never returned
@@ -14,16 +22,21 @@ import { resolveVaultAccess, permissionSatisfies } from './middleware.js';
 // the user_N/org_N owner prefix plus a UUID for no benefit (#80).
 
 export async function handleCreateVault(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const { name, description, ownerId, ownerType, initialPermissionLevel } = await request.json() as {
-        name: string;
+    const body = await safeJson<{
+        name?: string;
         description?: string;
-        ownerId: string; // 'user_X' or 'org_Y'
-        ownerType: 'user' | 'organization';
-        initialPermissionLevel: 'read' | 'write' | 'manage';
-    };
+        ownerId?: string; // 'user_X' or 'org_Y'
+        ownerType?: 'user' | 'organization';
+        initialPermissionLevel?: 'read' | 'write' | 'manage';
+    }>(request);
     const user = request.user;
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
+
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+    const { name, description, ownerId, ownerType, initialPermissionLevel } = body;
 
     if (!user || !user.userId) {
         logAudit(env, ctx, null, 'VAULT_CREATE_FAILURE', { reason: 'Unauthorized' }, ipAddress, userAgent);
@@ -32,6 +45,14 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
     if (!name || !ownerId || !ownerType || !initialPermissionLevel) {
         logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Missing fields' }, ipAddress, userAgent);
         return jsonResponse({ message: "Vault name, owner ID, owner type, and initial permission are required." }, 400);
+    }
+    // Nothing bounded these before they reached D1 (#78).
+    if (!isSaneText(name, MAX_NAME_LENGTH) || !isSaneText(description, MAX_DESCRIPTION_LENGTH) ||
+        !isSaneText(ownerId, 64)) {
+        logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Field too long' }, ipAddress, userAgent);
+        return jsonResponse({
+            message: `Vault name must be at most ${MAX_NAME_LENGTH} characters and the description at most ${MAX_DESCRIPTION_LENGTH}.`
+        }, 400);
     }
     if (!['user', 'organization'].includes(ownerType)) {
         logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { reason: 'Invalid owner type', ownerType }, ipAddress, userAgent);
@@ -115,7 +136,7 @@ export async function handleCreateVault(request: CustomRequest, env: Env, ctx: E
         }, 201);
     } catch (error: any) {
         console.error("Create vault error:", error);
-        logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { name, ownerId, ownerType, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'VAULT_CREATE_FAILURE', { name, ownerId, ownerType, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while creating vault." }, 500);
     }
 }
@@ -182,11 +203,12 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
         const distinctVaults = Array.from(allVaultsMap.values())
             .map(v => ({ ...v, has_key_share: heldKeys.has(v.id) }));
 
-        logAudit(env, ctx, user.userId, 'VAULT_LIST_SUCCESS', { count: distinctVaults.length }, ipAddress, userAgent);
+        // No VAULT_LIST_SUCCESS row: main.js prefetches vaults on every app boot,
+        // so this fired before the user had done anything (#73).
         return jsonResponse(distinctVaults);
     } catch (error: any) {
         console.error("Get vaults error:", error);
-        logAudit(env, ctx, user.userId, 'VAULT_LIST_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'VAULT_LIST_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while fetching vaults." }, 500);
     }
 }
@@ -205,13 +227,18 @@ export async function handleGetVaults(request: CustomRequest, env: Env, ctx: Exe
  */
 export async function handleUploadVault(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const vaultIdParam = request.params?.vaultId;
-    const { encryptedData, keyVersion } = await request.json() as {
-        encryptedData: EncryptedVaultBlob;
+    const body = await safeJson<{
+        encryptedData?: EncryptedVaultBlob;
         keyVersion?: string;
-    };
+    }>(request);
     const user = request.user;
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
+
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+    const { encryptedData, keyVersion } = body;
 
     if (!user || !user.userId) {
         logAudit(env, ctx, null, 'VAULT_UPLOAD_FAILURE', { reason: 'Unauthorized' }, ipAddress, userAgent);
@@ -254,7 +281,7 @@ export async function handleUploadVault(request: CustomRequest, env: Env, ctx: E
             : new Response(null, { status: 204 });
     } catch (error: any) {
         console.error("Upload vault error:", error);
-        logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'VAULT_UPLOAD_FAILURE', { vaultId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while uploading vault data." }, 500);
     }
 }
@@ -274,9 +301,13 @@ export async function handleCommitKeyVersion(request: CustomRequest, env: Env, c
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
 
-    const { vaults } = await request.json() as {
+    const body = await safeJson<{
         vaults?: Array<{ vaultId: number; keyVersion: string }>;
-    };
+    }>(request);
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+    const { vaults } = body;
 
     if (!Array.isArray(vaults) || vaults.length === 0) {
         return jsonResponse({ message: "A non-empty list of vaults is required." }, 400);
@@ -326,7 +357,7 @@ export async function handleCommitKeyVersion(request: CustomRequest, env: Env, c
         return jsonResponse({ message: "Key versions committed.", committed: vaults.length });
     } catch (error: any) {
         console.error("Commit key version error:", error);
-        logAudit(env, ctx, user.userId, 'VAULT_KEY_COMMIT_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'VAULT_KEY_COMMIT_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while committing key versions." }, 500);
     }
 }
@@ -365,18 +396,19 @@ export async function handleDownloadVault(request: CustomRequest, env: Env, ctx:
         const object = await env.VAULTS.get(versionedObjectKey(vault.r2_object_key, keyVersion));
         if (object === null) {
             // If the R2 object doesn't exist, it means the vault is new/empty
-            logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_SUCCESS', { vaultId, status: 'empty' }, ipAddress, userAgent);
             return new Response(null, { status: 204 }); // 204 No Content for empty vault
         }
 
         // R2 object content is usually a ReadableStream or ArrayBuffer
         const encryptedData: EncryptedVaultBlob = await object.json();
 
-        logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_SUCCESS', { vaultId, keyVersion }, ipAddress, userAgent);
+        // No VAULT_DOWNLOAD_SUCCESS row: one per vault open, on a table with no
+        // retention (#73). VAULT_DOWNLOAD_FAILURE and VAULT_ACCESS_DENIED —
+        // the security-relevant halves — are still recorded.
         return jsonResponse({ encryptedData, keyVersion });
     } catch (error: any) {
         console.error("Download vault error:", error);
-        logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'VAULT_DOWNLOAD_FAILURE', { vaultId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while downloading vault data." }, 500);
     }
 }
@@ -428,11 +460,15 @@ export async function handlePutVaultShares(request: CustomRequest, env: Env, ctx
     const vaultId = parseId(request.params?.vaultId);
     if (vaultId === null) return jsonResponse({ message: "Bad Request: Invalid vault ID format." }, 400);
 
-    const { shares, keyVersion, replace } = await request.json() as {
+    const body = await safeJson<{
         shares?: Array<{ userId: number; wrappedKey: string; ephemeralPubkey: string }>;
         keyVersion?: string;
         replace?: boolean;
-    };
+    }>(request);
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+    const { shares, keyVersion, replace } = body;
 
     if (!Array.isArray(shares) || shares.length === 0) {
         return jsonResponse({ message: "A non-empty list of key shares is required." }, 400);
@@ -488,7 +524,7 @@ export async function handlePutVaultShares(request: CustomRequest, env: Env, ctx
         return jsonResponse({ message: "Vault key shares updated.", count: shares.length });
     } catch (error: any) {
         console.error("Put vault shares error:", error);
-        logAudit(env, ctx, user.userId, 'VAULT_SHARE_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'VAULT_SHARE_FAILURE', { vaultId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while updating vault key shares." }, 500);
     }
 }
@@ -549,7 +585,7 @@ export async function handleDeleteVault(request: CustomRequest, env: Env, ctx: E
         return new Response(null, { status: 204 });
     } catch (error: any) {
         console.error("Delete vault error:", error);
-        logAudit(env, ctx, user.userId, 'VAULT_DELETE_FAILURE', { vaultId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'VAULT_DELETE_FAILURE', { vaultId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error while deleting vault." }, 500);
     }
 }

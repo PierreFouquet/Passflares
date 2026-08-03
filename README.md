@@ -6,15 +6,17 @@ A modern and secure password manager which runs on the Cloudflare Stack.
 
 * **Zero-knowledge key hierarchy:** your master password never leaves your browser. It is stretched with Argon2id, then split into two independent values: an authentication secret sent to the server, and a key-encryption key that stays local. The server cannot derive any vault key from what it stores. See [Security model](#security-model).
 * **Client-Side Encryption:** All sensitive vault data is encrypted in your browser with AES-256-GCM before being sent to Cloudflare R2.
-* **Serverless Architecture:** Cloudflare Workers for backend logic, D1 for metadata, R2 for encrypted vault blobs, and KV for rate-limit counters — global performance with no servers to run.
+* **Serverless Architecture:** Cloudflare Workers for backend logic, D1 for metadata, R2 for encrypted vault blobs, and a Durable Object for the brute-force limiter — global performance with no servers to run.
 * **Organisations & Shared Vaults:** Create organisations, invite members, assign Member / Admin / Owner roles, and share vaults across a team. Each vault has its own key, wrapped separately for every member.
 * **Password Generator:** Built-in cryptographically-strong generator inside the entry composer.
 * **Password Strength & Re-use Detection:** Dashboard surfaces weak and re-used passwords across decrypted vaults.
 * **Safe Master Password Change:** Changing your master password re-seals a single key blob. Vault contents are never rewritten, so an interrupted change cannot damage your data.
 * **Two-Factor Authentication:** TOTP authenticator apps with single-use recovery codes.
 * **Inactivity Logout:** Automatic session termination (5 minutes) for enhanced security.
-* **Rate Limiting:** Failed login attempts are rate-limited via KV to prevent brute-force attacks.
-* **Audit Logging:** Sensitive actions are written to a server-side audit log. (There is no admin UI for reading it yet — see [#73](https://github.com/PierreFouquet/Passflares/issues/73).)
+* **Rate Limiting:** Failed login attempts are rate-limited per account *and* per IP by a
+  Durable Object, with exponential backoff.
+* **Audit Logging:** Sensitive actions are written to a server-side audit log, readable by
+  the account they belong to under **Settings → Recent activity**, and swept after 90 days.
 * **Data Export:** Export your encrypted vault data for backup.
 * **Theme & Density Preferences:** Dark / light / system themes, comfortable / compact density, accent colour, and shape — persisted per user.
 * **Self-hosted Fonts:** No third-party font CDN calls; Inter and a Material Symbols subset are served from the worker.
@@ -102,7 +104,7 @@ Passflares/
 │   └── mocks/                       # Shared test fixtures and mocks
 ├── package.json
 ├── tsconfig.json
-├── wrangler.toml                    # Worker config (D1, R2, KV, assets)
+├── wrangler.toml                    # Worker config (D1, R2, Durable Object, assets, cron)
 ├── vitest.config.ts
 ├── playwright.config.ts
 ├── LICENSE
@@ -130,7 +132,7 @@ To set up and run locally:
    * `TURNSTILE_KEY` — the example file contains the Cloudflare always-passes test key, which is fine for local dev
    * `TOTP_ENC_KEY` — generate with `openssl rand -base64 32`. Required: `src/totp.ts` fails closed without it, so 2FA enrollment returns 500 if it is unset.
    * `.dev.vars` is gitignored and read automatically by `wrangler dev`.
-7. **Update `wrangler.toml`** with your own D1 `database_id`, R2 bucket, and KV namespace id if you're deploying.
+7. **Update `wrangler.toml`** with your own D1 `database_id` and R2 bucket if you're deploying. The rate-limiter Durable Object needs no ID — the `new_sqlite_classes` migration provisions it on first deploy.
 8. **Run the dev server:** `npm run dev` (wraps `wrangler dev`).
 9. The app is served at the URL printed by Wrangler (typically `http://127.0.0.1:8787/`).
 
@@ -276,27 +278,46 @@ not yet fully zero-knowledge. Once the last one is re-keyed the salt is cleared.
 * **Bot protection:** Cloudflare Turnstile is enforced server-side on both
   `/api/register` and `/api/login` — a missing or invalid token blocks the
   request before any DB or scrypt work happens.
-* **Rate limiting:** `/api/login`, `/api/register` and `/api/auth/params` are
-  KV-backed rate limited per IP. `/api/auth/params` returns deterministic decoy
-  parameters for unknown emails, so it cannot be used to enumerate accounts.
+* **Rate limiting:** `/api/login`, `/api/register`, the 2FA verify paths and the
+  password re-authentication paths are limited by a Durable Object
+  (`src/rateLimiter.ts`) — one instance per subject, doing a serialised
+  read-modify-write. Credential endpoints are capped per **account as well as
+  per IP**, so a distributed attacker cannot sidestep an IP cap and one abuser
+  cannot lock out a shared NAT egress. Lockouts start at 15 minutes and double
+  per additional failure, to a 24-hour ceiling. This replaced a KV counter,
+  which could not be atomic — the read and the write were separate operations
+  and reads are eventually consistent, so concurrent requests all saw the same
+  pre-increment value (`GHSA-vp89-22wm-gjr8`). `/api/auth/params` returns
+  deterministic decoy parameters for unknown emails, so it cannot be used to
+  enumerate accounts.
 * **Constant-time comparison:** stored verifiers are compared with a
   branch-free routine rather than `===`.
-* **Audit logging:** every authentication, vault-management, and
-  organisation event is written to the D1 `audit_logs` table.
+* **Audit logging:** every authentication, vault-management and organisation
+  event is written to the D1 `audit_logs` table via `ctx.waitUntil()`, so the
+  write is not cancelled when the response returns — which previously made the
+  fast-return failure events (`LOGIN_FAILURE`, `AUTH_FAILURE`,
+  `VAULT_ACCESS_DENIED`) the most likely of all to be lost. Each account can read
+  its own events at `GET /api/users/me/audit-log`; a nightly cron deletes rows
+  older than 90 days. Routine read events (vault list, vault open, preference
+  changes) are deliberately not recorded — they described page loads rather than
+  actions, on a table with no retention.
+* **Single-use recovery codes:** redeemed by one guarded `UPDATE` whose
+  `used_at IS NULL` predicate is part of the write, so concurrent presentations
+  of the same code cannot both succeed (`GHSA-q9vh-jccv-9p23`).
 * **Auto sign-out:** the client signs the user out after 5 minutes of
   inactivity; the JWT itself expires after 1 hour server-side.
 
 ## Forking and self-hosting
 
 The committed `wrangler.toml` references the upstream maintainer's
-Cloudflare resources (D1 database ID, KV namespace ID, R2 bucket, and the
+Cloudflare resources (D1 database ID, R2 bucket, and the
 `passflares.com` route). Those are not secrets, but they will not work
 for you — `wrangler deploy` will fail with permission errors. To stand up
 your own copy:
 
 1. Copy the template: `cp wrangler.toml.example wrangler.toml`
 2. Follow the comment block at the top of that file: create your own D1
-   database, KV namespace, and R2 bucket via the Wrangler CLI, then paste
+   database and R2 bucket via the Wrangler CLI, then paste
    the printed IDs into `wrangler.toml`.
 3. Set `JWT_SECRET` and `TURNSTILE_KEY` as Cloudflare secrets (see
    Deployment above).

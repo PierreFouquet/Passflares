@@ -111,6 +111,18 @@ export async function getTotpStatus() {
     return apiCall('/2fa/status', 'GET');
 }
 
+/**
+ * The signed-in account's own audit events, newest first.
+ *
+ * `before` is the previous page's `nextBefore` — keyset pagination, so pages
+ * stay stable as new events arrive rather than shifting under an offset.
+ */
+export async function getAuditLog({ limit = 25, before = null } = {}) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (before) params.set('before', before);
+    return apiCall(`/users/me/audit-log?${params}`, 'GET');
+}
+
 export async function enrollTotp(reauth = null) {
     return apiCall('/2fa/enroll', 'POST', reauth ?? {}, true, { suppressAuthRedirect: true });
 }

@@ -11,7 +11,6 @@ import worker from '../../src/worker.js';
 import {
     createMockDB,
     createMockEnv,
-    createMockKV,
     mockCtx
 } from '../mocks/cloudflare.js';
 
@@ -34,10 +33,9 @@ function tokenFor(userId: number, email = 'u@example.test') {
     return sign({ userId, email }, SECRET, { expiresIn: '1h' });
 }
 
-function envWith(dbResponses = {}, kv?: KVNamespace) {
+function envWith(dbResponses = {}) {
     return createMockEnv({
         DB: createMockDB(dbResponses),
-        RATE_LIMIT: kv ?? createMockKV(),
         JWT_SECRET: SECRET
     });
 }
@@ -302,7 +300,7 @@ describe('SQL injection (behavioural)', () => {
                     turnstileToken: 'ok'
                 }
             }),
-            envWith({}, createMockKV()),
+            envWith({}),
             mockCtx
         );
         // Should be a normal 201/409/4xx — never an unhandled 500.
@@ -318,7 +316,7 @@ describe('SQL injection (behavioural)', () => {
                     turnstileToken: 'ok'
                 }
             }),
-            envWith({}, createMockKV()),
+            envWith({}),
             mockCtx
         );
         expect(res.status).not.toBe(500);
@@ -334,7 +332,7 @@ describe('Oversize body handling', () => {
             apiReq('POST', '/api/login', {
                 body: { email: 'x@x', masterPassword: huge, turnstileToken: 'ok' }
             }),
-            envWith({}, createMockKV()),
+            envWith({}),
             mockCtx
         );
         // 200 is fine (login attempt with junk creds), as is 400/401/429.
@@ -350,7 +348,7 @@ describe('Login enumeration — response sameness', () => {
             apiReq('POST', '/api/login', {
                 body: { email: 'nobody@nowhere', masterPassword: 'x', turnstileToken: 'ok' }
             }),
-            envWith({}, createMockKV()),
+            envWith({}),
             mockCtx
         );
         expect(r1.status).toBe(401);
@@ -371,7 +369,7 @@ describe('Login enumeration — response sameness', () => {
                         encryption_salt: 'esalt'
                     }
                 }
-            }, createMockKV()),
+            }),
             mockCtx
         );
         expect(r2.status).toBe(401);
@@ -395,7 +393,7 @@ describe('Error responses — information leakage', () => {
             headers: { 'Content-Type': 'application/json' },
             body: 'not-json{'
         });
-        const res = await worker.fetch(req, envWith({}, createMockKV()), mockCtx);
+        const res = await worker.fetch(req, envWith({}), mockCtx);
         const text = await res.text();
         expect(text).not.toMatch(/at \w+\.\w+ \(/); // no stack frames
         expect(text).not.toMatch(/SyntaxError/);
