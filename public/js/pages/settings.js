@@ -7,7 +7,7 @@ import { confirmDialog, openDialog } from '../dialog.js';
 import { getUserInfo, clearSession } from '../session.js';
 import { reset as resetState, hasPrivateKey, getWrappedPrivateKey, getVaults } from '../state.js';
 import { deleteAccount, loadEncryptedVaultData, getVaults as apiGetVaults } from '../api.js';
-import { getTotpStatus, enrollTotp, enableTotp, disableTotp, regenerateRecoveryCodes } from '../api.js';
+import { getTotpStatus, enrollTotp, enableTotp, disableTotp, regenerateRecoveryCodes, getAuditLog } from '../api.js';
 import { deriveExistingHierarchy, rotateMasterPassword } from '../auth-flow.js';
 import { checkPasswordStrength } from '../utils.js';
 import { copyToClipboard } from '../clipboard.js';
@@ -66,6 +66,122 @@ export function renderSettingsPage({ mount }) {
 
     // Two-factor authentication section
     initTotpSection(mount);
+
+    // Recent account activity
+    initActivitySection(mount);
+}
+
+// ── Recent activity ────────────────────────────────
+//
+// The read side of the audit log (#73). Scoped to the signed-in account by the
+// session token, so it needs no admin role — and it is what makes the README's
+// audit-logging claim true. Its real job is letting someone spot a sign-in they
+// don't recognise, so failures are surfaced, not hidden.
+
+const PAGE_SIZE = 25;
+
+// Only actions a person can act on. Anything unmapped is skipped rather than
+// shown raw: an internal action name in a security view is noise at best and
+// alarming at worst.
+const ACTIVITY_LABELS = {
+    LOGIN_SUCCESS: ['Signed in', 'login'],
+    LOGIN_FAILURE: ['Failed sign-in attempt', 'warning'],
+    LOGIN_2FA_REQUIRED: ['Two-factor prompt issued', 'shield'],
+    LOGIN_2FA_FAILURE: ['Failed two-factor attempt', 'warning'],
+    REGISTER_SUCCESS: ['Account created', 'person_add'],
+    AUTH_FAILURE: ['Rejected session token', 'warning'],
+    AUTH_UPGRADE_SUCCESS: ['Account security upgraded', 'upgrade'],
+    UPDATE_PASSWORD_SUCCESS: ['Master password changed', 'key'],
+    UPDATE_PASSWORD_FAILURE: ['Failed master-password change', 'warning'],
+    TOTP_ENABLED: ['Two-factor authentication enabled', 'verified_user'],
+    TOTP_DISABLED: ['Two-factor authentication disabled', 'remove_moderator'],
+    TOTP_CHANGED: ['Authenticator app changed', 'sync'],
+    TOTP_ENROLL_START: ['Two-factor setup started', 'shield'],
+    TOTP_ENABLE_FAILURE: ['Failed two-factor setup attempt', 'warning'],
+    TOTP_DISABLE_FAILURE: ['Failed two-factor removal attempt', 'warning'],
+    RECOVERY_CODES_REGENERATED: ['Recovery codes regenerated', 'password'],
+    VAULT_CREATE_SUCCESS: ['Vault created', 'add'],
+    VAULT_DELETE_SUCCESS: ['Vault deleted', 'delete'],
+    VAULT_SHARE_SUCCESS: ['Vault access shared', 'group'],
+    VAULT_ACCESS_DENIED: ['Vault access denied', 'block'],
+    ORG_CREATE_SUCCESS: ['Organisation created', 'corporate_fare'],
+    ORG_DELETE_SUCCESS: ['Organisation deleted', 'delete'],
+    ORG_ADD_MEMBER_SUCCESS: ['Member added to organisation', 'person_add'],
+    ORG_REMOVE_MEMBER_SUCCESS: ['Member removed from organisation', 'person_remove'],
+    ORG_UPDATE_ROLE_SUCCESS: ['Member role changed', 'manage_accounts']
+};
+
+function formatEventTime(iso) {
+    const when = new Date(iso);
+    if (Number.isNaN(when.getTime())) return iso;
+    return when.toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+    });
+}
+
+async function initActivitySection(mount) {
+    const section = mount.querySelector('[data-activity-section]');
+    if (!section) return;
+
+    const hintEl = section.querySelector('[data-activity-hint]');
+    const listEl = section.querySelector('[data-activity-list]');
+    const moreBtn = section.querySelector('[data-action="activity-more"]');
+
+    let cursor = null;
+    let shown = 0;
+
+    function appendEvents(events) {
+        for (const event of events) {
+            const mapped = ACTIVITY_LABELS[event.action];
+            if (!mapped) continue;
+            const [label, icon] = mapped;
+
+            const row = cloneTemplate('tpl-activity-row');
+            // textContent throughout — an audit payload is attacker-influenced
+            // (a User-Agent, an email from a failed sign-in), so nothing here
+            // may ever be interpolated as HTML.
+            row.querySelector('[data-activity-action]').textContent = label;
+            row.querySelector('[data-activity-icon]').textContent = icon;
+            row.querySelector('[data-activity-time]').textContent = formatEventTime(event.timestamp);
+
+            const ipEl = row.querySelector('[data-activity-ip]');
+            if (event.ipAddress) {
+                ipEl.textContent = event.ipAddress;
+                ipEl.classList.remove('hidden');
+            }
+
+            listEl.appendChild(row);
+            shown += 1;
+        }
+    }
+
+    async function loadPage() {
+        if (moreBtn) moreBtn.disabled = true;
+        try {
+            const { events, nextBefore, retentionDays } = await getAuditLog({ limit: PAGE_SIZE, before: cursor });
+            appendEvents(events ?? []);
+            cursor = nextBefore ?? null;
+
+            if (hintEl) {
+                hintEl.textContent = shown === 0
+                    ? 'No account activity recorded yet.'
+                    : `Security events on your account, newest first. Kept for ${retentionDays} days.`;
+            }
+            moreBtn?.classList.toggle('hidden', !cursor);
+        } catch (err) {
+            // Deliberately not silent. Someone opening this panel is usually
+            // checking whether their account is safe; an empty list would answer
+            // "nothing happened", which is not what a failed fetch means.
+            if (hintEl) hintEl.textContent = 'Could not load recent activity.';
+            moreBtn?.classList.add('hidden');
+        } finally {
+            if (moreBtn) moreBtn.disabled = false;
+        }
+    }
+
+    moreBtn?.addEventListener('click', loadPage);
+    await loadPage();
 }
 
 // ── Two-factor authentication ──────────────────────

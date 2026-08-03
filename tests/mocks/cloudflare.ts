@@ -6,7 +6,10 @@ import { RateLimiter } from '../../src/rateLimiter.js';
 export type D1Response = {
     first?: Record<string, unknown> | null;
     all?: Record<string, unknown>[];
-    run?: { success: boolean; last_row_id?: number };
+    // `changes` matters for any statement whose *result count* decides the
+    // outcome — the guarded recovery-code UPDATE in src/totp.ts reads it to
+    // decide whether it claimed the code (GHSA-q9vh-jccv-9p23).
+    run?: { success: boolean; last_row_id?: number; changes?: number };
 };
 
 function makeStatement(response: D1Response) {
@@ -19,7 +22,10 @@ function makeStatement(response: D1Response) {
             run: vi.fn(() =>
                 Promise.resolve({
                     success: response.run?.success ?? true,
-                    meta: { last_row_id: response.run?.last_row_id ?? 1 },
+                    meta: {
+                        last_row_id: response.run?.last_row_id ?? 1,
+                        changes: response.run?.changes ?? 0
+                    },
                     results: []
                 })
             )
@@ -41,24 +47,6 @@ export function createMockDB(responses: Record<string, D1Response> = {}) {
         exec: vi.fn(() => Promise.resolve({ results: [], success: true })),
         batch: vi.fn(() => Promise.resolve([]))
     } as unknown as D1Database;
-}
-
-// --- KV mock ---
-
-export function createMockKV() {
-    const store = new Map<string, string>();
-    return {
-        get: vi.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
-        put: vi.fn((key: string, value: string) => {
-            store.set(key, value);
-            return Promise.resolve();
-        }),
-        delete: vi.fn((key: string) => {
-            store.delete(key);
-            return Promise.resolve();
-        }),
-        _store: store
-    } as unknown as KVNamespace;
 }
 
 // --- R2 mock ---
@@ -187,7 +175,6 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
     return {
         DB: createMockDB(),
         VAULTS: createMockR2(),
-        RATE_LIMIT: createMockKV(),
         RATE_LIMITER: createMockRateLimiter(),
         ASSETS: {} as Fetcher,
         JWT_SECRET: 'test-jwt-secret-32-chars-minimum!!',

@@ -28,6 +28,7 @@ import {
     handleAddMemberToOrganization,
     handleGetOrgMembers,
     handleGetOrgMemberKeys,
+    handleGetOrgKeyGaps,
     handleUpdateMemberRole,
     handleRemoveMember,
     handleDeleteOrganization
@@ -41,13 +42,14 @@ import {
     handleRegenerateRecoveryCodes,
     handleLoginVerify2fa
 } from './totp.js';
+import { handleGetAuditLog } from './auditLogHandlers.js';
+import { pruneAuditLogs } from './auditLog.js';
 import { CustomRequest, Env } from './types.js';
 import { jsonResponse } from './utils.js';
 
-// The Durable Object class must be exported from the Worker's entrypoint for the
-// runtime to instantiate it. Nothing calls it yet — this deploy exists only to
-// apply the class migration, which `wrangler deploy` can do and
-// `wrangler versions upload` cannot.
+// The brute-force limiter's Durable Object class must be exported from the
+// Worker's entrypoint for the runtime to instantiate it (see wrangler.toml
+// [[durable_objects.bindings]] and the new_sqlite_classes migration).
 export { RateLimiter } from './rateLimiter.js';
 
 const router = Router();
@@ -198,6 +200,11 @@ router.post('/api/2fa/recovery-codes/regenerate', withAuth, handleRegenerateReco
 router.get('/api/users/me/preferences', withAuth, handleGetPreferences);
 router.put('/api/users/me/preferences', withAuth, handleUpdatePreferences);
 
+// --- Account activity ---
+// The caller's own audit events. Scoped by the session token, so it needs no
+// admin role — and it is what makes README's audit-logging claim true (#73).
+router.get('/api/users/me/audit-log', withAuth, handleGetAuditLog);
+
 // --- Vault routes ---
 router.post('/api/vaults', withAuth, handleCreateVault);
 router.get('/api/vaults', withAuth, handleGetVaults);
@@ -218,10 +225,20 @@ router.get('/api/organizations/:orgId/members', withAuth, handleGetOrgMembers);
 // Public keys of every member, so an admin holding a vault key can wrap it for
 // them without a round trip per member.
 router.get('/api/organizations/:orgId/member-keys', withAuth, handleGetOrgMemberKeys);
+// Members entitled to an org vault who hold no key share. The client uses this
+// to heal gaps left when a wrap was impossible at add-member time (#69).
+router.get('/api/organizations/:orgId/key-gaps', withAuth, handleGetOrgKeyGaps);
 router.post('/api/organizations/:orgId/members', withAuth, handleAddMemberToOrganization);
 router.put('/api/organizations/:orgId/members/:memberUserId', withAuth, handleUpdateMemberRole);
 router.delete('/api/organizations/:orgId/members/:memberUserId', withAuth, handleRemoveMember);
 router.delete('/api/organizations/:orgId', withAuth, handleDeleteOrganization);
+
+// --- Unknown API routes ---
+// Registered before the static catch-all. Without this, `GET /api/nope` was
+// handed to the assets binding and came back as an HTML page served under the
+// *API* CSP (`default-src 'none'; base-uri 'none'`), because isApi is decided by
+// path while the non-API CSP is decided by content type (#78).
+router.all('/api/*', () => jsonResponse({ message: 'Not found.' }, 404));
 
 // --- Catch-all: serve static assets ---
 router.all('*', (request: Request, env: Env) => env.ASSETS.fetch(request));
@@ -275,5 +292,19 @@ export default {
                 getCorsHeaders(request)
             );
         }
+    },
+
+    /**
+     * Cron trigger (wrangler.toml [triggers]). Sweeps audit rows past the
+     * retention window — the table had no TTL, no pruning and no partitioning,
+     * while sharing D1's 10 GB limit with the vault metadata and user records
+     * that the service actually needs to function (#73).
+     */
+    async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+        ctx.waitUntil(
+            pruneAuditLogs(env)
+                .then(deleted => console.log(`Audit log sweep removed ${deleted} row(s).`))
+                .catch(err => console.error('Audit log sweep failed:', err))
+        );
     }
 };

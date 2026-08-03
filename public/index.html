@@ -146,7 +146,7 @@
                     <button type="button" class="menu__item" id="logout-btn" role="menuitem">
                         <span class="icon">logout</span>Sign out
                     </button>
-                    <div class="menu__footer">Passflares v1.1.4</div>
+                    <div class="menu__footer">Passflares v1.1.5</div>
                 </div>
             </div>
         </div>
@@ -370,7 +370,29 @@
                 <button type="button" class="btn btn--danger-text hidden" data-action="totp-disable"><span class="icon">remove_moderator</span>Disable 2FA</button>
             </div>
         </section>
+
+        <section class="card" data-activity-section>
+            <h2 class="card__title">Recent activity</h2>
+            <p class="settings-section__hint" data-activity-hint>Loading…</p>
+            <ul class="list" data-activity-list></ul>
+            <div class="row row-wrap">
+                <button type="button" class="btn btn--tonal hidden" data-action="activity-more"><span class="icon">expand_more</span>Show more</button>
+            </div>
+        </section>
     </div>
+</template>
+
+<template id="tpl-activity-row">
+    <li class="list-row list-row--static">
+        <span class="list-row__icon"><span class="icon" data-activity-icon>history</span></span>
+        <div class="list-row__body">
+            <span class="list-row__title" data-activity-action></span>
+            <span class="list-row__meta">
+                <span data-activity-time></span>
+                <span class="chip hidden" data-activity-ip></span>
+            </span>
+        </div>
+    </li>
 </template>
 
 <template id="tpl-vault-row">

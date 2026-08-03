@@ -24,11 +24,9 @@ export interface CustomRequest extends Request {
 export interface Env {
     DB: D1Database;
     VAULTS: R2Bucket;
-    RATE_LIMIT: KVNamespace;
-    // Provisioned here ahead of the code that uses it. A Durable Object
-    // migration is an atomic control-plane operation that `wrangler versions
-    // upload` cannot apply, so the namespace has to exist before the change
-    // that depends on it can be previewed on a branch. Nothing reads this yet.
+    // Brute-force limiter. A Durable Object, not KV: the counter needs an atomic
+    // read-modify-write and strong consistency, neither of which KV offers
+    // (GHSA-vp89-22wm-gjr8). See src/rateLimiter.ts.
     RATE_LIMITER: DurableObjectNamespace<import('./rateLimiter.js').RateLimiter>;
     ASSETS: Fetcher;
     JWT_SECRET: string;

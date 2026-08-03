@@ -37,7 +37,8 @@ import {
     handleLoginVerify2fa,
     __testables
 } from '../../src/totp.js';
-import { createMockKV, mockCtx } from '../mocks/cloudflare.js';
+import { createMockRateLimiter, mockCtx } from '../mocks/cloudflare.js';
+import { recordFailure } from '../../src/rateLimiter.js';
 
 const SECRET = 'test-jwt-secret-32-chars-minimum!!';
 const ENC_KEY = 'handler-test-totp-enc-key-32-chars!!';
@@ -78,11 +79,6 @@ function makeDB(world: World) {
                 if (sql.includes('COUNT(*) AS cnt FROM user_recovery_codes')) {
                     return { cnt: world.recovery.filter(r => r.used_at === null).length };
                 }
-                if (sql.includes('SELECT id FROM user_recovery_codes')) {
-                    const hash = args[1];
-                    const row = world.recovery.find(r => r.code_hash === hash && r.used_at === null);
-                    return row ? { id: row.id } : null;
-                }
                 return null;
             },
             run: async () => {
@@ -95,10 +91,19 @@ function makeDB(world: World) {
                 } else if (sql.includes('DELETE FROM user_totp')) {
                     world.totp = null;
                 } else if (sql.includes('UPDATE user_recovery_codes SET used_at')) {
-                    const row = world.recovery.find(r => r.id === args[0]);
+                    // Models the guarded single-statement redemption: the
+                    // `used_at IS NULL` predicate is part of the UPDATE, and
+                    // `meta.changes` reports whether this caller claimed the row
+                    // (GHSA-q9vh-jccv-9p23). A row already spent matches nothing,
+                    // so changes stays 0 — which is what makes reuse fail.
+                    const [userId, hash] = args;
+                    const row = world.recovery.find(
+                        r => r.user_id === userId && r.code_hash === hash && r.used_at === null
+                    );
                     if (row) row.used_at = 'now';
+                    return { success: true, meta: { changes: row ? 1 : 0 } };
                 }
-                return { success: true, meta: {} };
+                return { success: true, meta: { changes: 0 } };
             },
             all: async () => ({ results: [], success: true })
         })
@@ -129,10 +134,10 @@ function makeDBWithBatch(world: World) {
     return db as D1Database;
 }
 
-function makeEnv(world: World, kv = createMockKV()) {
+function makeEnv(world: World, rateLimiter = createMockRateLimiter()) {
     return {
         DB: makeDBWithBatch(world),
-        RATE_LIMIT: kv,
+        RATE_LIMITER: rateLimiter,
         JWT_SECRET: SECRET,
         TOTP_ENC_KEY: ENC_KEY
     } as any;
@@ -375,9 +380,10 @@ describe('handleLoginVerify2fa', () => {
 
     it('rate-limits after repeated failures from one IP', async () => {
         const world = freshWorld();
-        const kv = createMockKV();
-        (kv as any).get = vi.fn(async () => '5');
-        const env = makeEnv(world, kv);
+        const env = makeEnv(world);
+        // Drive the real limiter to its threshold rather than stubbing a count,
+        // so the increment itself is under test (GHSA-vp89-22wm-gjr8).
+        for (let i = 0; i < 5; i++) await recordFailure(env, ['2fa:ip:unknown']);
         await enableFresh(world, env);
         const temp = sign({ sub: 1, email: 'u@example.com', scope: '2fa' }, SECRET, { expiresIn: '5m' });
         const res = await handleLoginVerify2fa(loginReq({ tempToken: temp, code: '000000' }), env, mockCtx);

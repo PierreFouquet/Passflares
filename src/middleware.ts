@@ -3,7 +3,7 @@
 import { verify } from 'jsonwebtoken';
 import { logAudit } from './auditLog.js';
 import { CustomRequest, Env, VaultAccessControl } from './types.js';
-import { jsonResponse, parseId } from './utils.js';
+import { jsonResponse, parseId, auditErrorCode } from './utils.js';
 
 export type AccessLevel = 'read' | 'write' | 'manage';
 
@@ -77,7 +77,7 @@ export async function authenticateRequest(request: CustomRequest, env: Env, ctx:
         return null; // Continue to the next handler/middleware
     } catch (error: any) {
         console.error("JWT verification failed:", error);
-        logAudit(env, ctx, null, 'AUTH_FAILURE', { reason: 'Invalid/Expired token', error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, null, 'AUTH_FAILURE', { reason: 'Invalid/Expired token', error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Unauthorized: Invalid or expired token." }, 401);
     }
 }
@@ -123,7 +123,7 @@ export async function checkVaultPermission(
         return null; // Permission granted, continue
     } catch (error: any) {
         console.error("Error checking vault permissions:", error);
-        logAudit(env, ctx, user.userId, 'PERMISSION_CHECK_ERROR', { vaultId, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, user.userId, 'PERMISSION_CHECK_ERROR', { vaultId, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error during permission check." }, 500);
     }
 }

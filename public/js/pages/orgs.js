@@ -9,7 +9,7 @@ import { snack } from '../snackbar.js';
 import { openDialog, confirmDialog } from '../dialog.js';
 import { setOrgs, getOrgs } from '../state.js';
 import { getUserInfo } from '../session.js';
-import { shareOrgVaultsWithNewMember, rotateOrgVaultsAfterRemoval } from '../org-keys.js';
+import { shareOrgVaultsWithNewMember, rotateOrgVaultsAfterRemoval, reconcileOrgVaultKeys } from '../org-keys.js';
 
 const ROLE_LABEL = { member: 'Member', admin: 'Admin', super_admin: 'Owner' };
 const ROLE_CHIP_CLASS = { member: 'chip--neutral', admin: 'chip--info', super_admin: 'chip--purple' };
@@ -34,6 +34,34 @@ async function loadAndRender(mount) {
         snack.error(err.message ?? 'Failed to load organisations.');
     } finally {
         hideLoading();
+    }
+
+    // Heal any vault-key gaps this user can reach, quietly. Deliberately after
+    // the render and outside the try: it is a background repair, so it must
+    // never delay the page or turn into an error the user can't act on.
+    healKeyGapsInBackground();
+}
+
+/**
+ * Best-effort convergence for organisation vault keys (#69).
+ *
+ * A member's access can only be completed by someone who already holds the key,
+ * so it heals whenever such a person next looks at the org — no single admin has
+ * to remember. Silent unless it actually granted something; a failure here is
+ * not the user's problem and there is an explicit button for the deliberate case.
+ */
+async function healKeyGapsInBackground() {
+    for (const org of getOrgs()) {
+        try {
+            const { granted, vaults } = await reconcileOrgVaultKeys(org.id);
+            if (granted > 0) {
+                snack.success(
+                    `Shared ${vaults} vault key${vaults === 1 ? '' : 's'} with ${granted} member${granted === 1 ? '' : 's'} of ${org.name}.`
+                );
+            }
+        } catch (err) {
+            console.error(`Vault key reconciliation failed for org ${org.id}:`, err);
+        }
     }
 }
 
@@ -85,6 +113,7 @@ export function renderOrgCard(org, members, currentUserId) {
         <h4 class="text-label mb-8px">Members</h4>
         <div data-members></div>
         <div class="row-end mt-3">
+            <button type="button" class="btn btn--text" data-reshare-keys><span class="icon">key</span>Re-share vault keys</button>
             ${isAdmin ? `<button type="button" class="btn btn--tonal" data-add-member><span class="icon">person_add</span>Add member</button>` : ''}
             ${isSuper ? `<button type="button" class="btn btn--danger-text" data-delete-org><span class="icon">delete</span>Delete organisation</button>` : ''}
         </div>
@@ -94,6 +123,33 @@ export function renderOrgCard(org, members, currentUserId) {
     members.forEach(m => membersEl.appendChild(renderMemberRow(m, currentUserId, isSuper, isAdmin, org.id)));
 
     panel.querySelector('[data-add-member]')?.addEventListener('click', () => openAddMemberDialog(org));
+
+    // The deliberate counterpart to the background pass. Offered to every
+    // member, not just admins: anyone holding a vault key can close a gap in it,
+    // and making convergence depend on one person is what left members stranded.
+    // Reports everything, including what it could not do and why.
+    panel.querySelector('[data-reshare-keys]')?.addEventListener('click', async () => {
+        try {
+            showLoading('Checking vault key access…');
+            const { granted, vaults, unreachable, notUpgraded } = await reconcileOrgVaultKeys(org.id);
+
+            if (granted > 0) {
+                snack.success(`Shared ${vaults} vault key${vaults === 1 ? '' : 's'} with ${granted} member${granted === 1 ? '' : 's'}.`);
+            } else if (unreachable.length === 0 && notUpgraded.length === 0) {
+                snack.success('Everyone already has access to every vault they should.');
+            }
+            if (notUpgraded.length > 0) {
+                snack.warning(`Waiting on a first sign-in from: ${notUpgraded.join(', ')}. Keys can be shared once they have signed in.`);
+            }
+            if (unreachable.length > 0) {
+                snack.warning(`You cannot open ${unreachable.join(', ')}, so their keys can't be shared from here. A member who can open ${unreachable.length === 1 ? 'it' : 'them'} needs to do this.`);
+            }
+        } catch (err) {
+            snack.error(err.message ?? 'Failed to check vault key access.');
+        } finally {
+            hideLoading();
+        }
+    });
     panel.querySelector('[data-delete-org]')?.addEventListener('click', async () => {
         const ok = await confirmDialog({
             title: `Delete "${org.name}"?`,

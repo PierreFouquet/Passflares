@@ -13,7 +13,7 @@
 // can currently open. Anything they can't reach is reported rather than hidden,
 // so a partially-shared vault is visible instead of mysterious.
 
-import { getVaults as apiGetVaults, getOrgMemberKeys, getUserPublicKey } from './api.js';
+import { getVaults as apiGetVaults, getOrgMemberKeys, getUserPublicKey, getOrgKeyGaps } from './api.js';
 import { decryptVaultContents, rotateVaultKey, grantVaultKeyTo, orgIdOf } from './vault-keys.js';
 
 /** Org-owned vaults this user can currently manage. */
@@ -97,4 +97,73 @@ export async function rotateOrgVaultsAfterRemoval(orgId, vaultIds) {
     }
 
     return { rotated, failed };
+}
+
+/**
+ * Grants every org vault key this user holds to members who are entitled to it
+ * but hold no wrapped copy.
+ *
+ * `shareOrgVaultsWithNewMember` only ever ran at the instant a member was added,
+ * so any wrap that was impossible right then never happened at all. The common
+ * case is inviting someone before their first sign-in: they have no keypair yet,
+ * the admin is told "they need to sign in once", they do — and nothing goes back
+ * to finish the job. Same outcome if the inviting admin couldn't open a vault, or
+ * the request was interrupted. The member stayed locked out of vaults they were
+ * entitled to, with no action available to anyone that would fix it.
+ *
+ * This is the convergence step: it is safe to run repeatedly, it only adds
+ * shares (never rotates or replaces, so it cannot revoke anyone), and it is
+ * driven by whoever happens to be looking at the org — so access heals as soon
+ * as any key-holding member visits, rather than depending on one specific admin
+ * remembering to act.
+ *
+ * @returns {Promise<{granted: number, vaults: number, unreachable: string[], notUpgraded: string[]}>}
+ *   `unreachable` names vaults with a gap this caller cannot close (they cannot
+ *   open it themselves); `notUpgraded` names members nobody can wrap for yet.
+ */
+export async function reconcileOrgVaultKeys(orgId) {
+    const { gaps } = await getOrgKeyGaps(orgId);
+    if (!gaps || gaps.length === 0) {
+        return { granted: 0, vaults: 0, unreachable: [], notUpgraded: [] };
+    }
+
+    // Only vaults this user can actually open are candidates; the rest are
+    // reported so the state is visible rather than mysterious.
+    const openable = new Map((await manageableOrgVaults(orgId)).map(v => [v.id, v]));
+
+    let granted = 0;
+    let vaults = 0;
+    const unreachable = [];
+    const notUpgraded = new Set();
+
+    for (const gap of gaps) {
+        for (const member of gap.notUpgraded ?? []) notUpgraded.add(member.email);
+        if (!gap.missing || gap.missing.length === 0) continue;
+
+        const vault = openable.get(gap.vaultId);
+        if (!vault) { unreachable.push(gap.vaultName); continue; }
+
+        try {
+            const { vaultKey } = await decryptVaultContents(vault);
+            if (!vaultKey) { unreachable.push(gap.vaultName); continue; }
+
+            let grantedHere = 0;
+            for (const member of gap.missing) {
+                // One failure must not abandon the rest — a single member with a
+                // malformed public key would otherwise block everyone behind them.
+                try {
+                    await grantVaultKeyTo(gap.vaultId, vaultKey, member);
+                    grantedHere++;
+                } catch {
+                    notUpgraded.add(member.email);
+                }
+            }
+            granted += grantedHere;
+            if (grantedHere > 0) vaults++;
+        } catch {
+            unreachable.push(gap.vaultName);
+        }
+    }
+
+    return { granted, vaults, unreachable, notUpgraded: Array.from(notUpgraded) };
 }

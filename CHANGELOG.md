@@ -5,6 +5,130 @@ All notable changes to Passflares are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] — 2026-08-03
+
+Security release. Closes the three remaining advisories from the audit at
+`7b7d66b`, plus the two public issues they depend on. No user action required
+and no data migration — but a **D1 migration and a Durable Object namespace are
+provisioned on deploy** (see Deployment below).
+
+### Security
+
+- **The brute-force limiter is now atomic** (`GHSA-vp89-22wm-gjr8`, high). The
+  "5 attempts per 15 minutes" lockout on `/api/login` and `/api/register` was
+  bypassable by sending requests concurrently: the KV counter was a
+  read-modify-write, so N simultaneous requests all read the same value and all
+  wrote the same increment — N guesses for one tick — and KV's eventual
+  consistency meant reads at other edge locations could be stale for up to ~60s
+  on top of that. Replaced with a Durable Object (one instance per limiter
+  subject, never a global singleton) whose read-modify-write is serialised by
+  the runtime's input gates ([src/rateLimiter.ts](src/rateLimiter.ts)).
+- **Credential endpoints are limited per account as well as per IP.** An IP-only
+  cap was the whole control, which a distributed attacker sidesteps entirely and
+  which let one abuser lock out every user behind a shared NAT egress. Lockouts
+  now start at 15 minutes and double per further failure to a 24-hour ceiling,
+  and 429s carry `Retry-After`.
+- **Recovery codes can no longer be redeemed twice** (`GHSA-q9vh-jccv-9p23`,
+  medium). Consumption was a `SELECT … used_at IS NULL` followed by an unrelated
+  `UPDATE … WHERE id = ?`, so two concurrent requests presenting the same code
+  both saw it unused and both succeeded. It is now one guarded `UPDATE` whose
+  result count decides the winner ([src/totp.ts](src/totp.ts)).
+- **Every second-factor verification path is throttled**
+  (`GHSA-q9vh-jccv-9p23`). `handleTotpEnable`, `handleTotpDisable`, the
+  change-authenticator branch of
+  `handleTotpEnroll` and `handleRegenerateRecoveryCodes` had no attempt cap
+  at all — the enable path allowed unlimited guesses against a 6-digit code. All
+  four now share one per-account budget, as do the master-password
+  re-authentication paths on password change and account deletion.
+- **Constant-time verifier comparison is enforced by a test**
+  (`GHSA-jrh6-9qp8-rfgf`, low). The comparison itself was fixed in 1.1.4;
+  `tests/backend/code-security-invariants.test.ts` now fails the build if a
+  `*_hash` is ever compared with `===` or `!==` again.
+- **Credential fields are length-bounded** before reaching scrypt. `authSecret`
+  and `masterPassword` were unbounded and fed straight into a memory-hard KDF
+  doing ~48 MiB of work per call, on an unauthenticated endpoint.
+
+### Fixed
+
+- **Audit writes are no longer dropped**
+  ([#73](https://github.com/PierreFouquet/Passflares/issues/73)).
+  `logAudit` was `async`, called ~120 times and awaited nowhere, so the D1 write
+  was unregistered I/O that Workers may cancel once the response returns — and
+  the events most likely to be lost were the fast-return ones (`LOGIN_FAILURE`,
+  `AUTH_FAILURE`, `VAULT_ACCESS_DENIED`) — exactly the set that reveals an
+  attack. It now returns `void` and registers its write with
+  `ctx.waitUntil()`, so no call site can leave a floating promise
+  ([src/auditLog.ts](src/auditLog.ts)).
+- **The audit log has retention.** A nightly cron deletes rows older than 90
+  days, over the new `audit_logs` indexes. There was previously no TTL, no
+  pruning and no partitioning on a table taking a row per request and sharing
+  D1's 10 GB limit with the vault metadata the service needs to function.
+- **Routine reads are no longer audited.** `VAULT_LIST_SUCCESS`,
+  `VAULT_DOWNLOAD_SUCCESS`, `GET_SALT_SUCCESS`, `ORG_LIST_SUCCESS`,
+  `ORG_GET_MEMBERS_SUCCESS` and `PREFERENCES_UPDATE` recorded page loads rather
+  than actions — the app wrote several rows on every boot, and a theme toggle
+  wrote a burst. All failure events are still recorded.
+- **Audit payloads store an error code, not `error.message`.** Exception text
+  can carry internal detail and was persisted indefinitely. The full error still
+  reaches the observability logs via `console.error`.
+- **The audit log is readable.** README claimed audit events were available;
+  no read path existed. Each account can now see its own security events under
+  **Settings → Recent activity** (`GET /api/users/me/audit-log`), with keyset
+  pagination. This needed no admin role — the session token already scopes it,
+  so no new privilege surface was added.
+- **Malformed JSON returns 400, not 500**
+  ([#78](https://github.com/PierreFouquet/Passflares/issues/78)). Handlers
+  destructured `await request.json()` outside any `try`, so a bad body threw
+  past the handler and came back as `Service unavailable`.
+- **Unknown `/api/*` routes return a JSON 404** instead of falling through to
+  the asset handler, which served an HTML page under the *API* CSP.
+- **Vault and organisation names and descriptions are length-capped**
+  (100 / 500).
+- **Organisation members are no longer stranded without vault keys**
+  ([#69](https://github.com/PierreFouquet/Passflares/issues/69) residue). Key
+  shares were wrapped exactly once, at the instant a member was added, so any
+  wrap that was impossible right then never happened at all — most often because
+  the member was invited before their first sign-in and had no keypair to wrap
+  to. They signed in, and nothing went back to finish the job; they stayed
+  locked out of vaults they were entitled to, told to "ask an administrator",
+  with no action that would actually help. The same applied if the inviting
+  admin could not open a vault, or the request was interrupted.
+  A new `GET /api/organizations/:orgId/key-gaps` reports who is entitled to an
+  org vault but holds no share (entitlement only — never key material), and
+  `reconcileOrgVaultKeys()` closes every gap the caller can reach. It runs
+  automatically whenever a key-holding member opens the Organisations page, and
+  on demand via **Re-share vault keys**. It only ever adds shares, so it can
+  never revoke, and it is safe to run repeatedly. Available to every member, not
+  just admins — making convergence depend on one specific person is what caused
+  the problem.
+
+### Changed
+
+- `vitest.config.ts` → `vitest.config.mts`, using `import.meta.dirname`. Vite's
+  forthcoming native config loader treats the config as real ESM, where the
+  previous form warns today and breaks on that release.
+- The `RATE_LIMIT` KV namespace binding is gone; nothing uses it. The namespace
+  itself can be deleted from the Cloudflare account once 1.1.5 is live.
+
+### Deployment
+
+Two provisioning steps beyond a normal deploy, both completed ahead of this
+release so that shipping it is an ordinary deploy:
+
+1. `npx wrangler d1 migrations apply secure-password-db --remote` — applies
+   the new `audit_logs` and `user_recovery_codes` indexes. Purely additive
+   (`CREATE INDEX IF NOT EXISTS`), safe to run against the live database ahead
+   of the deploy, and compatible with 1.1.4 code.
+2. The `RateLimiter` Durable Object namespace was created by the
+   `new_sqlite_classes` migration in
+   [#87](https://github.com/PierreFouquet/Passflares/pull/87), landed
+   separately and deliberately: a class migration is an atomic control-plane
+   operation that only `wrangler deploy` can apply, so the `wrangler versions
+   upload` that branch builds run rejects it outright
+   (`[code: 10211]`) — no branch containing an unapplied migration can have a
+   green build. Splitting it kept that unavoidable red on a nine-file change
+   with no behavioural effect, and left this release building normally.
+
 ## [1.1.4] — 2026-08-01
 
 Security release. Passflares was **server-trusting rather than zero-knowledge**:

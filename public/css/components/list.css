@@ -51,6 +51,15 @@
 .list-row:hover {
     background: var(--color-surface-2);
 }
+
+/* A row that only reports something (Settings → Recent activity). Nothing to
+   click, so it must not advertise itself as clickable. */
+.list-row--static {
+    cursor: default;
+}
+.list-row--static:hover {
+    background: var(--color-surface);
+}
 .list-row.is-active {
     background: var(--color-primary-container);
     border-color: var(--color-primary);

@@ -7,10 +7,21 @@ import {
     normalizeEmail,
     isValidEmail,
     parseId,
-    parseCounter,
-    decoyKdfSalt
+    decoyKdfSalt,
+    safeJson,
+    auditErrorCode,
+    MAX_SECRET_LENGTH
 } from './utils.js';
 import { logAudit } from './auditLog.js';
+import {
+    checkRateLimit,
+    recordFailure,
+    clearRateLimit,
+    ipSubject,
+    accountSubject,
+    RateLimitVerdict,
+    VOLUME_POLICY
+} from './rateLimiter.js';
 import {
     CustomRequest,
     Env,
@@ -22,8 +33,14 @@ import {
 } from './types.js';
 import { jsonResponse } from './utils.js';
 
-const FAILED_ATTEMPTS_LIMIT = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+/** 429 body + Retry-After, so a client can back off instead of hammering. */
+function rateLimitedResponse(message: string, verdict: RateLimitVerdict): Response {
+    return jsonResponse(
+        { message, retryAfter: verdict.retryAfter },
+        429,
+        { 'Retry-After': String(verdict.retryAfter) }
+    );
+}
 
 // Argon2id profile handed to new clients. Mirrors ARGON2_PARAMS in
 // public/js/constants.js; stored per-user at registration so raising these later
@@ -67,12 +84,12 @@ export async function handleAuthParams(request: CustomRequest, env: Env, ctx: Ex
     const url = new URL(request.url);
     const email = normalizeEmail(url.searchParams.get('email'));
 
-    const ipKey = `rate_limit:authparams:${ipAddress}`;
-    const attempts = parseCounter(await env.RATE_LIMIT.get(ipKey));
-    if (attempts >= FAILED_ATTEMPTS_LIMIT * 6) {
-        return jsonResponse({ message: "Too many requests. Try again later." }, 429);
+    // Every call counts here, not just failures — this endpoint has no notion of
+    // a failed attempt (unknown emails get decoys), so the limit is on volume.
+    const verdict = await recordFailure(env, [ipSubject('authparams', ipAddress)], VOLUME_POLICY);
+    if (!verdict.allowed) {
+        return rateLimitedResponse("Too many requests. Try again later.", verdict);
     }
-    await env.RATE_LIMIT.put(ipKey, String(attempts + 1), { expirationTtl: LOCKOUT_DURATION / 1000 });
 
     // A malformed email can't belong to an account, but answering differently
     // would still distinguish it. Fall through to the decoy.
@@ -117,7 +134,10 @@ export async function handleAuthParams(request: CustomRequest, env: Env, ctx: Ex
  * never appears in this request.
  */
 export async function handleRegister(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const body = await request.json() as {
+    const ipAddress = request.headers.get('CF-Connecting-IP');
+    const userAgent = request.headers.get('User-Agent');
+
+    const body = await safeJson<{
         email?: string;
         authSecret?: string;
         kdfSalt?: string;
@@ -125,18 +145,20 @@ export async function handleRegister(request: CustomRequest, env: Env, ctx: Exec
         publicKey?: string;
         privateKeyEnc?: string;
         turnstileToken?: string;
-    };
+    }>(request);
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+
     const email = normalizeEmail(body.email);
     const { authSecret, kdfSalt, publicKey, privateKeyEnc, turnstileToken } = body;
-    const ipAddress = request.headers.get('CF-Connecting-IP');
-    const userAgent = request.headers.get('User-Agent');
 
     // Rate limit by IP — same lockout policy as /login to prevent registration spam
-    const ipKey = `rate_limit:register:${ipAddress}`;
-    const failedAttempts = parseCounter(await env.RATE_LIMIT.get(ipKey));
-    if (failedAttempts >= FAILED_ATTEMPTS_LIMIT) {
+    const subjects = [ipSubject('register', ipAddress)];
+    const verdict = await checkRateLimit(env, subjects);
+    if (!verdict.allowed) {
         logAudit(env, ctx, null, 'REGISTER_FAILURE', { email, reason: 'Rate limited' }, ipAddress, userAgent);
-        return jsonResponse({ message: "Too many registration attempts. Try again later." }, 429);
+        return rateLimitedResponse("Too many registration attempts. Try again later.", verdict);
     }
 
     const kdfParams = parseKdfParams(body.kdfParams);
@@ -153,7 +175,7 @@ export async function handleRegister(request: CustomRequest, env: Env, ctx: Exec
     // Turnstile is required — fail closed so a missing or invalid token blocks registration.
     const turnstileOk = await verifyTurnstile(turnstileToken, env.TURNSTILE_KEY, ipAddress);
     if (!turnstileOk) {
-        await env.RATE_LIMIT.put(ipKey, String(failedAttempts + 1), { expirationTtl: LOCKOUT_DURATION / 1000 });
+        await recordFailure(env, subjects);
         logAudit(env, ctx, null, 'REGISTER_FAILURE', { email, reason: 'Turnstile failed' }, ipAddress, userAgent);
         return jsonResponse({ message: "CAPTCHA verification failed. Please try again." }, 403);
     }
@@ -197,12 +219,12 @@ export async function handleRegister(request: CustomRequest, env: Env, ctx: Exec
             return jsonResponse({ message: "Failed to register user." }, 500);
         }
 
-        await env.RATE_LIMIT.delete(ipKey);
+        await clearRateLimit(env, subjects);
         logAudit(env, ctx, null, 'REGISTER_SUCCESS', { email }, ipAddress, userAgent);
         return jsonResponse({ message: "User registered successfully." }, 201);
     } catch (error: any) {
         console.error("Registration error:", error);
-        logAudit(env, ctx, null, 'REGISTER_FAILURE', { email, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, null, 'REGISTER_FAILURE', { email, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error during registration." }, 500);
     }
 }
@@ -219,32 +241,38 @@ export async function handleRegister(request: CustomRequest, env: Env, ctx: Exec
  * only until its owner next signs in.
  */
 export async function handleLogin(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const body = await request.json() as {
+    const ipAddress = request.headers.get('CF-Connecting-IP');
+    const userAgent = request.headers.get('User-Agent');
+
+    const body = await safeJson<{
         email?: string;
         authSecret?: string;
         masterPassword?: string;
         turnstileToken?: string;
-    };
+    }>(request);
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+
     const email = normalizeEmail(body.email);
     const { authSecret, masterPassword, turnstileToken } = body;
-    const ipAddress = request.headers.get('CF-Connecting-IP');
-    const userAgent = request.headers.get('User-Agent');
 
     const presentedSecret = authSecret ?? masterPassword;
-    if (!email || !isSaneSecret(presentedSecret, 4096)) {
+    if (!email || !isSaneSecret(presentedSecret, MAX_SECRET_LENGTH)) {
         logAudit(env, ctx, null, 'LOGIN_FAILURE', { reason: 'Missing fields' }, ipAddress, userAgent);
         return jsonResponse({ message: "Email and credentials are required." }, 400);
     }
 
-    // Rate limiting check
-    const ipKey = `rate_limit:${ipAddress}`;
-    const failedAttempts = parseCounter(await env.RATE_LIMIT.get(ipKey));
-    if (failedAttempts >= FAILED_ATTEMPTS_LIMIT) {
+    // Limited per source IP *and* per account. IP alone was the whole control
+    // before, which a distributed attacker sidesteps entirely and which lets one
+    // abuser lock out every user behind a shared NAT egress (GHSA-vp89-22wm-gjr8).
+    const subjects = [ipSubject('login', ipAddress), accountSubject('login', email)];
+    const verdict = await checkRateLimit(env, subjects);
+    if (!verdict.allowed) {
         logAudit(env, ctx, null, 'LOGIN_FAILURE', { email, reason: 'Rate limited' }, ipAddress, userAgent);
-        return jsonResponse({ message: "Too many failed attempts. Try again later." }, 429);
+        return rateLimitedResponse("Too many failed attempts. Try again later.", verdict);
     }
-    const bumpFailures = () =>
-        env.RATE_LIMIT.put(ipKey, String(failedAttempts + 1), { expirationTtl: LOCKOUT_DURATION / 1000 });
+    const bumpFailures = () => recordFailure(env, subjects);
 
     // Turnstile is required — fail closed so a missing or invalid token blocks login.
     const turnstileOk = await verifyTurnstile(turnstileToken, env.TURNSTILE_KEY, ipAddress);
@@ -283,7 +311,7 @@ export async function handleLogin(request: CustomRequest, env: Env, ctx: Executi
         }
 
         // Reset failed attempts on successful login
-        await env.RATE_LIMIT.delete(ipKey);
+        await clearRateLimit(env, subjects);
 
         // If the user has 2FA enabled, don't issue a session yet. Return a
         // short-lived token scoped to the 2FA step only — handleLoginVerify2fa
@@ -300,7 +328,7 @@ export async function handleLogin(request: CustomRequest, env: Env, ctx: Executi
         return jsonResponse(await buildLoginResponse(env, user, token));
     } catch (error: any) {
         console.error("Login error:", error);
-        logAudit(env, ctx, null, 'LOGIN_FAILURE', { email, error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, null, 'LOGIN_FAILURE', { email, error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error during login." }, 500);
     }
 }
@@ -360,7 +388,7 @@ export async function handleAuthUpgrade(request: CustomRequest, env: Env, ctx: E
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
 
-    const body = await request.json() as {
+    const body = await safeJson<{
         authSecret?: string;
         kdfSalt?: string;
         kdfParams?: unknown;
@@ -368,7 +396,10 @@ export async function handleAuthUpgrade(request: CustomRequest, env: Env, ctx: E
         privateKeyEnc?: string;
         vaults?: Array<{ vaultId: number; wrappedKey: string; ephemeralPubkey: string }>;
         legacyVaultsPending?: number;
-    };
+    }>(request);
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
 
     const kdfParams = parseKdfParams(body.kdfParams);
     const { authSecret, kdfSalt, publicKey, privateKeyEnc } = body;
@@ -471,7 +502,7 @@ export async function handleAuthUpgrade(request: CustomRequest, env: Env, ctx: E
         });
     } catch (error: any) {
         console.error("Auth upgrade error:", error);
-        logAudit(env, ctx, userId, 'AUTH_UPGRADE_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, userId, 'AUTH_UPGRADE_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error during account upgrade." }, 500);
     }
 }
@@ -502,14 +533,15 @@ export async function handleGetUserEncryptionSalt(request: CustomRequest, env: E
             return jsonResponse({ message: "User not found." }, 404);
         }
 
-        logAudit(env, ctx, request.user.userId, 'GET_SALT_SUCCESS', {}, ipAddress, userAgent);
+        // No GET_SALT_SUCCESS row: a routine read fired on every app boot, which
+        // is the growth pattern #73 describes. Failures are still recorded.
         return jsonResponse({
             encryptionSalt: user.encryption_salt || null,
             legacyVaultsPending: user.legacy_vaults_pending
         });
     } catch (error: any) {
         console.error("Get encryption salt error:", error);
-        logAudit(env, ctx, request.user.userId, 'GET_SALT_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, request.user.userId, 'GET_SALT_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error." }, 500);
     }
 }
@@ -563,16 +595,20 @@ export async function handleGetUserPublicKey(request: CustomRequest, env: Env, c
  * data-loss window described in #70.
  */
 export async function handleUpdateMasterPassword(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const body = await request.json() as {
+    const body = await safeJson<{
         oldAuthSecret?: string;
         newAuthSecret?: string;
         newKdfSalt?: string;
         newKdfParams?: unknown;
         newPrivateKeyEnc?: string;
-    };
+    }>(request);
     const requestedId = parseId(request.params?.userId);
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
+
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
 
     if (!request.user || requestedId === null || request.user.userId !== requestedId) {
         logAudit(env, ctx, request.user?.userId || null, 'UPDATE_PASSWORD_FAILURE', { reason: 'Unauthorized user ID mismatch' }, ipAddress, userAgent);
@@ -585,6 +621,16 @@ export async function handleUpdateMasterPassword(request: CustomRequest, env: En
         !isSaneSecret(newKdfSalt, 128) || !newKdfParams || !isSaneSecret(newPrivateKeyEnc, 4096)) {
         logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { reason: 'Missing fields' }, ipAddress, userAgent);
         return jsonResponse({ message: "Password change payload is incomplete or invalid." }, 400);
+    }
+
+    // A re-auth check with no attempt cap is a password oracle for anyone holding
+    // a hijacked session token. Same class as the unthrottled 2FA verify paths in
+    // GHSA-q9vh-jccv-9p23, so it gets the same treatment.
+    const subjects = [accountSubject('reauth', request.user.userId)];
+    const verdict = await checkRateLimit(env, subjects);
+    if (!verdict.allowed) {
+        logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { reason: 'Rate limited' }, ipAddress, userAgent);
+        return rateLimitedResponse("Too many attempts. Try again later.", verdict);
     }
 
     try {
@@ -604,9 +650,11 @@ export async function handleUpdateMasterPassword(request: CustomRequest, env: En
 
         const { hash: verifiedOldHash } = await deriveScryptHash(oldAuthSecret, user.password_salt);
         if (!timingSafeEqualHex(verifiedOldHash, user.password_hash)) {
+            await recordFailure(env, subjects);
             logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { reason: 'Old password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: "Old master password is incorrect." }, 401);
         }
+        await clearRateLimit(env, subjects);
 
         const { hash: newPasswordHash, salt: newStoredSalt } = await deriveScryptHash(newAuthSecret);
 
@@ -625,33 +673,47 @@ export async function handleUpdateMasterPassword(request: CustomRequest, env: En
         return jsonResponse({ message: "Master password updated successfully." });
     } catch (error: any) {
         console.error("Update master password error:", error);
-        logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, request.user.userId, 'UPDATE_PASSWORD_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error during password update." }, 500);
     }
 }
 
 export async function handleDeleteAccount(request: CustomRequest, env: Env, ctx: ExecutionContext): Promise<Response> {
     const requestedId = parseId(request.params?.userId);
-    const body = await request.json() as { authSecret?: string; masterPassword?: string };
-    const presentedSecret = body.authSecret ?? body.masterPassword;
+    const body = await safeJson<{ authSecret?: string; masterPassword?: string }>(request);
     const ipAddress = request.headers.get('CF-Connecting-IP');
     const userAgent = request.headers.get('User-Agent');
+
+    if (!body) {
+        return jsonResponse({ message: "Invalid JSON body." }, 400);
+    }
+
+    const presentedSecret = body.authSecret ?? body.masterPassword;
 
     if (!request.user || requestedId === null || request.user.userId !== requestedId) {
         return jsonResponse({ message: "Unauthorized: User ID mismatch." }, 403);
     }
 
-    if (!isSaneSecret(presentedSecret, 4096)) {
+    if (!isSaneSecret(presentedSecret, MAX_SECRET_LENGTH)) {
         return jsonResponse({ message: "Master password is required to confirm account deletion." }, 400);
     }
 
     const userId = request.user.userId;
 
+    // Shares the 'reauth' bucket with the password-change path: both are
+    // password checks behind a session, and an attacker gets one budget, not two.
+    const subjects = [accountSubject('reauth', userId)];
+    const verdict = await checkRateLimit(env, subjects);
+    if (!verdict.allowed) {
+        logAudit(env, ctx, userId, 'DELETE_ACCOUNT_FAILURE', { reason: 'Rate limited' }, ipAddress, userAgent);
+        return rateLimitedResponse("Too many attempts. Try again later.", verdict);
+    }
+
     try {
         // Verify credentials before deleting anything
         const user = await env.DB.prepare(
-            "SELECT id, password_hash, password_salt, auth_version FROM users WHERE id = ?"
-        ).bind(userId).first<Pick<User, 'id' | 'password_hash' | 'password_salt' | 'auth_version'>>();
+            "SELECT id, email, password_hash, password_salt, auth_version FROM users WHERE id = ?"
+        ).bind(userId).first<Pick<User, 'id' | 'email' | 'password_hash' | 'password_salt' | 'auth_version'>>();
 
         if (!user) {
             return jsonResponse({ message: "User not found." }, 404);
@@ -659,15 +721,18 @@ export async function handleDeleteAccount(request: CustomRequest, env: Env, ctx:
 
         const usingLegacyFlow = body.authSecret === undefined;
         if (usingLegacyFlow !== (user.auth_version === AUTH_VERSION_LEGACY)) {
+            await recordFailure(env, subjects);
             logAudit(env, ctx, userId, 'DELETE_ACCOUNT_FAILURE', { reason: 'Auth version mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: "Master password is incorrect." }, 401);
         }
 
         const { hash: verifiedHash } = await deriveScryptHash(presentedSecret, user.password_salt);
         if (!timingSafeEqualHex(verifiedHash, user.password_hash)) {
+            await recordFailure(env, subjects);
             logAudit(env, ctx, userId, 'DELETE_ACCOUNT_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: "Master password is incorrect." }, 401);
         }
+        await clearRateLimit(env, subjects);
 
         // 1. Find all personal vaults owned by this user
         const ownedVaults = await env.DB.prepare(
@@ -703,16 +768,18 @@ export async function handleDeleteAccount(request: CustomRequest, env: Env, ctx:
         //    vault_key_shares; audit_logs.user_id set to NULL)
         await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();
 
-        // 6. Clear any rate limit entries for this user's recent IPs (best-effort)
-        if (ipAddress) {
-            await env.RATE_LIMIT.delete(`rate_limit:${ipAddress}`);
-        }
+        // 6. Clear the limiter buckets this account owned (best-effort)
+        await clearRateLimit(env, [
+            ...subjects,
+            ipSubject('login', ipAddress),
+            accountSubject('login', user.email ?? '')
+        ]);
 
         logAudit(env, ctx, null, 'DELETE_ACCOUNT_SUCCESS', { userId }, ipAddress, userAgent);
         return new Response(null, { status: 204 });
     } catch (error: any) {
         console.error("Delete account error:", error);
-        logAudit(env, ctx, userId, 'DELETE_ACCOUNT_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, userId, 'DELETE_ACCOUNT_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: "Internal Server Error during account deletion." }, 500);
     }
 }

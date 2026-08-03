@@ -28,8 +28,16 @@ import {
     uint8ArrayToHexString,
     jsonResponse,
     timingSafeEqualHex,
-    parseCounter
+    auditErrorCode
 } from './utils.js';
+import {
+    checkRateLimit,
+    recordFailure,
+    clearRateLimit,
+    ipSubject,
+    accountSubject,
+    RateLimitVerdict
+} from './rateLimiter.js';
 import { logAudit } from './auditLog.js';
 import { buildLoginResponse } from './auth.js';
 
@@ -172,14 +180,27 @@ async function replaceRecoveryCodes(env: Env, userId: number, codes: string[]): 
     await env.DB.batch(codes.map(c => insert.bind(userId, hashRecoveryCode(env, c))));
 }
 
+/**
+ * Redeems a recovery code, exactly once.
+ *
+ * This used to SELECT the unused row and then UPDATE it by id — two statements
+ * with no serialisation between them, so two concurrent requests presenting the
+ * same code both saw `used_at IS NULL` and both succeeded (GHSA-q9vh-jccv-9p23).
+ * A code captured once from a screenshot or a stale download could be replayed,
+ * and the "codes remaining" count shown to the user drifted from reality.
+ *
+ * One guarded write closes the window: the `used_at IS NULL` predicate lives in
+ * the UPDATE itself, so SQLite decides the winner. `meta.changes` is 1 for the
+ * request that claimed the code and 0 for every other — invalid or already used,
+ * which are indistinguishable to the caller by design.
+ */
 async function consumeRecoveryCode(env: Env, userId: number, code: string): Promise<boolean> {
     const hash = hashRecoveryCode(env, code);
-    const row = await env.DB.prepare(
-        'SELECT id FROM user_recovery_codes WHERE user_id = ? AND code_hash = ? AND used_at IS NULL'
-    ).bind(userId, hash).first<{ id: number }>();
-    if (!row) return false;
-    await env.DB.prepare('UPDATE user_recovery_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(row.id).run();
-    return true;
+    const result = await env.DB.prepare(
+        `UPDATE user_recovery_codes SET used_at = CURRENT_TIMESTAMP
+         WHERE user_id = ? AND code_hash = ? AND used_at IS NULL`
+    ).bind(userId, hash).run();
+    return (result.meta?.changes ?? 0) === 1;
 }
 
 /**
@@ -208,26 +229,55 @@ async function verifyActiveSecondFactor(env: Env, userId: number, row: TotpRow, 
     return consumeRecoveryCode(env, userId, code);
 }
 
-// ─── rate limiting (reuses the KV pattern from auth.ts) ──────────────────────
+// ─── rate limiting ──────────────────────────────────────────────────────────
+//
+// Shares the atomic Durable Object limiter with auth.ts (src/rateLimiter.ts).
+// The KV pattern this replaces was non-atomic — see GHSA-vp89-22wm-gjr8, which
+// names this file's old isRateLimited/bumpFailure pair specifically.
 
-async function isRateLimited(env: Env, key: string): Promise<boolean> {
-    const v = await env.RATE_LIMIT.get(key);
-    return parseCounter(v) >= FAILED_ATTEMPTS_LIMIT;
+/** Subjects for the second-factor check during login (pre-session). */
+function loginSubjects(ipAddress: string | null, userId?: number): string[] {
+    const subjects = [ipSubject('2fa', ipAddress)];
+    if (userId !== undefined) subjects.push(accountSubject('2fa', userId));
+    return subjects;
 }
 
-async function bumpFailure(env: Env, key: string): Promise<void> {
-    const v = await env.RATE_LIMIT.get(key);
-    const n = parseCounter(v) + 1;
-    await env.RATE_LIMIT.put(key, String(n), { expirationTtl: LOCKOUT_DURATION / 1000 });
+/**
+ * Subject for an authenticated 2FA management action (enable, disable, change
+ * authenticator, regenerate codes).
+ *
+ * These had no attempt cap at all (GHSA-q9vh-jccv-9p23). `handleTotpEnable` was
+ * the worst of them: unlimited guesses against a 6-digit code, of which ~3 are
+ * valid at any moment under `window: 1`, needs only ~333k attempts to land.
+ *
+ * Per account only — no IP component, unlike the login paths. Every one of these
+ * requires a valid session, so the account *is* the attacker's target and the
+ * meaningful budget. Adding an IP bucket would buy almost nothing (an attacker
+ * holding several hijacked sessions is distributed anyway) while letting one
+ * person fumbling their password lock 2FA management for everyone else behind
+ * the same office NAT.
+ *
+ * One shared bucket across all four, so rotating between endpoints does not
+ * hand out a fresh five guesses each.
+ */
+function manageSubjects(userId: number): string[] {
+    return [accountSubject('2fa-manage', userId)];
 }
 
-async function clearFailures(env: Env, key: string): Promise<void> {
-    await env.RATE_LIMIT.delete(key);
+function rateLimitedResponse(message: string, verdict: RateLimitVerdict): Response {
+    return jsonResponse(
+        { message, retryAfter: verdict.retryAfter },
+        429,
+        { 'Retry-After': String(verdict.retryAfter) }
+    );
 }
 
 async function safeJson(request: CustomRequest): Promise<Record<string, any>> {
     try {
-        return (await request.json()) as Record<string, any>;
+        const body = await request.json();
+        return body !== null && typeof body === 'object' && !Array.isArray(body)
+            ? body as Record<string, any>
+            : {};
     } catch {
         return {};
     }
@@ -265,14 +315,23 @@ export async function handleTotpEnroll(request: CustomRequest, env: Env, ctx: Ex
             if (!reauthSecret || !code) {
                 return jsonResponse({ message: 'Master password and a current code are required to change your authenticator.' }, 400);
             }
+            const subjects = manageSubjects(userId);
+            const verdict = await checkRateLimit(env, subjects);
+            if (!verdict.allowed) {
+                logAudit(env, ctx, userId, 'TOTP_ENROLL_FAILURE', { reason: 'Rate limited' }, ipAddress, userAgent);
+                return rateLimitedResponse('Too many attempts. Try again later.', verdict);
+            }
             if (!(await verifyReauthSecret(env, userId, reauthSecret))) {
+                await recordFailure(env, subjects);
                 logAudit(env, ctx, userId, 'TOTP_ENROLL_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
                 return jsonResponse({ message: 'Master password is incorrect.' }, 401);
             }
             if (!(await verifyActiveSecondFactor(env, userId, row, email, code))) {
+                await recordFailure(env, subjects);
                 logAudit(env, ctx, userId, 'TOTP_ENROLL_FAILURE', { reason: 'Invalid second factor' }, ipAddress, userAgent);
                 return jsonResponse({ message: 'Invalid authenticator or recovery code.' }, 401);
             }
+            await clearRateLimit(env, subjects);
         }
 
         const secret = new Secret({ size: 20 }).base32;
@@ -286,7 +345,7 @@ export async function handleTotpEnroll(request: CustomRequest, env: Env, ctx: Ex
         return jsonResponse({ secret, otpauthUri: uri, qrDataUri: qrDataUri(uri) });
     } catch (error: any) {
         console.error('TOTP enroll error:', error);
-        logAudit(env, ctx, userId, 'TOTP_ENROLL_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, userId, 'TOTP_ENROLL_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: 'Internal Server Error.' }, 500);
     }
 }
@@ -305,11 +364,20 @@ export async function handleTotpEnable(request: CustomRequest, env: Env, ctx: Ex
             return jsonResponse({ message: 'No 2FA enrollment in progress.' }, 400);
         }
 
+        const subjects = manageSubjects(userId);
+        const verdict = await checkRateLimit(env, subjects);
+        if (!verdict.allowed) {
+            logAudit(env, ctx, userId, 'TOTP_ENABLE_FAILURE', { reason: 'Rate limited' }, ipAddress, userAgent);
+            return rateLimitedResponse('Too many attempts. Try again later.', verdict);
+        }
+
         const pendingSecret = await decryptSecret(env, row.pending_secret_enc);
         if (!verifyTotpToken(pendingSecret, email, code)) {
+            await recordFailure(env, subjects);
             logAudit(env, ctx, userId, 'TOTP_ENABLE_FAILURE', { reason: 'Invalid code' }, ipAddress, userAgent);
             return jsonResponse({ message: 'That code is not valid. Try again.' }, 401);
         }
+        await clearRateLimit(env, subjects);
 
         const wasEnabled = row.enabled === 1;
         await env.DB.prepare(
@@ -329,7 +397,7 @@ export async function handleTotpEnable(request: CustomRequest, env: Env, ctx: Ex
         return jsonResponse({ enabled: true, recoveryCodes });
     } catch (error: any) {
         console.error('TOTP enable error:', error);
-        logAudit(env, ctx, userId, 'TOTP_ENABLE_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, userId, 'TOTP_ENABLE_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: 'Internal Server Error.' }, 500);
     }
 }
@@ -349,14 +417,23 @@ export async function handleTotpDisable(request: CustomRequest, env: Env, ctx: E
         if (row?.enabled !== 1) {
             return jsonResponse({ message: 'Two-factor authentication is not enabled.' }, 400);
         }
+        const subjects = manageSubjects(userId);
+        const verdict = await checkRateLimit(env, subjects);
+        if (!verdict.allowed) {
+            logAudit(env, ctx, userId, 'TOTP_DISABLE_FAILURE', { reason: 'Rate limited' }, ipAddress, userAgent);
+            return rateLimitedResponse('Too many attempts. Try again later.', verdict);
+        }
         if (!(await verifyReauthSecret(env, userId, reauthSecret))) {
+            await recordFailure(env, subjects);
             logAudit(env, ctx, userId, 'TOTP_DISABLE_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: 'Master password is incorrect.' }, 401);
         }
         if (!(await verifyActiveSecondFactor(env, userId, row, email, code))) {
+            await recordFailure(env, subjects);
             logAudit(env, ctx, userId, 'TOTP_DISABLE_FAILURE', { reason: 'Invalid second factor' }, ipAddress, userAgent);
             return jsonResponse({ message: 'Invalid authenticator or recovery code.' }, 401);
         }
+        await clearRateLimit(env, subjects);
 
         await env.DB.prepare('DELETE FROM user_recovery_codes WHERE user_id = ?').bind(userId).run();
         await env.DB.prepare('DELETE FROM user_totp WHERE user_id = ?').bind(userId).run();
@@ -364,7 +441,7 @@ export async function handleTotpDisable(request: CustomRequest, env: Env, ctx: E
         return jsonResponse({ disabled: true, message: 'Two-factor authentication disabled.' });
     } catch (error: any) {
         console.error('TOTP disable error:', error);
-        logAudit(env, ctx, userId, 'TOTP_DISABLE_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, userId, 'TOTP_DISABLE_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: 'Internal Server Error.' }, 500);
     }
 }
@@ -383,10 +460,19 @@ export async function handleRegenerateRecoveryCodes(request: CustomRequest, env:
         if (row?.enabled !== 1) {
             return jsonResponse({ message: 'Two-factor authentication is not enabled.' }, 400);
         }
+        const subjects = manageSubjects(userId);
+        const verdict = await checkRateLimit(env, subjects);
+        if (!verdict.allowed) {
+            logAudit(env, ctx, userId, 'RECOVERY_CODES_REGENERATE_FAILURE', { reason: 'Rate limited' }, ipAddress, userAgent);
+            return rateLimitedResponse('Too many attempts. Try again later.', verdict);
+        }
         if (!(await verifyReauthSecret(env, userId, reauthSecret))) {
+            await recordFailure(env, subjects);
             logAudit(env, ctx, userId, 'RECOVERY_CODES_REGENERATE_FAILURE', { reason: 'Password mismatch' }, ipAddress, userAgent);
             return jsonResponse({ message: 'Master password is incorrect.' }, 401);
         }
+        await clearRateLimit(env, subjects);
+
         const recoveryCodes = generateRecoveryCodes();
         await replaceRecoveryCodes(env, userId, recoveryCodes);
         logAudit(env, ctx, userId, 'RECOVERY_CODES_REGENERATED', {}, ipAddress, userAgent);
@@ -409,32 +495,35 @@ export async function handleLoginVerify2fa(request: CustomRequest, env: Env, ctx
         return jsonResponse({ message: 'Verification code is required.' }, 400);
     }
 
-    const ipKey = `rate_limit:2fa:${ipAddress}`;
-    if (await isRateLimited(env, ipKey)) {
+    const ipSubjects = loginSubjects(ipAddress);
+    const ipVerdict = await checkRateLimit(env, ipSubjects);
+    if (!ipVerdict.allowed) {
         logAudit(env, ctx, null, 'LOGIN_2FA_FAILURE', { reason: 'Rate limited' }, ipAddress, userAgent);
-        return jsonResponse({ message: 'Too many attempts. Try again later.' }, 429);
+        return rateLimitedResponse('Too many attempts. Try again later.', ipVerdict);
     }
 
     let decoded: { sub?: number; email?: string; scope?: string };
     try {
         decoded = verify(tempToken, env.JWT_SECRET) as { sub?: number; email?: string; scope?: string };
     } catch {
-        await bumpFailure(env, ipKey);
+        await recordFailure(env, ipSubjects);
         logAudit(env, ctx, null, 'LOGIN_2FA_FAILURE', { reason: 'Invalid temp token' }, ipAddress, userAgent);
         return jsonResponse({ message: 'Your verification session expired. Please sign in again.' }, 401);
     }
 
     if (decoded.scope !== '2fa' || typeof decoded.sub !== 'number') {
-        await bumpFailure(env, ipKey);
+        await recordFailure(env, ipSubjects);
         logAudit(env, ctx, null, 'LOGIN_2FA_FAILURE', { reason: 'Wrong token scope' }, ipAddress, userAgent);
         return jsonResponse({ message: 'Invalid verification session.' }, 401);
     }
 
     const userId = decoded.sub;
-    const userKey = `rate_limit:2fa:user:${userId}`;
-    if (await isRateLimited(env, userKey)) {
+    // Now that the token names an account, both subjects apply.
+    const subjects = loginSubjects(ipAddress, userId);
+    const verdict = await checkRateLimit(env, subjects);
+    if (!verdict.allowed) {
         logAudit(env, ctx, userId, 'LOGIN_2FA_FAILURE', { reason: 'User rate limited' }, ipAddress, userAgent);
-        return jsonResponse({ message: 'Too many attempts. Try again later.' }, 429);
+        return rateLimitedResponse('Too many attempts. Try again later.', verdict);
     }
 
     try {
@@ -447,8 +536,7 @@ export async function handleLoginVerify2fa(request: CustomRequest, env: Env, ctx
         const row = await getTotpRow(env, userId);
 
         if (!user || row?.enabled !== 1 || !row.secret_enc) {
-            await bumpFailure(env, ipKey);
-            await bumpFailure(env, userKey);
+            await recordFailure(env, subjects);
             return jsonResponse({ message: 'Two-factor authentication is not set up.' }, 401);
         }
 
@@ -461,14 +549,12 @@ export async function handleLoginVerify2fa(request: CustomRequest, env: Env, ctx
         }
 
         if (!ok) {
-            await bumpFailure(env, ipKey);
-            await bumpFailure(env, userKey);
+            await recordFailure(env, subjects);
             logAudit(env, ctx, userId, 'LOGIN_2FA_FAILURE', { reason: 'Invalid code' }, ipAddress, userAgent);
             return jsonResponse({ message: 'Invalid code.' }, 401);
         }
 
-        await clearFailures(env, ipKey);
-        await clearFailures(env, userKey);
+        await clearRateLimit(env, subjects);
 
         const token = sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL });
         const remainingRecoveryCodes = recoveryCodeUsed ? await countUnusedRecoveryCodes(env, userId) : undefined;
@@ -483,7 +569,7 @@ export async function handleLoginVerify2fa(request: CustomRequest, env: Env, ctx
         });
     } catch (error: any) {
         console.error('2FA login verification error:', error);
-        logAudit(env, ctx, userId, 'LOGIN_2FA_FAILURE', { error: error.message }, ipAddress, userAgent);
+        logAudit(env, ctx, userId, 'LOGIN_2FA_FAILURE', { error: auditErrorCode(error) }, ipAddress, userAgent);
         return jsonResponse({ message: 'Internal Server Error.' }, 500);
     }
 }
@@ -499,6 +585,9 @@ export const __testables = {
     qrDataUri,
     encryptSecret,
     decryptSecret,
+    // Exposed so the single-use guarantee can be tested against the real
+    // implementation rather than a restatement of it (GHSA-q9vh-jccv-9p23).
+    consumeRecoveryCode,
     RECOVERY_CODE_ALPHABET,
     RECOVERY_CODE_COUNT
 };
