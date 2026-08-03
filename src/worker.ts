@@ -44,6 +44,12 @@ import {
 import { CustomRequest, Env } from './types.js';
 import { jsonResponse } from './utils.js';
 
+// The Durable Object class must be exported from the Worker's entrypoint for the
+// runtime to instantiate it. Nothing calls it yet — this deploy exists only to
+// apply the class migration, which `wrangler deploy` can do and
+// `wrangler versions upload` cannot.
+export { RateLimiter } from './rateLimiter.js';
+
 const router = Router();
 
 // Security headers common to every response (API + static assets).
