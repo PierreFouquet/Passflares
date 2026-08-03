@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { RateLimiter } from '../../src/rateLimiter.js';
 
 // --- D1 mock ---
 
@@ -82,6 +83,104 @@ export function createMockR2() {
     } as unknown as R2Bucket;
 }
 
+// --- Durable Object mock ---
+
+/**
+ * Minimal DurableObjectState backed by a Map.
+ *
+ * Deliberately *not* a fake of the limiter's logic — it stores what the real
+ * one stores, so `RateLimiter` runs unmodified against it.
+ */
+export function createMockDurableObjectState() {
+    const store = new Map<string, unknown>();
+    let alarm: number | null = null;
+    return {
+        storage: {
+            get: vi.fn(async (key: string) => store.get(key)),
+            put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
+            delete: vi.fn(async (key: string) => store.delete(key)),
+            deleteAll: vi.fn(async () => { store.clear(); }),
+            setAlarm: vi.fn(async (time: number) => { alarm = time; }),
+            getAlarm: vi.fn(async () => alarm),
+            deleteAlarm: vi.fn(async () => { alarm = null; })
+        },
+        blockConcurrencyWhile: vi.fn(async (fn: () => Promise<unknown>) => fn()),
+        _store: store,
+        _alarm: () => alarm
+    } as unknown as DurableObjectState & { _store: Map<string, unknown>; _alarm: () => number | null };
+}
+
+/**
+ * Wraps a Durable Object instance so its async methods run one at a time.
+ *
+ * This models workerd's *input gates*: while a storage operation is in flight,
+ * the runtime delivers no other events to that object. That guarantee is the
+ * reason `RateLimiter.fail()` can do a plain read-modify-write without locking,
+ * and it is what KV structurally could not offer (GHSA-vp89-22wm-gjr8).
+ *
+ * Without this, the mock would interleave awaits and reproduce the very bug the
+ * fix removes — making tests fail for a reason the platform does not have.
+ */
+function withInputGate<T extends object>(instance: T): T {
+    let queue: Promise<unknown> = Promise.resolve();
+    return new Proxy(instance, {
+        get(target, prop, receiver) {
+            const value = Reflect.get(target, prop, receiver);
+            if (typeof value !== 'function') return value;
+            return (...args: unknown[]) => {
+                const run = queue.then(() => (value as Function).apply(target, args));
+                // Keep the chain alive even if one call rejects.
+                queue = run.then(() => undefined, () => undefined);
+                return run;
+            };
+        }
+    });
+}
+
+/**
+ * A DurableObjectNamespace that instantiates the real class, one instance per
+ * name — mirroring `idFromName`, where the same name always resolves to the
+ * same object and different names never share state.
+ */
+export function createMockDurableObjectNamespace<T extends object>(
+    factory: (state: DurableObjectState, env: unknown) => T,
+    env: unknown = {}
+) {
+    const instances = new Map<string, T>();
+    const states = new Map<string, ReturnType<typeof createMockDurableObjectState>>();
+
+    const instanceFor = (name: string): T => {
+        if (!instances.has(name)) {
+            const state = createMockDurableObjectState();
+            states.set(name, state);
+            instances.set(name, withInputGate(factory(state, env)));
+        }
+        return instances.get(name)!;
+    };
+
+    return {
+        // The mock treats the name itself as the ID; the real hash is opaque and
+        // irrelevant, only the name → instance mapping matters here.
+        idFromName: vi.fn((name: string) => name),
+        idFromString: vi.fn((id: string) => id),
+        newUniqueId: vi.fn(() => `unique-${Math.random()}`),
+        get: vi.fn((id: string) => instanceFor(id)),
+        getByName: vi.fn((name: string) => instanceFor(name)),
+        _instances: instances,
+        _states: states
+    } as unknown as DurableObjectNamespace<any> & {
+        _instances: Map<string, T>;
+        _states: Map<string, ReturnType<typeof createMockDurableObjectState>>;
+    };
+}
+
+/** A namespace wired to the real RateLimiter, for handler-level tests. */
+export function createMockRateLimiter() {
+    return createMockDurableObjectNamespace(
+        (state, env) => new RateLimiter(state, env as any)
+    );
+}
+
 // --- Env factory ---
 
 export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) {
@@ -89,6 +188,7 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
         DB: createMockDB(),
         VAULTS: createMockR2(),
         RATE_LIMIT: createMockKV(),
+        RATE_LIMITER: createMockRateLimiter(),
         ASSETS: {} as Fetcher,
         JWT_SECRET: 'test-jwt-secret-32-chars-minimum!!',
         TURNSTILE_KEY: 'test-turnstile-key',

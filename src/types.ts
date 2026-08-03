@@ -25,6 +25,11 @@ export interface Env {
     DB: D1Database;
     VAULTS: R2Bucket;
     RATE_LIMIT: KVNamespace;
+    // Provisioned here ahead of the code that uses it. A Durable Object
+    // migration is an atomic control-plane operation that `wrangler versions
+    // upload` cannot apply, so the namespace has to exist before the change
+    // that depends on it can be previewed on a branch. Nothing reads this yet.
+    RATE_LIMITER: DurableObjectNamespace<import('./rateLimiter.js').RateLimiter>;
     ASSETS: Fetcher;
     JWT_SECRET: string;
     TURNSTILE_KEY: string;

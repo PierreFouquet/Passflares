@@ -53,6 +53,22 @@ bucket_name = "secure-vaults-r2"
 binding = "RATE_LIMIT"
 id = "912ffecc0a27412ba662c890c9f9d4e2"
 
+# Durable Object for the brute-force limiter. Deployed ahead of the code that
+# uses it: a class migration is an atomic control-plane operation, so it can only
+# be applied by `wrangler deploy` — `wrangler versions upload`, which branch
+# builds run, rejects it outright. Landing it on its own also keeps the blast
+# radius of the lifecycle change to a deploy that changes no behaviour.
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+# new_sqlite_classes, not new_classes: key-value backed Durable Object namespaces
+# can no longer be created, and the Workers Free plan has only ever supported the
+# SQLite backend.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "secure-password-db"
