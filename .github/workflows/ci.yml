@@ -32,6 +32,22 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  mutation:
+    runs-on: ubuntu-latest
+    name: Falsifiability gate
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      # Breaks one security-critical behaviour at a time and fails if the suite
+      # stays green — a passing test that cannot fail is worse than no test,
+      # because it reads as coverage (#83). Separate job so it runs alongside
+      # the unit tests rather than adding ~6 min to them.
+      - run: npm run test:mutation
+
   e2e:
     runs-on: ubuntu-latest
     name: Browser E2E
