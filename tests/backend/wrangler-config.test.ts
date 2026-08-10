@@ -71,3 +71,71 @@ describe.each(['wrangler.toml', 'wrangler.toml.example'])('%s — rate limiter',
         expect(text()).toMatch(/\[triggers\][\s\S]*?crons\s*=\s*\[/);
     });
 });
+
+// compatibility_date and compatibility_flags decide which runtime APIs the
+// Worker gets — Request/Response semantics, stream behaviour, which Node
+// built-ins exist. Editing either changes production behaviour with no code
+// diff to review, and nothing noticed the last move (2026-05-26 -> 2026-08-07,
+// #89 §7).
+//
+// So the value is pinned here rather than merely "present". Bumping it is fine
+// and sometimes necessary — but it now costs a deliberate edit to this file,
+// which is where the reviewer gets told what they are agreeing to. Before
+// changing COMPATIBILITY_DATE, read the runtime changes between the two dates
+// (https://developers.cloudflare.com/workers/configuration/compatibility-dates/)
+// and check the installed wrangler/workerd actually supports the new one — a
+// date past the runtime's ceiling makes `wrangler dev` refuse to boot.
+const COMPATIBILITY_DATE = '2026-08-07';
+
+// nodejs_compat is load-bearing: src/ reaches for Node built-ins (jsonwebtoken
+// pulls in crypto/buffer/stream), so dropping the flag breaks the Worker at
+// import time, before any handler runs.
+const COMPATIBILITY_FLAGS = ['nodejs_compat'];
+
+describe.each(['wrangler.toml', 'wrangler.toml.example'])('%s — runtime contract', (path) => {
+    const text = () => readFileSync(resolve(path), 'utf8');
+
+    function compatibilityDate(): string | null {
+        return text().match(/^compatibility_date\s*=\s*"([^"]+)"/m)?.[1] ?? null;
+    }
+
+    function compatibilityFlags(): string[] {
+        const block = text().match(/^compatibility_flags\s*=\s*\[([^\]]*)\]/m)?.[1];
+        if (block === undefined) return [];
+        return [...block.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    }
+
+    it(`pins compatibility_date to ${COMPATIBILITY_DATE}`, () => {
+        expect(compatibilityDate()).toBe(COMPATIBILITY_DATE);
+    });
+
+    it('declares compatibility_flags including nodejs_compat', () => {
+        expect(compatibilityFlags()).toEqual(COMPATIBILITY_FLAGS);
+    });
+
+    it('uses a real ISO date, not a placeholder', () => {
+        // A malformed date is silently ignored by some tooling, which then
+        // falls back to the oldest possible semantics.
+        const date = compatibilityDate();
+        expect(date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(Number.isNaN(Date.parse(date!))).toBe(false);
+    });
+});
+
+describe('wrangler.toml and wrangler.toml.example agree on the runtime', () => {
+    // A fork deploying from the example gets a different runtime from the one
+    // every test here ran against — which is the kind of divergence that only
+    // shows up as "works upstream, breaks on my account".
+    const read = (p: string) => readFileSync(resolve(p), 'utf8');
+
+    it('declares the same compatibility_date in both files', () => {
+        const live = read('wrangler.toml').match(/^compatibility_date\s*=\s*"([^"]+)"/m)?.[1];
+        const example = read('wrangler.toml.example').match(/^compatibility_date\s*=\s*"([^"]+)"/m)?.[1];
+        expect(example).toBe(live);
+    });
+
+    it('declares the same compatibility_flags in both files', () => {
+        const flagsOf = (p: string) => read(p).match(/^compatibility_flags\s*=\s*\[([^\]]*)\]/m)?.[1]?.trim();
+        expect(flagsOf('wrangler.toml.example')).toBe(flagsOf('wrangler.toml'));
+    });
+});

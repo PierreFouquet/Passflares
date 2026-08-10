@@ -65,22 +65,23 @@ describe('Layer 0-1 — password stretching and domain separation', () => {
         expect(Array.from(a)).not.toEqual(Array.from(b));
     });
 
-    it('authSecret and kek are independent outputs of the same master key', async () => {
+    it('authSecret is hex and the kek is a non-extractable CryptoKey', async () => {
+        // Named for what it checks. It used to be called "authSecret and kek are
+        // independent outputs of the same master key" and did not check that:
+        // the comparison below re-derived authSecret and compared it to itself,
+        // so it asserted determinism twice over and nothing about the kek. The
+        // falsifiability gate found it — `fe-kek-from-auth-info` swaps the KEK's
+        // HKDF label for the auth one, collapsing the two into the same value,
+        // and this file stayed green.
+        //
+        // The independence property is asserted properly, end to end, in
+        // zero-knowledge-invariants.test.js. What is left here is the shape
+        // check that was always genuine.
         const { deriveMasterKey, deriveAuthSecret, deriveKek } = await load();
         const masterKey = await deriveMasterKey('pw', SALT, FAST);
 
-        const authSecret = await deriveAuthSecret(masterKey);
-        const kek = await deriveKek(masterKey);
-
-        // The server holds authSecret. If it equalled (or were derivable from)
-        // the KEK, the whole exercise would be pointless.
-        expect(authSecret).toMatch(/^[0-9a-f]{64}$/);
-        expect(kek.extractable).toBe(false);
-
-        // Same input, different info string -> unrelated output.
-        const authBytes = authSecret;
-        const kekProbe = await deriveAuthSecret(masterKey);
-        expect(kekProbe).toBe(authBytes); // deterministic
+        expect(await deriveAuthSecret(masterKey)).toMatch(/^[0-9a-f]{64}$/);
+        expect((await deriveKek(masterKey)).extractable).toBe(false);
     });
 
     it('authSecret is stable across derivations and unique per password', async () => {

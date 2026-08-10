@@ -97,8 +97,27 @@ describe('authenticateRequest', () => {
 });
 
 // --- checkVaultPermission ---
+//
+// BRANCH COVERAGE ONLY. These drive the substring-matching mock, which returns
+// the same canned row whatever is bound, so nothing below can show that a query
+// is scoped to the right user or the right vault. "Returns null when user is the
+// direct owner" passes just as happily if the SQL drops `AND owner_id = ?`.
+//
+// Not a guess — measured. Pointing the falsifiability gate at this file alone:
+//
+//   node scripts/mutation-check.mjs --only mw-owner-any-vault \
+//        --targets tests/backend/middleware.test.ts
+//
+// mw-owner-any-vault, mw-acl-any-user and mw-org-any-member all SURVIVE here.
+// They are killed by integration/vault-permission-real-db.test.ts, which is
+// where the authorization boundary is actually asserted, against real SQL where
+// bound parameters decide the answer (#89 §6, #83 §1).
+//
+// What these keep earning: the argument-validation and control-flow arms —
+// bad vault id, absent user context, the 401/400 paths — which need no database
+// and are cheaper to state here.
 
-describe('checkVaultPermission', () => {
+describe('checkVaultPermission (branch coverage; scoping lives in the integration suite)', () => {
     function makeAuthedRequest(userId: number, vaultId: string) {
         const req = makeRequest('GET', `/api/vaults/${vaultId}/data`) as any;
         req.user = { userId, email: 'a@b.com', iat: 0, exp: 9999999999 };

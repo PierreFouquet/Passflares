@@ -134,8 +134,24 @@ describe('GET /api/organizations/:orgId/key-gaps', () => {
         const bound: unknown[][] = [];
         const env = createMockEnv({ DB: makeDB(MEMBER, [], a => bound.push(a)) });
         await handleGetOrgKeyGaps(req('7'), env as any, mockCtx);
-        // Membership check binds (userId, orgId); the anti-join binds (orgId, orgId).
-        expect(bound.some(a => a.length === 2 && a[0] === 7 && a[1] === 7)).toBe(true);
+
+        // Membership check binds (userId, orgId) — here (1, 7), because req()
+        // defaults the caller to userId 1.
+        //
+        // This used to assert (7, 7) and describe it as the membership check.
+        // It was not: the caller is user 1, and the only bind pair matching
+        // (7, 7) was the anti-join's (orgId, orgId). The assertion passed for a
+        // reason unrelated to its comment, and would have kept passing with the
+        // membership check scoped to the wrong user entirely.
+        expect(bound.some(a => a.length === 2 && a[0] === 1 && a[1] === 7)).toBe(true);
+
+        // The anti-join binds the entity tag as a *string*, not the number 7
+        // concatenated in SQL. It used to be `'org_' || ?` with 7 bound, which
+        // renders 'org_7.0' under any driver that types a JS number as REAL —
+        // matching no row, so every organisation would report "no key gaps".
+        // Asserting the shape here keeps it from drifting back.
+        expect(bound.some(a => a.length === 2 && a[0] === 'org_7' && a[1] === 7)).toBe(true);
+        expect(bound.some(a => a.includes('org_7.0'))).toBe(false);
     });
 
     it('answers 500 rather than leaking an exception on a DB failure', async () => {

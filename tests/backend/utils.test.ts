@@ -118,13 +118,59 @@ describe('verifyTurnstile', () => {
     });
 
     it('returns false when the siteverify endpoint returns a non-2xx', async () => {
-        stubFetch({}, 500);
+        // The body deliberately claims success. With `{}` this test passed
+        // whether or not the `!result.ok` guard existed — `data.success` was
+        // undefined either way, so it was green for the wrong reason and
+        // deleting the guard changed nothing. Now only the status check can
+        // produce `false`, so the assertion is about the guard it names.
+        stubFetch({ success: true }, 500);
         expect(await verifyTurnstile('token', 'secret')).toBe(false);
     });
 
     it('returns false when fetch throws', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network'); }));
         expect(await verifyTurnstile('token', 'secret')).toBe(false);
+    });
+
+    // Everything above asserts the return value, so the request itself was
+    // never checked: sending an empty secret, or dropping the token, kept the
+    // suite green. Cloudflare fails such a request closed, which makes this an
+    // availability bug rather than a bypass — every human would be told they
+    // are a bot — but nothing here could tell you it had happened.
+    it('sends the secret, the token and the caller IP to siteverify', async () => {
+        const fetchMock = vi.fn(async () =>
+            new Response(JSON.stringify({ success: true }), {
+                status: 200, headers: { 'Content-Type': 'application/json' }
+            })
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await verifyTurnstile('the-token', 'the-secret', '203.0.113.7');
+
+        const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+        expect(url).toBe('https://challenges.cloudflare.com/turnstile/v0/siteverify');
+        expect(init.method).toBe('POST');
+
+        const form = init.body as FormData;
+        expect(form.get('secret')).toBe('the-secret');
+        expect(form.get('response')).toBe('the-token');
+        expect(form.get('remoteip')).toBe('203.0.113.7');
+    });
+
+    it('omits remoteip when no caller IP is available', async () => {
+        // Cloudflare rejects an empty remoteip rather than ignoring it, so
+        // "absent" and "present but blank" are not the same request.
+        const fetchMock = vi.fn(async () =>
+            new Response(JSON.stringify({ success: true }), {
+                status: 200, headers: { 'Content-Type': 'application/json' }
+            })
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await verifyTurnstile('the-token', 'the-secret', null);
+
+        const form = (fetchMock.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+        expect(form.get('remoteip')).toBeNull();
     });
 });
 

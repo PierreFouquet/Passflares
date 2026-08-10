@@ -7,7 +7,7 @@ import { BSIGMA, G1s, G2s } from "./_blake.js";
 import { SHA256_IV } from "./_md.js";
 import * as u64 from "./_u64.js";
 // prettier-ignore
-import { abytes, aexists, anumber, aoutput, clean, createHasher, swap32IfBE, swap8IfBE, u32 } from "./utils.js";
+import { abytes, aexists, anumber, aoutput, checkOpts, clean, copyBytes, createHasher, swap32IfBE, swap8IfBE, u32 } from "./utils.js";
 // Same IV words as `SHA512_IV`, but endian-swapped into LE u32 low/high halves
 // for the BLAKE2b u64 helpers below.
 const B2B_IV = /* @__PURE__ */ Uint32Array.from([
@@ -25,21 +25,28 @@ function G1b(a, b, c, d, msg, x) {
     let Cl = BBUF[2 * c], Ch = BBUF[2 * c + 1]; // prettier-ignore
     let Dl = BBUF[2 * d], Dh = BBUF[2 * d + 1]; // prettier-ignore
     // v[a] = (v[a] + v[b] + x) | 0;
-    let ll = u64.add3L(Al, Bl, Xl);
+    const ll = u64.add3L(Al, Bl, Xl);
     Ah = u64.add3H(ll, Ah, Bh, Xh);
     Al = ll | 0;
     // v[d] = rotr(v[d] ^ v[a], 32)
-    ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
-    ({ Dh, Dl } = { Dh: u64.rotr32H(Dh, Dl), Dl: u64.rotr32L(Dh, Dl) });
+    let xh = Dh ^ Ah, xl = Dl ^ Al; // prettier-ignore
+    Dh = u64.rotr32H(xh, xl);
+    Dl = u64.rotr32L(xh, xl);
     // v[c] = (v[c] + v[d]) | 0;
     ({ h: Ch, l: Cl } = u64.add(Ch, Cl, Dh, Dl));
     // v[b] = rotr(v[b] ^ v[c], 24)
-    ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
-    ({ Bh, Bl } = { Bh: u64.rotrSH(Bh, Bl, 24), Bl: u64.rotrSL(Bh, Bl, 24) });
-    ((BBUF[2 * a] = Al), (BBUF[2 * a + 1] = Ah));
-    ((BBUF[2 * b] = Bl), (BBUF[2 * b + 1] = Bh));
-    ((BBUF[2 * c] = Cl), (BBUF[2 * c + 1] = Ch));
-    ((BBUF[2 * d] = Dl), (BBUF[2 * d + 1] = Dh));
+    xh = Bh ^ Ch;
+    xl = Bl ^ Cl;
+    Bh = u64.rotrSH(xh, xl, 24);
+    Bl = u64.rotrSL(xh, xl, 24);
+    BBUF[2 * a] = Al;
+    BBUF[2 * a + 1] = Ah;
+    BBUF[2 * b] = Bl;
+    BBUF[2 * b + 1] = Bh;
+    BBUF[2 * c] = Cl;
+    BBUF[2 * c + 1] = Ch;
+    BBUF[2 * d] = Dl;
+    BBUF[2 * d + 1] = Dh;
 }
 // Second half-round of the same LE-limb BLAKE2b G mix; `x` is the message word offset.
 function G2b(a, b, c, d, msg, x) {
@@ -50,27 +57,35 @@ function G2b(a, b, c, d, msg, x) {
     let Cl = BBUF[2 * c], Ch = BBUF[2 * c + 1]; // prettier-ignore
     let Dl = BBUF[2 * d], Dh = BBUF[2 * d + 1]; // prettier-ignore
     // v[a] = (v[a] + v[b] + x) | 0;
-    let ll = u64.add3L(Al, Bl, Xl);
+    const ll = u64.add3L(Al, Bl, Xl);
     Ah = u64.add3H(ll, Ah, Bh, Xh);
     Al = ll | 0;
     // v[d] = rotr(v[d] ^ v[a], 16)
-    ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
-    ({ Dh, Dl } = { Dh: u64.rotrSH(Dh, Dl, 16), Dl: u64.rotrSL(Dh, Dl, 16) });
+    let xh = Dh ^ Ah, xl = Dl ^ Al; // prettier-ignore
+    Dh = u64.rotrSH(xh, xl, 16);
+    Dl = u64.rotrSL(xh, xl, 16);
     // v[c] = (v[c] + v[d]) | 0;
     ({ h: Ch, l: Cl } = u64.add(Ch, Cl, Dh, Dl));
     // v[b] = rotr(v[b] ^ v[c], 63)
-    ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
-    ({ Bh, Bl } = { Bh: u64.rotrBH(Bh, Bl, 63), Bl: u64.rotrBL(Bh, Bl, 63) });
-    ((BBUF[2 * a] = Al), (BBUF[2 * a + 1] = Ah));
-    ((BBUF[2 * b] = Bl), (BBUF[2 * b + 1] = Bh));
-    ((BBUF[2 * c] = Cl), (BBUF[2 * c + 1] = Ch));
-    ((BBUF[2 * d] = Dl), (BBUF[2 * d + 1] = Dh));
+    xh = Bh ^ Ch;
+    xl = Bl ^ Cl;
+    Bh = u64.rotrBH(xh, xl, 63);
+    Bl = u64.rotrBL(xh, xl, 63);
+    BBUF[2 * a] = Al;
+    BBUF[2 * a + 1] = Ah;
+    BBUF[2 * b] = Bl;
+    BBUF[2 * b + 1] = Bh;
+    BBUF[2 * c] = Cl;
+    BBUF[2 * c + 1] = Ch;
+    BBUF[2 * d] = Dl;
+    BBUF[2 * d + 1] = Dh;
 }
 function checkBlake2Opts(outputLen, opts = {}, keyLen, saltLen, persLen) {
     anumber(keyLen);
-    // RFC 7693 §2.1 requires digest length nn in 1..keyLen.
+    // RFC 7693 §2.1 requires digest length nn in 1..keyLen (keyLen doubles as
+    // the per-variant max for both key and digest lengths: 64 for b, 32 for s).
     if (outputLen <= 0 || outputLen > keyLen)
-        throw new Error('outputLen bigger than keyLen');
+        throw new Error('"dkLen" must be 1..' + keyLen + ', got ' + outputLen);
     const { key, salt, personalization } = opts;
     // This API uses `undefined` for the RFC 7693 `kk = 0` case, so a provided key must be non-empty.
     if (key !== undefined && (key.length < 1 || key.length > keyLen))
@@ -131,7 +146,9 @@ export class _BLAKE2 {
                 swap32IfBE(data32);
                 continue;
             }
-            buffer.set(data.subarray(pos, pos + take), this.pos);
+            // When the whole input is buffered in one go (common for short messages), passing `data`
+            // directly avoids allocating a subarray view.
+            buffer.set(pos === 0 && take === len ? data : data.subarray(pos, pos + take), this.pos);
             this.pos += take;
             this.length += take;
             pos += take;
@@ -141,18 +158,19 @@ export class _BLAKE2 {
     digestInto(out) {
         aexists(this);
         aoutput(out, this);
+        // Reject unaligned views explicitly instead of hiding them behind a full scratch copy.
+        if (out.byteOffset & 3)
+            throw new RangeError('"output" expected 4-byte aligned byteOffset, got ' + out.byteOffset);
         const { pos, buffer32 } = this;
         this.finished = true;
         // Padding
-        clean(this.buffer.subarray(pos));
+        this.buffer.fill(0, pos);
         swap32IfBE(buffer32);
         this.compress(buffer32, 0, true);
         swap32IfBE(buffer32);
-        // Reject unaligned views explicitly instead of hiding them behind a full scratch copy.
-        if (out.byteOffset & 3)
-            throw new RangeError('"digestInto() output" expected 4-byte aligned byteOffset, got ' + out.byteOffset);
         const state = this.get();
-        const out32 = u32(out);
+        // digest() passes our own `buffer` as `out`; reuse its cached u32 view instead of allocating.
+        const out32 = out === this.buffer ? buffer32 : u32(out);
         const full = Math.floor(this.outputLen / 4);
         for (let i = 0; i < full; i++)
             out32[i] = swap8IfBE(state[i]);
@@ -177,6 +195,7 @@ export class _BLAKE2 {
         // Recreate only `dkLen`; key/salt/personalization are already absorbed into the copied state.
         to ||= new this.constructor({ dkLen: outputLen });
         to.set(...this.get());
+        // Last-block-aware lazy compression keeps the pending block live even when full.
         to.buffer.set(buffer);
         to.destroyed = destroyed;
         to.finished = finished;
@@ -210,6 +229,7 @@ export class _BLAKE2b extends _BLAKE2 {
     v7l = B2B_IV[14] | 0;
     v7h = B2B_IV[15] | 0;
     constructor(opts = {}) {
+        opts = checkOpts({}, opts);
         const olen = opts.dkLen === undefined ? 64 : opts.dkLen;
         super(128, olen);
         checkBlake2Opts(olen, opts, 64, 16, 16);
@@ -224,7 +244,8 @@ export class _BLAKE2b extends _BLAKE2 {
         this.v0l ^= this.outputLen | (keyLength << 8) | (0x01 << 16) | (0x01 << 24);
         if (salt !== undefined) {
             abytes(salt, undefined, 'salt');
-            const slt = u32(salt);
+            // Copy: u32() would throw on views with byteOffset not divisible by 4.
+            const slt = u32(copyBytes(salt));
             this.v4l ^= swap8IfBE(slt[0]);
             this.v4h ^= swap8IfBE(slt[1]);
             this.v5l ^= swap8IfBE(slt[2]);
@@ -232,7 +253,8 @@ export class _BLAKE2b extends _BLAKE2 {
         }
         if (personalization !== undefined) {
             abytes(personalization, undefined, 'personalization');
-            const pers = u32(personalization);
+            // Copy: u32() would throw on views with byteOffset not divisible by 4.
+            const pers = u32(copyBytes(personalization));
             this.v6l ^= swap8IfBE(pers[0]);
             this.v6h ^= swap8IfBE(pers[1]);
             this.v7l ^= swap8IfBE(pers[2]);
@@ -243,6 +265,8 @@ export class _BLAKE2b extends _BLAKE2 {
             const tmp = new Uint8Array(this.blockLen);
             tmp.set(key);
             this.update(tmp);
+            // The padded copy holds key material; buffer/state keep what they need.
+            clean(tmp);
         }
     }
     // prettier-ignore
@@ -270,9 +294,32 @@ export class _BLAKE2b extends _BLAKE2 {
         this.v7h = v7h | 0;
     }
     compress(msg, offset, isLast) {
-        this.get().forEach((v, i) => (BBUF[i] = v)); // First half from state.
+        // First half from state. Direct writes: get() would allocate an array +
+        // closure per block.
+        // prettier-ignore
+        const { v0l, v0h, v1l, v1h, v2l, v2h, v3l, v3h, v4l, v4h, v5l, v5h, v6l, v6h, v7l, v7h } = this;
+        // prettier-ignore
+        {
+            BBUF[0] = v0l;
+            BBUF[1] = v0h;
+            BBUF[2] = v1l;
+            BBUF[3] = v1h;
+            BBUF[4] = v2l;
+            BBUF[5] = v2h;
+            BBUF[6] = v3l;
+            BBUF[7] = v3h;
+            BBUF[8] = v4l;
+            BBUF[9] = v4h;
+            BBUF[10] = v5l;
+            BBUF[11] = v5h;
+            BBUF[12] = v6l;
+            BBUF[13] = v6h;
+            BBUF[14] = v7l;
+            BBUF[15] = v7h;
+        }
         BBUF.set(B2B_IV, 16); // Second half from IV.
-        let { h, l } = u64.fromBig(BigInt(this.length));
+        const l = u64.fromNumL(this.length);
+        const h = u64.fromNumH(this.length);
         BBUF[24] = B2B_IV[8] ^ l; // Low word of the offset.
         BBUF[25] = B2B_IV[9] ^ h; // High word.
         // Invert all bits for last block
@@ -338,6 +385,16 @@ export class _BLAKE2b extends _BLAKE2 {
  * ```ts
  * blake2b(new Uint8Array([97, 98, 99]));
  * ```
+ * @example
+ * Hash a message with Blake2b while selecting output, MAC, salt, and personalization settings.
+ * ```ts
+ * blake2b(new Uint8Array([97, 98, 99]), {
+ *   dkLen: 32,
+ *   key: new Uint8Array(32),
+ *   salt: new Uint8Array(16),
+ *   personalization: new Uint8Array(16),
+ * });
+ * ```
  */
 export const blake2b = /* @__PURE__ */ createHasher((opts) => new _BLAKE2b(opts));
 /**
@@ -368,8 +425,8 @@ export const blake2b = /* @__PURE__ */ createHasher((opts) => new _BLAKE2b(opts)
  * @example
  * Run the BLAKE2 compression core on zeroed state and message words.
  * ```ts
- * import { compress } from '@noble/hashes/blake2.js';
- * const state = compress(
+ * import { _compress } from '@noble/hashes/blake2.js';
+ * const state = _compress(
  *   new Uint8Array(16),
  *   0,
  *   new Uint32Array(16),
@@ -381,7 +438,7 @@ export const blake2b = /* @__PURE__ */ createHasher((opts) => new _BLAKE2b(opts)
  * ```
  */
 // prettier-ignore
-export function compress(s, offset, msg, rounds, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) {
+export function _compress(s, offset, msg, rounds, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) {
     let j = 0;
     for (let i = 0; i < rounds; i++) {
         ({ a: v0, b: v4, c: v8, d: v12 } = G1s(v0, v4, v8, v12, msg[offset + s[j++]]));
@@ -417,6 +474,7 @@ export class _BLAKE2s extends _BLAKE2 {
     v6 = B2S_IV[6] | 0;
     v7 = B2S_IV[7] | 0;
     constructor(opts = {}) {
+        opts = checkOpts({}, opts);
         const olen = opts.dkLen === undefined ? 32 : opts.dkLen;
         super(64, olen);
         checkBlake2Opts(olen, opts, 32, 8, 8);
@@ -431,13 +489,15 @@ export class _BLAKE2s extends _BLAKE2 {
         this.v0 ^= this.outputLen | (keyLength << 8) | (0x01 << 16) | (0x01 << 24);
         if (salt !== undefined) {
             abytes(salt, undefined, 'salt');
-            const slt = u32(salt);
+            // Copy: u32() would throw on views with byteOffset not divisible by 4.
+            const slt = u32(copyBytes(salt));
             this.v4 ^= swap8IfBE(slt[0]);
             this.v5 ^= swap8IfBE(slt[1]);
         }
         if (personalization !== undefined) {
             abytes(personalization, undefined, 'personalization');
-            const pers = u32(personalization);
+            // Copy: u32() would throw on views with byteOffset not divisible by 4.
+            const pers = u32(copyBytes(personalization));
             this.v6 ^= swap8IfBE(pers[0]);
             this.v7 ^= swap8IfBE(pers[1]);
         }
@@ -446,6 +506,8 @@ export class _BLAKE2s extends _BLAKE2 {
             const tmp = new Uint8Array(this.blockLen);
             tmp.set(key);
             this.update(tmp);
+            // The padded copy holds key material; buffer/state keep what they need.
+            clean(tmp);
         }
     }
     get() {
@@ -464,11 +526,12 @@ export class _BLAKE2s extends _BLAKE2 {
         this.v7 = v7 | 0;
     }
     compress(msg, offset, isLast) {
-        const { h, l } = u64.fromBig(BigInt(this.length));
+        const l = u64.fromNumL(this.length);
+        const h = u64.fromNumH(this.length);
         // Seed v8..v15 from the IV, xor the low/high 32-bit byte counter into
         // v12/v13, and invert v14 on the final block.
         // prettier-ignore
-        const { v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15 } = compress(BSIGMA, offset, msg, 10, this.v0, this.v1, this.v2, this.v3, this.v4, this.v5, this.v6, this.v7, B2S_IV[0], B2S_IV[1], B2S_IV[2], B2S_IV[3], l ^ B2S_IV[4], h ^ B2S_IV[5], isLast ? ~B2S_IV[6] : B2S_IV[6], B2S_IV[7]);
+        const { v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15 } = _compress(BSIGMA, offset, msg, 10, this.v0, this.v1, this.v2, this.v3, this.v4, this.v5, this.v6, this.v7, B2S_IV[0], B2S_IV[1], B2S_IV[2], B2S_IV[3], l ^ B2S_IV[4], h ^ B2S_IV[5], isLast ? ~B2S_IV[6] : B2S_IV[6], B2S_IV[7]);
         this.v0 ^= v0 ^ v8;
         this.v1 ^= v1 ^ v9;
         this.v2 ^= v2 ^ v10;
@@ -495,6 +558,16 @@ export class _BLAKE2s extends _BLAKE2 {
  * Hash a message with Blake2s.
  * ```ts
  * blake2s(new Uint8Array([97, 98, 99]));
+ * ```
+ * @example
+ * Hash a message with Blake2s while selecting output, MAC, salt, and personalization settings.
+ * ```ts
+ * blake2s(new Uint8Array([97, 98, 99]), {
+ *   dkLen: 16,
+ *   key: new Uint8Array(32),
+ *   salt: new Uint8Array(8),
+ *   personalization: new Uint8Array(8),
+ * });
  * ```
  */
 export const blake2s = /* @__PURE__ */ createHasher((opts) => new _BLAKE2s(opts));

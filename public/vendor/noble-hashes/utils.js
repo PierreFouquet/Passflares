@@ -19,10 +19,14 @@ export function isBytes(a) {
             'BYTES_PER_ELEMENT' in a &&
             a.BYTES_PER_ELEMENT === 1));
 }
+// Shared error-message prefix builder. Only called on throw paths, so assert
+// success paths never pay for the string concatenation.
+const atitle = (title) => (title ? `"${title}" ` : '');
 /**
  * Asserts something is a non-negative integer.
  * @param n - number to validate
  * @param title - label included in thrown errors
+ * @returns The validated number.
  * @throws On wrong argument types. {@link TypeError}
  * @throws On wrong argument ranges or values. {@link RangeError}
  * @example
@@ -32,14 +36,28 @@ export function isBytes(a) {
  * ```
  */
 export function anumber(n, title = '') {
-    if (typeof n !== 'number') {
-        const prefix = title && `"${title}" `;
-        throw new TypeError(`${prefix}expected number, got ${typeof n}`);
-    }
-    if (!Number.isSafeInteger(n) || n < 0) {
-        const prefix = title && `"${title}" `;
-        throw new RangeError(`${prefix}expected integer >= 0, got ${n}`);
-    }
+    if (typeof n !== 'number')
+        throw new TypeError(atitle(title) + 'expected number, got ' + typeof n);
+    if (!Number.isSafeInteger(n) || n < 0)
+        throw new RangeError(atitle(title) + 'expected integer >= 0, got ' + n);
+    return n;
+}
+/**
+ * Asserts something is a boolean.
+ * @param value - value to validate
+ * @param title - label included in thrown errors
+ * @returns The validated boolean.
+ * @throws On wrong argument types. {@link TypeError}
+ * @example
+ * Validate a boolean option.
+ * ```ts
+ * abool(true, 'enableXOF');
+ * ```
+ */
+export function abool(value, title = '') {
+    if (typeof value !== 'boolean')
+        throw new TypeError(atitle(title) + 'expected boolean, got type=' + typeof value);
+    return value;
 }
 /**
  * Asserts something is Uint8Array.
@@ -56,19 +74,20 @@ export function anumber(n, title = '') {
  * ```
  */
 export function abytes(value, length, title = '') {
+    // Success path first: this runs at the start of every update() / digestInto(), and the
+    // common `abytes(data)` form must not pay for length handling it does not use.
+    if (isBytes(value) && (length === undefined || value.length === length))
+        return value;
+    // Error path: recompute freely to build the exact message.
+    if (length !== undefined)
+        anumber(length, 'length');
     const bytes = isBytes(value);
-    const len = value?.length;
-    const needsLen = length !== undefined;
-    if (!bytes || (needsLen && len !== length)) {
-        const prefix = title && `"${title}" `;
-        const ofLen = needsLen ? ` of length ${length}` : '';
-        const got = bytes ? `length=${len}` : `type=${typeof value}`;
-        const message = prefix + 'expected Uint8Array' + ofLen + ', got ' + got;
-        if (!bytes)
-            throw new TypeError(message);
-        throw new RangeError(message);
-    }
-    return value;
+    const ofLen = length !== undefined ? ` of length ${length}` : '';
+    const got = bytes ? `length=${value.length}` : `type=${typeof value}`;
+    const message = atitle(title) + 'expected Uint8Array' + ofLen + ', got ' + got;
+    if (!bytes)
+        throw new TypeError(message);
+    throw new RangeError(message);
 }
 /**
  * Copies bytes into a fresh Uint8Array.
@@ -103,16 +122,18 @@ export function copyBytes(bytes) {
  */
 export function ahash(h) {
     if (typeof h !== 'function' || typeof h.create !== 'function')
-        throw new TypeError('Hash must wrapped by utils.createHasher');
+        throw new TypeError('expected hash wrapped by utils.createHasher');
     anumber(h.outputLen);
     anumber(h.blockLen);
     // HMAC and KDF callers treat these as real byte lengths; allowing zero lets fake wrappers pass
     // validation and can produce empty outputs instead of failing fast.
-    if (h.outputLen < 1)
-        throw new Error('"outputLen" must be >= 1');
-    if (h.blockLen < 1)
-        throw new Error('"blockLen" must be >= 1');
+    if (h.outputLen < 1 || h.blockLen < 1)
+        throw new Error('hash blockLen / outputLen must be >= 1');
 }
+const aobject = (value, label) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        throw new TypeError((label === 'object' ? '' : `"${label}" `) + 'expected object, got type=' + typeof value);
+};
 /**
  * Asserts a hash instance has not been destroyed or finished.
  * @param instance - hash instance to validate
@@ -128,10 +149,12 @@ export function ahash(h) {
  * ```
  */
 export function aexists(instance, checkFinished = true) {
+    // Runs on every update()/digestInto(); the flags are library-owned booleans, so only their
+    // truthiness is checked - re-validating their type per call was pure hot-path overhead.
     if (instance.destroyed)
-        throw new Error('Hash instance has been destroyed');
+        throw new Error('hash was destroyed');
     if (checkFinished && instance.finished)
-        throw new Error('Hash#digest() has already been called');
+        throw new Error('digest() was already called');
 }
 /**
  * Asserts output is a sufficiently-sized byte array.
@@ -150,10 +173,12 @@ export function aexists(instance, checkFinished = true) {
  * ```
  */
 export function aoutput(out, instance) {
-    abytes(out, undefined, 'digestInto() output');
+    abytes(out, undefined, 'output');
+    // `outputLen` is a library-owned readonly number; the negated comparison keeps failing fast
+    // when it is missing/NaN (comparisons with undefined/NaN are false) without an anumber() call.
     const min = instance.outputLen;
-    if (out.length < min) {
-        throw new RangeError('"digestInto() output" expected to be of length >=' + min);
+    if (!(out.length >= min)) {
+        throw new RangeError('"output" expected length >= ' + min);
     }
 }
 /**
@@ -331,16 +356,14 @@ export function bytesToHex(bytes) {
     }
     return hex;
 }
-// We use optimized technique to convert hex string to byte array
-const asciis = { _0: 48, _9: 57, A: 65, F: 70, a: 97, f: 102 };
+// Strict ASCII nibble parser: non-ASCII hex lookalikes are rejected as undefined.
+// ASCII codes: '0'..'9' = 48..57, 'A'..'F' = 65..70, 'a'..'f' = 97..102.
+// prettier-ignore
 function asciiToBase16(ch) {
-    if (ch >= asciis._0 && ch <= asciis._9)
-        return ch - asciis._0; // '2' => 50-48
-    if (ch >= asciis.A && ch <= asciis.F)
-        return ch - (asciis.A - 10); // 'B' => 66-(65-10)
-    if (ch >= asciis.a && ch <= asciis.f)
-        return ch - (asciis.a - 10); // 'b' => 98-(97-10)
-    return;
+    return ch >= 48 && ch <= 57 ? ch - 48 // '2' => 50-48
+        : ch >= 65 && ch <= 70 ? ch - (65 - 10) // 'B' => 66-(65-10)
+            : ch >= 97 && ch <= 102 ? ch - (97 - 10) // 'b' => 98-(97-10)
+                : undefined;
 }
 /**
  * Convert hex string to byte array. Uses built-in function, when available.
@@ -373,13 +396,13 @@ export function hexToBytes(hex) {
         throw new RangeError('hex string expected, got unpadded hex of length ' + hl);
     const array = new Uint8Array(al);
     for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
-        const n1 = asciiToBase16(hex.charCodeAt(hi));
-        const n2 = asciiToBase16(hex.charCodeAt(hi + 1));
+        const n1 = asciiToBase16(hex.charCodeAt(hi)); // parse first char, multiply it by 16
+        const n2 = asciiToBase16(hex.charCodeAt(hi + 1)); // parse second char
         if (n1 === undefined || n2 === undefined) {
             const char = hex[hi] + hex[hi + 1];
             throw new RangeError('hex string expected, got non-hex character "' + char + '" at index ' + hi);
         }
-        array[ai] = n1 * 16 + n2; // multiply first octet, e.g. 'a3' => 10*16+3 => 160 + 3 => 163
+        array[ai] = n1 * 16 + n2; // example: 'A9' => 10*16 + 9
     }
     return array;
 }
@@ -400,6 +423,8 @@ export const nextTick = async () => { };
  * @param iters - number of loop iterations to run
  * @param tick - maximum time slice in milliseconds
  * @param cb - callback executed on each iteration
+ * @throws On wrong argument types. {@link TypeError}
+ * @throws On wrong argument ranges or values. {@link RangeError}
  * @example
  * Run a loop that periodically yields back to the event loop.
  * ```ts
@@ -407,6 +432,11 @@ export const nextTick = async () => { };
  * ```
  */
 export async function asyncLoop(iters, tick, cb) {
+    anumber(iters, 'iters');
+    anumber(tick, 'tick');
+    if (typeof cb !== 'function')
+        throw new TypeError('callback must be a function');
+    // Callback is synchronous by contract; asyncLoop only yields between sync work windows.
     let ts = Date.now();
     for (let i = 0; i < iters; i++) {
         cb(i);
@@ -415,6 +445,7 @@ export async function asyncLoop(iters, tick, cb) {
         if (diff >= 0 && diff < tick)
             continue;
         await nextTick();
+        // Track only synchronous work time; scheduler delay after yielding is outside our budget.
         ts += diff;
     }
 }
@@ -481,9 +512,50 @@ export function concatBytes(...arrays) {
     return res;
 }
 /**
+ * Validates declared required and optional field types on a plain object.
+ * This walks field schemas and formats detailed errors, so avoid it on hot paths; use direct
+ * one-line guards such as `abytes()`, `abool()`, or `anumber()` instead.
+ * @param object - object to validate
+ * @param fields - map of required field names to expected types
+ * @param optFields - map of optional field names to expected types
+ * @param title - label included in thrown errors
+ * @throws On wrong argument types. {@link TypeError}
+ * @example
+ * Validate required and optional option fields.
+ * ```ts
+ * validateObject({ N: 1024, dkLen: 32 }, { N: 'number' }, { dkLen: 'number' });
+ * ```
+ */
+export const validateObject = (object, fields = {}, optFields = {}, title = 'object') => {
+    aobject(object, title);
+    aobject(fields, 'fields');
+    aobject(optFields, 'optFields');
+    function checkField(fieldName, expectedType, isOpt) {
+        const label = title === 'object' ? `param "${String(fieldName)}"` : `"${title}.${String(fieldName)}"`;
+        // Config fields must be explicit own properties. Optional inherited values are rejected too
+        // because callers keep reading the same options object after validation.
+        const val = object[fieldName];
+        // Runtime objects such as Field instances intentionally satisfy required method slots
+        // via their shared prototype.
+        if (!Object.hasOwn(object, fieldName) &&
+            (isOpt ? val !== undefined : expectedType !== 'function')) {
+            throw new TypeError(`${label} is invalid: expected own property`);
+        }
+        if (isOpt && val === undefined)
+            return;
+        const current = typeof val;
+        if (current !== expectedType || val === null)
+            throw new TypeError(`${label} is invalid: expected ${expectedType}, got ${current}`);
+    }
+    const iter = (f, isOpt) => Object.entries(f).forEach(([k, v]) => checkField(k, v, isOpt));
+    iter(fields, false);
+    iter(optFields, true);
+};
+/**
  * Merges default options and passed options.
  * @param defaults - base option object
  * @param opts - user overrides
+ * @param title - label included in thrown override errors
  * @returns Merged option object. The merge mutates `defaults` in place.
  * @throws On wrong argument types. {@link TypeError}
  * @example
@@ -492,9 +564,10 @@ export function concatBytes(...arrays) {
  * checkOpts({ dkLen: 32 }, { asyncTick: 10 });
  * ```
  */
-export function checkOpts(defaults, opts) {
-    if (opts !== undefined && {}.toString.call(opts) !== '[object Object]')
-        throw new TypeError('options must be object or undefined');
+export function checkOpts(defaults, opts, title = 'opts') {
+    aobject(defaults, 'defaults');
+    if (opts !== undefined)
+        aobject(opts, title);
     const merged = Object.assign(defaults, opts);
     return merged;
 }
@@ -506,6 +579,7 @@ export function checkOpts(defaults, opts) {
  *   Wrapper construction eagerly calls `hashCons(undefined)` once to read
  *   `outputLen` / `blockLen`, so constructor side effects happen at module
  *   init time.
+ * @throws On wrong argument types. {@link TypeError}
  * @example
  * Wrap a stateful hash constructor into a callable helper.
  * ```ts
@@ -516,6 +590,9 @@ export function checkOpts(defaults, opts) {
  * ```
  */
 export function createHasher(hashCons, info = {}) {
+    if (typeof hashCons !== 'function')
+        throw new TypeError('"hashCons" expected function, got type=' + typeof hashCons);
+    info = checkOpts({}, info, 'info');
     const hashC = (msg, opts) => hashCons(opts)
         .update(msg)
         .digest();

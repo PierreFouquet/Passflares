@@ -23,3 +23,10 @@ yarn-debug.log*
 # Build / temp
 dist/
 .cache/
+
+# Coverage (npm run test:coverage); thresholds live in vitest.config.mts
+coverage/
+
+# Stryker (npm run test:stryker) — generated mutation testing, run on demand
+.stryker-tmp/
+reports/
