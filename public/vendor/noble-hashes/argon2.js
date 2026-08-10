@@ -8,12 +8,12 @@
  * * JS arrays do slow bound checks, so reading from `A2_BUF` slows it down
  * @module
  */
-import { add3H, add3L, rotr32H, rotr32L, rotrBH, rotrBL, rotrSH, rotrSL } from "./_u64.js";
+import { rotr32H, rotr32L, rotrBH, rotrBL, rotrSH, rotrSL } from "./_u64.js";
 import { blake2b } from "./blake2.js";
-import { anumber, clean, kdfInputToBytes, nextTick, swap32IfBE, swap8IfBE, u32, u8, } from "./utils.js";
+import { anumber, checkOpts, clean, kdfInputToBytes, nextTick, swap32IfBE, swap8IfBE, u32, u8, } from "./utils.js";
 // RFC 9106 §3.1 type `y`: 0 = Argon2d, 1 = Argon2i, 2 = Argon2id. The numeric values are the
 // spec-bound part here; the object keys are internal labels.
-const AT = { Argond2d: 0, Argon2i: 1, Argon2id: 2 };
+const AT = { Argon2d: 0, Argon2i: 1, Argon2id: 2 };
 // RFC 9106 sync points constant `SL = 4`, fixed by the design rather than exposed as a tuning knob.
 const ARGON2_SYNC_POINTS = 4;
 // Preserve Argon2's `LE32(len(X)) || X` encoding for omitted
@@ -39,42 +39,69 @@ function mul(a, b) {
     const low = (carry << 16) | (ll & 0xffff);
     return { h: high, l: low };
 }
-function mul2(a, b) {
-    // Double the split 64-bit product; carry from `l` is folded back into `h` via `l >>> 31`.
-    const { h, l } = mul(a, b);
-    return { h: ((h << 1) | (l >>> 31)) & 0xffff_ffff, l: (l << 1) & 0xffff_ffff };
-}
-// BlaMka permutation for Argon2
-// `A + B + 2 * trunc(A) * trunc(B)`, where `trunc(...)` means the low 32-bit halves.
-function blamka(Ah, Al, Bh, Bl) {
-    const { h: Ch, l: Cl } = mul2(Al, Bl);
-    // A + B + (2 * A * B)
-    const Rll = add3L(Al, Bl, Cl);
-    return { h: add3H(Rll, Ah, Bh, Ch), l: Rll | 0 };
+// High 32 bits of unsigned u32 multiply, via the same 16-bit limb split as `mul` below.
+// Kept single-purpose and number-returning so V8 inlines it (object-returning
+// helpers here cost 2.2x of the whole derivation, measured; small helpers
+// returning one number are free — see rotr* usage everywhere).
+function mulHi(a, b) {
+    const aL = a & 0xffff, aH = a >>> 16, bL = b & 0xffff, bH = b >>> 16; // prettier-ignore
+    const carry = (Math.imul(aL, bL) >>> 16) + (Math.imul(aH, bL) & 0xffff) + Math.imul(aL, bH);
+    return (Math.imul(aH, bH) + (Math.imul(aH, bL) >>> 16) + (carry >>> 16)) | 0;
 }
 // Temporary block buffer.
 // 1024-byte block: 256 u32 = 128 interleaved low/high halves = RFC's
 // 8x8 matrix of 16-byte registers.
 const A2_BUF = new Uint32Array(256);
 // Quarter-round over 64-bit word indices into `A2_BUF`; each index maps to adjacent low/high u32s.
+// Each BlaMka step `X = X + Y + 2 * trunc(X) * trunc(Y)` (trunc = low 32 bits) is three lines:
+// `Math.imul` is the low product half, `mulHi` the high half, then a split 64-bit add with the
+// doubling folded in. RFC 9106 Figure 19 GB rotates by 32, 24, 16, and 63 bits after each XOR.
 function G(a, b, c, d) {
     let Al = A2_BUF[2 * a], Ah = A2_BUF[2 * a + 1]; // prettier-ignore
     let Bl = A2_BUF[2 * b], Bh = A2_BUF[2 * b + 1]; // prettier-ignore
     let Cl = A2_BUF[2 * c], Ch = A2_BUF[2 * c + 1]; // prettier-ignore
     let Dl = A2_BUF[2 * d], Dh = A2_BUF[2 * d + 1]; // prettier-ignore
-    // RFC 9106 Figure 19 GB rotates by 32, 24, 16, and 63 bits after each XOR step.
-    ({ h: Ah, l: Al } = blamka(Ah, Al, Bh, Bl));
-    ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
-    ({ Dh, Dl } = { Dh: rotr32H(Dh, Dl), Dl: rotr32L(Dh, Dl) });
-    ({ h: Ch, l: Cl } = blamka(Ch, Cl, Dh, Dl));
-    ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
-    ({ Bh, Bl } = { Bh: rotrSH(Bh, Bl, 24), Bl: rotrSL(Bh, Bl, 24) });
-    ({ h: Ah, l: Al } = blamka(Ah, Al, Bh, Bl));
-    ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
-    ({ Dh, Dl } = { Dh: rotrSH(Dh, Dl, 16), Dl: rotrSL(Dh, Dl, 16) });
-    ({ h: Ch, l: Cl } = blamka(Ch, Cl, Dh, Dl));
-    ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
-    ({ Bh, Bl } = { Bh: rotrBH(Bh, Bl, 63), Bl: rotrBL(Bh, Bl, 63) });
+    let ml = 0, mh = 0, rl = 0, xh = 0, xl = 0; // prettier-ignore
+    // A = blamka(A, B); D = rotr64(D ^ A, 32)
+    ml = Math.imul(Al, Bl);
+    mh = mulHi(Al, Bl); // prettier-ignore
+    rl = (Al >>> 0) + (Bl >>> 0) + ((ml << 1) >>> 0);
+    Ah = (Ah + Bh + ((mh << 1) | (ml >>> 31)) + ((rl / 0x100000000) | 0)) | 0;
+    Al = rl | 0; // prettier-ignore
+    xh = Dh ^ Ah;
+    xl = Dl ^ Al; // prettier-ignore
+    Dh = rotr32H(xh, xl);
+    Dl = rotr32L(xh, xl); // prettier-ignore
+    // C = blamka(C, D); B = rotr64(B ^ C, 24)
+    ml = Math.imul(Cl, Dl);
+    mh = mulHi(Cl, Dl); // prettier-ignore
+    rl = (Cl >>> 0) + (Dl >>> 0) + ((ml << 1) >>> 0);
+    Ch = (Ch + Dh + ((mh << 1) | (ml >>> 31)) + ((rl / 0x100000000) | 0)) | 0;
+    Cl = rl | 0; // prettier-ignore
+    xh = Bh ^ Ch;
+    xl = Bl ^ Cl; // prettier-ignore
+    Bh = rotrSH(xh, xl, 24);
+    Bl = rotrSL(xh, xl, 24); // prettier-ignore
+    // A = blamka(A, B); D = rotr64(D ^ A, 16)
+    ml = Math.imul(Al, Bl);
+    mh = mulHi(Al, Bl); // prettier-ignore
+    rl = (Al >>> 0) + (Bl >>> 0) + ((ml << 1) >>> 0);
+    Ah = (Ah + Bh + ((mh << 1) | (ml >>> 31)) + ((rl / 0x100000000) | 0)) | 0;
+    Al = rl | 0; // prettier-ignore
+    xh = Dh ^ Ah;
+    xl = Dl ^ Al; // prettier-ignore
+    Dh = rotrSH(xh, xl, 16);
+    Dl = rotrSL(xh, xl, 16); // prettier-ignore
+    // C = blamka(C, D); B = rotr64(B ^ C, 63)
+    ml = Math.imul(Cl, Dl);
+    mh = mulHi(Cl, Dl); // prettier-ignore
+    rl = (Cl >>> 0) + (Dl >>> 0) + ((ml << 1) >>> 0);
+    Ch = (Ch + Dh + ((mh << 1) | (ml >>> 31)) + ((rl / 0x100000000) | 0)) | 0;
+    Cl = rl | 0; // prettier-ignore
+    xh = Bh ^ Ch;
+    xl = Bl ^ Cl; // prettier-ignore
+    Bh = rotrBH(xh, xl, 63);
+    Bl = rotrBL(xh, xl, 63); // prettier-ignore
     ((A2_BUF[2 * a] = Al), (A2_BUF[2 * a + 1] = Ah));
     ((A2_BUF[2 * b] = Bl), (A2_BUF[2 * b + 1] = Bh));
     ((A2_BUF[2 * c] = Cl), (A2_BUF[2 * c + 1] = Ch));
@@ -148,7 +175,7 @@ function Hp(A, dkLen) {
     // H' is byte-oriented; returning `u32(out)` would silently drop dkLen % 4 tail bytes.
     return out;
 }
-// Used only inside process block!
+// Used only inside argon2Blocks!
 function indexAlpha(r, s, laneLen, segmentLen, index, randL, sameLane = false) {
     // RFC 9106 §3.4.2 Figures 12-13: map `J1` / `J2` into the current lane's reference area `W`.
     let area;
@@ -177,6 +204,7 @@ function isU32(num) {
     return Number.isSafeInteger(num) && num >= 0 && num < maxUint32;
 }
 function argon2Opts(opts) {
+    opts = checkOpts({}, opts);
     const merged = {
         version: 0x13,
         dkLen: 32,
@@ -199,7 +227,7 @@ function argon2Opts(opts) {
     if (!isU32(t) || t < 1)
         throw new Error('"t" (iterations) must be 1..2^32');
     if (onProgress !== undefined && typeof onProgress !== 'function')
-        throw new Error('"progressCb" must be a function');
+        throw new Error('"onProgress" must be a function');
     anumber(asyncTick, 'asyncTick');
     /*
     Memory size m MUST be an integer number of kibibytes from 8*p
@@ -305,38 +333,13 @@ function argon2Output(B, p, laneLen, dkLen) {
     clean(B, B_final);
     return res;
 }
-function processBlock(B, address, l, r, s, index, laneLen, segmentLen, lanes, offset, prev, dataIndependent, needXor) {
-    if (offset % laneLen)
-        prev = offset - 1;
-    let randL, randH;
-    if (dataIndependent) {
-        let i128 = index % 128;
-        // RFC 9106 §3.4.1.2: each 1024-byte address block yields 128 `(J1, J2)` pairs, so regenerate
-        // it whenever the segment index crosses a multiple of 128.
-        if (i128 === 0) {
-            address[256 + 12]++;
-            block(address, 256, 2 * 256, 0, false);
-            block(address, 0, 2 * 256, 0, false);
-        }
-        randL = address[2 * i128];
-        randH = address[2 * i128 + 1];
-    }
-    else {
-        const T = 256 * prev;
-        randL = B[T];
-        randH = B[T + 1];
-    }
-    // Address-block path selects `J1` / `J2`, then maps them to the reference
-    // lane/block per RFC 9106 §3.4.
-    const refLane = r === 0 && s === 0 ? l : randH % lanes;
-    const refPos = indexAlpha(r, s, laneLen, segmentLen, index, randL, refLane == l);
-    const refBlock = laneLen * refLane + refPos;
-    // B[i][j] = G(B[i][j-1], B[l][z])
-    block(B, 256 * prev, 256 * refBlock, offset * 256, needXor);
-}
-function argon2(type, password, salt, opts) {
-    const { mP, p, t, version, B, laneLen, lanes, segmentLen, dkLen, perBlock } = argon2Init(password, salt, type, opts);
-    // Pre-loop setup
+/**
+ * Fills every Argon2 block for all passes / slices / lanes, yielding once per
+ * processed block so callers control pacing: the sync driver just drains the
+ * generator, while the async driver awaits `nextTick()` between time slices.
+ */
+function* argon2Blocks(ctx) {
+    const { type, mP, p, t, version, B, laneLen, lanes, segmentLen, perBlock } = ctx;
     // [address, input, zero_block] format so we can pass single U32 to block function
     const address = new Uint32Array(3 * 256);
     address[256 + 6] = mP;
@@ -364,19 +367,50 @@ function argon2(type, password, salt, opts) {
                         block(address, 0, 2 * 256, 0, false);
                     }
                 }
-                // current block postion
+                // current block position
                 let offset = l * laneLen + s * segmentLen + startPos;
-                // previous block position
-                let prev = offset % laneLen ? offset - 1 : offset + laneLen - 1;
-                for (let index = startPos; index < segmentLen; index++, offset++, prev++) {
+                for (let index = startPos; index < segmentLen; index++, offset++) {
                     perBlock();
-                    processBlock(B, address, l, r, s, index, laneLen, segmentLen, lanes, offset, prev, dataIndependent, needXor);
+                    // Previous block position: wraps to the lane's last block only at lane start,
+                    // which can happen here only for the first block of slice 0 on passes > 0.
+                    const prev = offset % laneLen ? offset - 1 : offset + laneLen - 1;
+                    let randL, randH;
+                    if (dataIndependent) {
+                        let i128 = index % 128;
+                        // RFC 9106 §3.4.1.2: each 1024-byte address block yields 128 `(J1, J2)` pairs, so
+                        // regenerate it whenever the segment index crosses a multiple of 128.
+                        if (i128 === 0) {
+                            address[256 + 12]++;
+                            block(address, 256, 2 * 256, 0, false);
+                            block(address, 0, 2 * 256, 0, false);
+                        }
+                        randL = address[2 * i128];
+                        randH = address[2 * i128 + 1];
+                    }
+                    else {
+                        const T = 256 * prev;
+                        randL = B[T];
+                        randH = B[T + 1];
+                    }
+                    // Address-block path selects `J1` / `J2`, then maps them to the reference
+                    // lane/block per RFC 9106 §3.4.
+                    const refLane = r === 0 && s === 0 ? l : randH % lanes;
+                    const refPos = indexAlpha(r, s, laneLen, segmentLen, index, randL, refLane == l);
+                    const refBlock = laneLen * refLane + refPos;
+                    // B[i][j] = G(B[i][j-1], B[l][z])
+                    block(B, 256 * prev, 256 * refBlock, offset * 256, needXor);
+                    yield;
                 }
             }
         }
     }
     clean(address);
-    return argon2Output(B, p, laneLen, dkLen);
+}
+function argon2(type, password, salt, opts) {
+    const ctx = argon2Init(password, salt, type, opts);
+    const blocks = argon2Blocks(ctx);
+    while (!blocks.next().done) { }
+    return argon2Output(ctx.B, ctx.p, ctx.laneLen, ctx.dkLen);
 }
 /**
  * Argon2d GPU-resistant version.
@@ -390,8 +424,27 @@ function argon2(type, password, salt, opts) {
  * ```ts
  * argon2d('password', 'salt1234', { t: 1, m: 8, p: 1, dkLen: 32 });
  * ```
+ * @example
+ * Derive a key with optional secret and scheduler controls.
+ * ```ts
+ * const progressLog: number[] = [];
+ * argon2d('password', 'salt1234', {
+ *   t: 1,
+ *   m: 8,
+ *   p: 1,
+ *   dkLen: 32,
+ *   version: 0x13,
+ *   key: 'secret',
+ *   personalization: 'application',
+ *   maxmem: 1024 * 1024,
+ *   asyncTick: 1,
+ *   onProgress(progress) {
+ *     progressLog.push(progress);
+ *   },
+ * });
+ * ```
  */
-export const argon2d = (password, salt, opts) => argon2(AT.Argond2d, password, salt, opts);
+export const argon2d = (password, salt, opts) => argon2(AT.Argon2d, password, salt, opts);
 /**
  * Argon2i side-channel-resistant version.
  * @param password - password or input key material
@@ -421,56 +474,19 @@ export const argon2i = (password, salt, opts) => argon2(AT.Argon2i, password, sa
  */
 export const argon2id = (password, salt, opts) => argon2(AT.Argon2id, password, salt, opts);
 async function argon2Async(type, password, salt, opts) {
-    const { mP, p, t, version, B, laneLen, lanes, segmentLen, dkLen, perBlock, asyncTick } = argon2Init(password, salt, type, opts);
-    // Pre-loop setup
-    // [address, input, zero_block] format so we can pass single U32 to block function
-    const address = new Uint32Array(3 * 256);
-    address[256 + 6] = mP;
-    address[256 + 8] = t;
-    address[256 + 10] = type;
+    const ctx = argon2Init(password, salt, type, opts);
+    const blocks = argon2Blocks(ctx);
     let ts = Date.now();
-    for (let r = 0; r < t; r++) {
-        // RFC 9106 step 6 applies the XOR-on-later-passes rule only for version `0x13`; legacy
-        // `0x10` keeps the older overwrite behavior used by the v16 test vectors.
-        const needXor = r !== 0 && version === 0x13;
-        address[256 + 0] = r;
-        for (let s = 0; s < ARGON2_SYNC_POINTS; s++) {
-            address[256 + 4] = s;
-            // RFC 9106 §3.4.1.3: Argon2id uses Argon2i's data-independent `J1` / `J2` generation only
-            // in pass 0, slices 0 and 1; Argon2i uses it in every segment.
-            const dataIndependent = type == AT.Argon2i || (type == AT.Argon2id && r === 0 && s < 2);
-            for (let l = 0; l < p; l++) {
-                address[256 + 2] = l;
-                address[256 + 12] = 0;
-                let startPos = 0;
-                if (r === 0 && s === 0) {
-                    startPos = 2;
-                    if (dataIndependent) {
-                        address[256 + 12]++;
-                        block(address, 256, 2 * 256, 0, false);
-                        block(address, 0, 2 * 256, 0, false);
-                    }
-                }
-                // current block postion
-                let offset = l * laneLen + s * segmentLen + startPos;
-                // previous block position
-                let prev = offset % laneLen ? offset - 1 : offset + laneLen - 1;
-                for (let index = startPos; index < segmentLen; index++, offset++, prev++) {
-                    perBlock();
-                    processBlock(B, address, l, r, s, index, laneLen, segmentLen, lanes, offset, prev, dataIndependent, needXor);
-                    // Date.now() is not monotonic. If the clock goes backwards,
-                    // still yield control.
-                    const diff = Date.now() - ts;
-                    if (!(diff >= 0 && diff < asyncTick)) {
-                        await nextTick();
-                        ts += diff;
-                    }
-                }
-            }
-        }
+    while (!blocks.next().done) {
+        // Date.now() is not monotonic. If the clock goes backwards,
+        // still yield control.
+        const diff = Date.now() - ts;
+        if (diff >= 0 && diff < ctx.asyncTick)
+            continue;
+        await nextTick();
+        ts += diff;
     }
-    clean(address);
-    return argon2Output(B, p, laneLen, dkLen);
+    return argon2Output(ctx.B, ctx.p, ctx.laneLen, ctx.dkLen);
 }
 /**
  * Argon2d async GPU-resistant version.
@@ -484,8 +500,26 @@ async function argon2Async(type, password, salt, opts) {
  * ```ts
  * await argon2dAsync('password', 'salt1234', { t: 1, m: 8, p: 1, dkLen: 32 });
  * ```
+ * @example
+ * Derive a key asynchronously with optional secret and scheduler controls.
+ * ```ts
+ * await argon2dAsync('password', 'salt1234', {
+ *   t: 1,
+ *   m: 8,
+ *   p: 1,
+ *   dkLen: 32,
+ *   version: 0x13,
+ *   key: 'secret',
+ *   personalization: 'application',
+ *   maxmem: 1024 * 1024,
+ *   asyncTick: 1,
+ *   onProgress(progress) {
+ *     if (progress > 1) throw new Error('invalid progress');
+ *   },
+ * });
+ * ```
  */
-export const argon2dAsync = (password, salt, opts) => argon2Async(AT.Argond2d, password, salt, opts);
+export const argon2dAsync = (password, salt, opts) => argon2Async(AT.Argon2d, password, salt, opts);
 /**
  * Argon2i async side-channel-resistant version.
  * @param password - password or input key material
