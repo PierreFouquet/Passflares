@@ -150,6 +150,8 @@ and an interactive runner (for local development):
 | `npm run test:e2e:ui` | Playwright UI Mode — interactive, needs a display | Debugging or authoring a failing/flaky e2e test locally |
 | `npm run test:audit` | `npm audit` at the `moderate` level | Spot-checking dependencies for known vulnerabilities |
 | `npm run test:security` | The security-regression subset only | A fast check after touching auth, crypto, or anything parsing untrusted input |
+| `npm run test:mutation` | The falsifiability gate — breaks one behaviour at a time and fails if the suite stays green | After adding or changing a security-relevant test, to prove it can actually fail |
+| `npm run test:coverage` | Vitest with v8 coverage and the per-area floors in `vitest.config.mts` | Before adding a handler or module, to check it isn't shipping untested |
 | `npm run preflight` | `typecheck` + `test:audit` + Vitest + Playwright | **Run this before opening a PR** |
 
 ### Layers, and what each one is for
@@ -181,8 +183,38 @@ what the local suite missed in 1.1.4:
 Both were verified to fail against the code that had the defect. A regression
 test that has never been seen red is a guess.
 
-CI runs `npm test`, `npm run test:e2e` and CodeQL on every pull request and push
-to `main`; dependency auditing is handled separately by Dependabot.
+### Green is not the same as sound
+
+A test that passes whatever the code does still counts in the total, still shows
+up as coverage, and protects nothing. Two mechanisms exist to keep that from
+happening quietly.
+
+**The falsifiability gate** (`npm run test:mutation`, `scripts/mutation-check.mjs`)
+breaks one security-critical behaviour at a time and fails if the suite stays
+green. Each mutant in `tests/mutation/mutants.mjs` names the suite that is
+supposed to notice it: handler mutants are judged by `tests/backend`, and
+mutants over `public/js/` by `tests/frontend`. Both halves matter, and the
+browser half arguably more — the zero-knowledge guarantee is enforced there, so
+mutating `src/` proves nothing about whether the client still refuses to send
+the master password. A mutant reported as `SURVIVED` is a missing test, not a
+bug in the gate.
+
+**The coverage floor** (`npm run test:coverage`) stops a new module shipping with
+no behavioural coverage at all. The floors are per-area, in
+`vitest.config.mts` — tight on the four files that make up the key hierarchy,
+loose on the page controllers that Playwright covers instead. It is a necessary
+check, not a sufficient one: it counts lines, not whether the tests touching
+them can fail. Lowering a floor to turn a build green defeats the entire point.
+
+The security promises in [Security model](#security-model) are themselves
+asserted, in `tests/frontend/zero-knowledge-invariants.test.js`. Each block
+quotes the README claim it enforces and fails if that claim is reworded, so the
+prose and the code cannot drift apart silently — a promise that isn't an
+assertion cannot fail.
+
+CI runs `npm test`, `npm run test:mutation`, `npm run test:coverage`,
+`npm run test:e2e` and CodeQL on every pull request and push to `main`;
+dependency auditing is handled separately by Dependabot.
 
 ## Deployment
 

@@ -7,7 +7,7 @@
 // (and already depend on server-side) gets vendored rather than re-implemented.
 //
 // Run `node scripts/vendor-noble.mjs` after bumping @noble/hashes.
-// tests/frontend/vendor-integrity.test.js fails if the copies drift.
+// tests/backend/vendor-integrity.test.ts fails if the copies drift.
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -73,7 +73,7 @@ has no build step, and Argon2id has no WebCrypto equivalent, so the browser need
 these as plain ES modules.
 
 To update: bump \`@noble/hashes\` in \`package.json\`, run \`npm install\`, then
-\`node scripts/vendor-noble.mjs\`. \`tests/frontend/vendor-integrity.test.js\`
+\`node scripts/vendor-noble.mjs\`. \`tests/backend/vendor-integrity.test.ts\`
 fails if these copies drift from the installed package.
 
 Licensed MIT, same as upstream.

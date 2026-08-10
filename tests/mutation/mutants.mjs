@@ -6,6 +6,12 @@
 //
 // SURVIVED = the suite stayed green while the behaviour was broken. That is
 // either a missing test or an equivalent mutant; triage before "fixing".
+//
+// `suite` names the test directory that is supposed to notice the mutant, and
+// defaults to DEFAULT_SUITE. Backend mutants are judged by tests/backend;
+// browser mutants over public/js/ are judged by tests/frontend (#89 §1).
+
+export const DEFAULT_SUITE = 'tests/backend';
 
 export const mutants = [
     // ── middleware: resolveVaultAccess scoping ─────────────────────
@@ -257,5 +263,157 @@ export const mutants = [
         desc: 'preference values stop being validated against their enums',
         find: 'function isOneOf<T extends string>(value: unknown, allowed: ReadonlyArray<T>): value is T {',
         replace: 'function isOneOf<T extends string>(value: unknown, allowed: ReadonlyArray<T>): value is T {\n    if (1) return true;'
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    //  public/js/ — the browser half (#89 §1)
+    //
+    //  Judged by tests/frontend. This is where the zero-knowledge
+    //  guarantee actually lives: mutating src/ proves nothing about
+    //  whether the browser still refuses to send the master password,
+    //  so a vacuous test here hides more than a vacuous test in a
+    //  handler.
+    // ═══════════════════════════════════════════════════════════════
+
+    // ── what goes on the wire ──────────────────────────────────────
+    {
+        id: 'fe-login-sends-password',
+        file: 'public/js/auth-flow.js',
+        suite: 'tests/frontend',
+        desc: 'sign-in puts the master password in the login body',
+        find: 'const response = await loginUser(email, { authSecret }, turnstileToken);',
+        replace: 'const response = await loginUser(email, { authSecret, masterPassword: password }, turnstileToken);'
+    },
+    {
+        id: 'fe-register-sends-password',
+        file: 'public/js/auth-flow.js',
+        suite: 'tests/frontend',
+        desc: 'enrolment sends the master password as the auth verifier',
+        // Sending it *as authSecret* rather than as an extra field, because an
+        // extra field is inert: api.js's registerUser destructures a fixed list
+        // of names, so anything else the caller passes is dropped before the
+        // body is built. That allow-list is a real control and this mutant
+        // would be equivalent without it — noted here so nobody "fixes" the
+        // survivor by weakening the signature to a spread.
+        find: 'await registerUser({ email, authSecret, kdfSalt, kdfParams, publicKey, privateKeyEnc, turnstileToken });',
+        replace: 'await registerUser({ email, authSecret: password, kdfSalt, kdfParams, publicKey, privateKeyEnc, turnstileToken });'
+    },
+    {
+        id: 'fe-rotate-sends-new-password',
+        file: 'public/js/auth-flow.js',
+        suite: 'tests/frontend',
+        desc: 'password rotation puts the NEW master password in the update body',
+        // Deliberately the new password, not the old one. An invariant that
+        // only looks for the password the account already had would miss the
+        // one being set — and that is the value an attacker wants.
+        find: '    await updateMasterPassword(userId, {\n        oldAuthSecret,',
+        replace: '    await updateMasterPassword(userId, {\n        masterPassword: newPassword,\n        oldAuthSecret,'
+    },
+    {
+        id: 'fe-rotate-accepts-wrong-password',
+        file: 'public/js/auth-flow.js',
+        suite: 'tests/frontend',
+        desc: 'a wrong current password no longer stops the rotation',
+        find: "        .catch(() => { throw new Error('Current master password is incorrect.'); });",
+        replace: '        .catch(() => privateKeyEnc);'
+    },
+
+    // ── the legacy upgrade's non-destructive ordering (#70) ────────
+    {
+        id: 'fe-upgrade-overwrites-live-blob',
+        file: 'public/js/auth-flow.js',
+        suite: 'tests/frontend',
+        desc: 're-encrypted vaults overwrite the live blob instead of staging',
+        find: "            await saveEncryptedVaultData(vault.id, reEncrypted, 'v2');",
+        replace: '            await saveEncryptedVaultData(vault.id, reEncrypted);'
+    },
+    {
+        id: 'fe-upgrade-commits-after-failure',
+        file: 'public/js/auth-flow.js',
+        suite: 'tests/frontend',
+        desc: 'the upgrade commits even though a vault could not be re-encrypted',
+        find: '    if (failed.length > 0) {',
+        replace: '    if (false) {'
+    },
+    {
+        id: 'fe-upgrade-rekeys-org-vaults',
+        file: 'public/js/auth-flow.js',
+        suite: 'tests/frontend',
+        desc: 'the upgrade re-keys organisation vaults, locking out every other member',
+        find: "    const ownVaults = allVaults.filter(v => v.owner_type === 'user' && v.permission_level === 'manage');",
+        replace: '    const ownVaults = allVaults;'
+    },
+
+    // ── the key hierarchy's domain separation ──────────────────────
+    {
+        id: 'fe-kek-from-auth-info',
+        file: 'public/js/keys.js',
+        suite: 'tests/frontend',
+        desc: 'the KEK is derived with the auth info string, so the server can compute it',
+        // The whole point of two HKDF labels. Collapse them and authSecret —
+        // which the server stores — reproduces the key that unwraps the
+        // private key. This is GHSA-pqm6-r3vj-mhvq reopened.
+        find: '    const raw = await hkdf(masterKey, HKDF_INFO_KEK);',
+        replace: '    const raw = await hkdf(masterKey, HKDF_INFO_AUTH);'
+    },
+    {
+        id: 'fe-authsecret-is-master-key',
+        file: 'public/js/keys.js',
+        suite: 'tests/frontend',
+        desc: 'the raw master key is sent to the server instead of an HKDF branch of it',
+        find: '    return uint8ArrayToHexString(await hkdf(masterKey, HKDF_INFO_AUTH));',
+        replace: '    return uint8ArrayToHexString(masterKey);'
+    },
+    {
+        id: 'fe-share-not-vault-bound',
+        file: 'public/js/keys.js',
+        suite: 'tests/frontend',
+        desc: 'the share wrap key stops being bound to the vault id, so a row replays onto another vault',
+        find: '    const wrapBytes = await hkdf(shared, HKDF_INFO_VAULT_SHARE, TEXT.encode(String(vaultId)));',
+        replace: '    const wrapBytes = await hkdf(shared, HKDF_INFO_VAULT_SHARE);'
+    },
+    {
+        id: 'fe-private-key-extractable',
+        file: 'public/js/keys.js',
+        suite: 'tests/frontend',
+        desc: 'the unwrapped private key is imported as extractable',
+        // Extractable means any XSS that reaches state.js can exportKey() the
+        // identity that opens every vault share, rather than being limited to
+        // whatever it can do while the tab is open.
+        find: "    const key = await crypto.subtle.importKey('pkcs8', pkcs8, ECDH_PARAMS, false, ['deriveBits']);",
+        replace: "    const key = await crypto.subtle.importKey('pkcs8', pkcs8, ECDH_PARAMS, true, ['deriveBits']);"
+    },
+
+    // ── AES-GCM misuse ─────────────────────────────────────────────
+    {
+        id: 'fe-vault-iv-fixed',
+        file: 'public/js/crypto.js',
+        suite: 'tests/frontend',
+        desc: 'vault entries are sealed with an all-zero IV',
+        // GCM IV reuse under one key is not a weakening, it is a break: two
+        // ciphertexts under the same (key, IV) leak their XOR and hand over the
+        // authentication subkey.
+        find: '    const iv = crypto.getRandomValues(new Uint8Array(AES_IV_LENGTH));',
+        replace: '    const iv = new Uint8Array(AES_IV_LENGTH);'
+    },
+    {
+        id: 'fe-keyblob-iv-fixed',
+        file: 'public/js/keys.js',
+        suite: 'tests/frontend',
+        desc: 'wrapped key blobs are sealed with an all-zero IV',
+        find: '    const iv = crypto.getRandomValues(new Uint8Array(AES_IV_LENGTH));',
+        replace: '    const iv = new Uint8Array(AES_IV_LENGTH);'
+    },
+
+    // ── what is allowed to persist ─────────────────────────────────
+    {
+        id: 'fe-persists-wrapped-private-key',
+        file: 'public/js/state.js',
+        suite: 'tests/frontend',
+        desc: 'the sealed private key is written to localStorage again',
+        // The regression CodeQL caught once already. Storage survives the tab;
+        // the session key material must not.
+        find: 'export function setWrappedPrivateKey(blob) { state.wrappedPrivateKey = blob; }',
+        replace: "export function setWrappedPrivateKey(blob) { state.wrappedPrivateKey = blob; try { localStorage.setItem('privateKeyEnc', blob); } catch { /* non-DOM env */ } }"
     }
 ];

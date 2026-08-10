@@ -8,7 +8,7 @@ has no build step, and Argon2id has no WebCrypto equivalent, so the browser need
 these as plain ES modules.
 
 To update: bump `@noble/hashes` in `package.json`, run `npm install`, then
-`node scripts/vendor-noble.mjs`. `tests/frontend/vendor-integrity.test.js`
+`node scripts/vendor-noble.mjs`. `tests/backend/vendor-integrity.test.ts`
 fails if these copies drift from the installed package.
 
 Licensed MIT, same as upstream.
