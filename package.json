@@ -24,7 +24,7 @@
     "node": ">=26"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260727.1",
+    "@cloudflare/workers-types": "^5.20260804.1",
     "@playwright/test": "^1.62.0",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^26.1.2",
@@ -34,7 +34,7 @@
     "wrangler": "^4.120.0"
   },
   "dependencies": {
-    "@noble/hashes": "^2.2.0",
+    "@noble/hashes": "^2.3.0",
     "itty-router": "^5.0.24",
     "jsonwebtoken": "^9.0.2",
     "otpauth": "^9.5.1",
