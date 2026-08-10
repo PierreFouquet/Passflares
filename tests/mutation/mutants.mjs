@@ -189,27 +189,44 @@ export const mutants = [
         replace: 'const cutoff = new Date(Date.now()).toISOString();'
     },
 
-    // ── organisations: last-owner guard ────────────────────────────
+    // ── organisations: keeping an owner ────────────────────────────
+    //
+    // These replace two mutants that were marked `equivalent` because the
+    // `<= 1` last-owner guards they broke were unreachable. Those guards are
+    // now deleted (#89), and what remains is the protection that was doing the
+    // work all along: an owner cannot demote or remove *themselves*, and only
+    // an owner may act on another owner. Dead defence-in-depth swapped for a
+    // live, falsifiable assertion.
     {
-        id: 'org-demote-last-owner',
+        id: 'org-self-demote-allowed',
         file: 'src/organizations.ts',
-        desc: 'the last owner can be demoted, stranding the organisation',
-        // Unreachable: the caller must be super_admin and the target a
-        // *different* super_admin, so COUNT is always >= 2. The real protection
-        // is the earlier self-demotion 403, which authz-real-db.test.ts covers.
-        equivalent: 'guard is dead code — see #83',
-        find: 'if ((superAdminCount?.count ?? 0) <= 1) {\n                return jsonResponse({ message: "Forbidden: Cannot demote the last owner." }, 409);',
-        replace: 'if (false) {\n                return jsonResponse({ message: "Forbidden: Cannot demote the last owner." }, 409);'
+        desc: 'an owner can demote themselves, leaving the organisation unowned',
+        find: '    if (user.userId === targetUserId)\n        return jsonResponse({ message: "Forbidden: Cannot change your own role." }, 403);',
+        replace: '    if (false)\n        return jsonResponse({ message: "Forbidden: Cannot change your own role." }, 403);'
     },
     {
-        id: 'org-remove-last-owner',
+        id: 'org-self-remove-allowed',
         file: 'src/organizations.ts',
-        desc: 'the last owner can be removed, stranding the organisation',
-        // Same shape: only a super_admin reaches it, and removing another
-        // super_admin implies COUNT >= 2.
-        equivalent: 'guard is dead code — see #83',
-        find: 'if ((superAdminCount?.count ?? 0) <= 1) {\n                return jsonResponse({ message: "Forbidden: Cannot remove the last owner." }, 409);',
-        replace: 'if (false) {\n                return jsonResponse({ message: "Forbidden: Cannot remove the last owner." }, 409);'
+        desc: 'an owner can remove themselves, leaving the organisation unowned',
+        find: '    if (user.userId === targetUserId)\n        return jsonResponse({ message: "Forbidden: Cannot remove yourself from the organization." }, 403);',
+        replace: '    if (false)\n        return jsonResponse({ message: "Forbidden: Cannot remove yourself from the organization." }, 403);'
+    },
+    {
+        id: 'org-admin-demotes-owner',
+        file: 'src/organizations.ts',
+        desc: 'a mere admin can change roles, so an admin can demote an owner',
+        // Anchored on the audit reason, because the bare role check appears
+        // again in handleDeleteOrganization and an ambiguous pattern is
+        // reported stale rather than silently mutating the wrong one.
+        find: "        if (!callerRole || callerRole.role !== 'super_admin') {\n            logAudit(env, ctx, user.userId, 'ORG_UPDATE_ROLE_FAILURE'",
+        replace: "        if (false) {\n            logAudit(env, ctx, user.userId, 'ORG_UPDATE_ROLE_FAILURE'"
+    },
+    {
+        id: 'org-any-member-deletes-org',
+        file: 'src/organizations.ts',
+        desc: 'a plain member can delete the whole organisation',
+        find: "        if (!callerRole || callerRole.role !== 'super_admin') {\n            logAudit(env, ctx, user.userId, 'ORG_DELETE_FAILURE'",
+        replace: "        if (false) {\n            logAudit(env, ctx, user.userId, 'ORG_DELETE_FAILURE'"
     },
     {
         id: 'org-any-member-removes',
@@ -263,6 +280,26 @@ export const mutants = [
         desc: 'preference values stop being validated against their enums',
         find: 'function isOneOf<T extends string>(value: unknown, allowed: ReadonlyArray<T>): value is T {',
         replace: 'function isOneOf<T extends string>(value: unknown, allowed: ReadonlyArray<T>): value is T {\n    if (1) return true;'
+    },
+
+    // ── bot protection ─────────────────────────────────────────────
+    // Both of these survived until the Stryker pilot pointed at them (#89 §2).
+    // The suite asserted only what verifyTurnstile *returned*, never what it
+    // sent or why it said no, so the request could be malformed and the
+    // non-2xx test was green whether or not the guard it named existed.
+    {
+        id: 'turnstile-secret-blanked',
+        file: 'src/utils.ts',
+        desc: 'the Turnstile secret is replaced with an empty string on the wire',
+        find: "    formData.append('secret', secret);",
+        replace: "    formData.append('secret', '');"
+    },
+    {
+        id: 'turnstile-ignores-http-status',
+        file: 'src/utils.ts',
+        desc: 'a non-2xx from siteverify is parsed as if it were a verdict',
+        find: '        if (!result.ok) return false;',
+        replace: '        if (false) return false;'
     },
 
     // ═══════════════════════════════════════════════════════════════

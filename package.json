@@ -14,8 +14,10 @@
     "test:e2e:ui": "playwright test --ui",
     "test:audit": "npm audit --audit-level=moderate",
     "test:mutation": "node scripts/mutation-check.mjs",
+    "test:stryker": "stryker run",
     "test:all": "npm run typecheck && npm run test:audit && vitest run && playwright test",
-    "test:security": "vitest run tests/backend/static-server.test.ts tests/backend/integration tests/backend/code-security-invariants.test.ts tests/backend/static-security-audit.test.ts tests/backend/vuln-classes.test.ts tests/backend/worker-security.test.ts tests/backend/vendor-integrity.test.ts tests/frontend/keys.test.js tests/frontend/auth-flow.test.js tests/frontend/vault-keys.test.js",
+    "test:security": "vitest run tests/backend/static-server.test.ts tests/backend/integration tests/guardrails/code-security-invariants.test.ts tests/guardrails/static-security-audit.test.ts tests/backend/vuln-classes.test.ts tests/backend/worker-security.test.ts tests/backend/vendor-integrity.test.ts tests/frontend/keys.test.js tests/frontend/auth-flow.test.js tests/frontend/vault-keys.test.js",
+    "test:guardrails": "vitest run tests/guardrails",
     "preflight": "npm run test:all"
   },
   "keywords": [],
@@ -27,6 +29,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260804.1",
     "@playwright/test": "^1.62.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^26.1.2",
     "@vitest/coverage-v8": "^4.1.10",
@@ -43,7 +47,8 @@
     "qrcode-svg": "^1.1.0"
   },
   "overrides": {
-    "undici": "^7.29.0"
+    "undici": "^7.29.0",
+    "qs": "^6.15.2"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,

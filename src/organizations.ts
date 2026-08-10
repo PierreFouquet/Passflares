@@ -184,16 +184,22 @@ export async function handleUpdateMemberRole(request: CustomRequest, env: Env, c
         if (!targetCurrentRole)
             return jsonResponse({ message: "Member not found in this organization." }, 404);
 
-        if (targetCurrentRole.role === 'super_admin' && role !== 'super_admin') {
-            const superAdminCount: { count: number } | null = await env.DB.prepare(
-                `SELECT COUNT(*) as count FROM user_organizations WHERE organization_id = ? AND role = 'super_admin'`
-            ).bind(orgId).first();
-
-            if ((superAdminCount?.count ?? 0) <= 1) {
-                return jsonResponse({ message: "Forbidden: Cannot demote the last owner." }, 409);
-            }
-        }
-
+        // There used to be a "cannot demote the last owner" guard here, counting
+        // super_admins and refusing at <= 1. It was unreachable and has been
+        // removed (#89). To get this far the caller must be a super_admin, the
+        // target must be a *different* super_admin (self-edits are refused
+        // above), so the count is always >= 2 and the guard never fired — it
+        // cost a D1 round-trip per role change to decide nothing.
+        //
+        // What actually keeps an organisation owned is the self-modification
+        // 403 above plus "only owners can change roles"; both are asserted in
+        // tests/backend/integration/authz-real-db.test.ts against real SQL, and
+        // the falsifiability gate holds them (org-self-demote-allowed).
+        //
+        // Note this is not the same as the invariant being enforced: #74
+        // deletes the membership row by cascade when an account is deleted,
+        // with no check at all. That path is the real hole, and it is tracked
+        // as a failing test in that file rather than left as prose.
         await env.DB.prepare(
             `UPDATE user_organizations SET role = ? WHERE user_id = ? AND organization_id = ?`
         ).bind(role, targetUserId, orgId).run();
@@ -246,25 +252,27 @@ export async function handleRemoveMember(request: CustomRequest, env: Env, ctx: 
             return jsonResponse({ message: "Forbidden: Only owners can remove other owners." }, 403);
         }
 
-        // Guard: cannot remove the last super_admin
-        if (targetRole.role === 'super_admin') {
-            const superAdminCount: { count: number } | null = await env.DB.prepare(
-                `SELECT COUNT(*) as count FROM user_organizations WHERE organization_id = ? AND role = 'super_admin'`
-            ).bind(orgId).first();
-
-            if ((superAdminCount?.count ?? 0) <= 1) {
-                return jsonResponse({ message: "Forbidden: Cannot remove the last owner." }, 409);
-            }
-        }
+        // The matching "cannot remove the last owner" guard was removed for the
+        // same reason as the one in handleUpdateMemberRole: unreachable. Self
+        // removal is refused above, and only a super_admin may remove another
+        // super_admin, so reaching it required two owners to exist.
 
         // Vaults the removed member could open via this organisation. Their key
         // shares must go with the membership, or the row keeps unwrapping the
         // vault key long after access was revoked.
+        //
+        // The entity tag is composed in JS and bound whole, rather than built in
+        // SQL as `'org_' || ?`. Concatenating a bound number makes the result
+        // depend on how the driver types it: bind 7 as REAL and SQLite renders
+        // 'org_7.0', which matches no row — so this query would quietly return
+        // nothing and a removed member would keep every key share. Binding a
+        // string cannot go wrong that way. (`|| uo.organization_id` elsewhere is
+        // fine: that value comes from an INTEGER column, not a binding.)
         const affectedVaults = await env.DB.prepare(
             `SELECT v.id FROM vaults v
              JOIN vault_access_controls vac ON v.id = vac.vault_id
-             WHERE vac.entity_id = 'org_' || ? AND vac.entity_type = 'organization'`
-        ).bind(orgId).all().then(r => r.results as unknown as { id: number }[]);
+             WHERE vac.entity_id = ? AND vac.entity_type = 'organization'`
+        ).bind(`org_${orgId}`).all().then(r => r.results as unknown as { id: number }[]);
 
         const statements = [
             env.DB.prepare(`DELETE FROM user_organizations WHERE user_id = ? AND organization_id = ?`)
@@ -429,14 +437,17 @@ export async function handleGetOrgKeyGaps(request: CustomRequest, env: Env, ctx:
                     u.id AS userId, u.email AS email, uk.public_key AS publicKey
              FROM vaults v
              JOIN vault_access_controls vac ON vac.vault_id = v.id
-                  AND vac.entity_type = 'organization' AND vac.entity_id = 'org_' || ?
+                  AND vac.entity_type = 'organization' AND vac.entity_id = ?
              JOIN user_organizations uo ON uo.organization_id = ?
              JOIN users u ON u.id = uo.user_id
              LEFT JOIN user_keys uk ON uk.user_id = u.id
              LEFT JOIN vault_key_shares vks ON vks.vault_id = v.id AND vks.user_id = u.id
              WHERE v.owner_type = 'organization' AND vks.vault_id IS NULL
              ORDER BY v.id`
-        ).bind(orgId, orgId).all().then(r => r.results as unknown as {
+            // Same reason as the tag bound in handleRemoveMember above: a
+            // concatenated numeric binding is driver-dependent, and here it
+            // would silently report "no gaps" for every organisation.
+        ).bind(`org_${orgId}`, orgId).all().then(r => r.results as unknown as {
             vaultId: number; vaultName: string; userId: number; email: string; publicKey: string | null;
         }[]);
 

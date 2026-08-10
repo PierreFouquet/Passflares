@@ -50,10 +50,10 @@ export default defineConfig({
             // not. Raise them when the real figure rises; never lower one to
             // turn a red build green — that is the one move that makes this
             // whole mechanism worthless.
-            // Measured 2026-08-10 at 677 tests:
-            //   src/**            84.5 st / 85.4 br / 95.9 fn / 85.0 ln
-            //   key hierarchy     91.5 / 72.4 / 94.0 / 92.4
-            //   public/js/** all  42.4 / 38.2 / 44.6 / 44.3
+            // Measured 2026-08-10 at 705 tests:
+            //   src/**            84.8 st / 86.2 br / 95.9 fn / 85.2 ln
+            //   key hierarchy     91.4 / 72.4 / 94.0 / 92.4
+            //   public/js/** all  42.3 / 38.2 / 44.6 / 44.3
             thresholds: {
                 'src/**/*.ts': { statements: 80, branches: 80, functions: 90, lines: 80 },
                 // The key hierarchy. Tight, because these four files are the

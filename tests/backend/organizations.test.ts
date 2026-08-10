@@ -116,34 +116,6 @@ describe('handleGetOrgMembers', () => {
 // --- handleUpdateMemberRole ---
 
 describe('handleUpdateMemberRole', () => {
-    it('returns 200 when super_admin changes a member role', async () => {
-        const db = createMockDB({
-            'SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?': { first: { role: 'super_admin' } }
-        });
-        // Two calls to the same pattern — first for caller, second for target
-        let callCount = 0;
-        (db as any).prepare = vi.fn((sql: string) => ({
-            bind: vi.fn(() => ({
-                first: vi.fn(() => {
-                    if (sql.includes('SELECT role FROM user_organizations')) {
-                        callCount++;
-                        return Promise.resolve({ role: callCount === 1 ? 'super_admin' : 'member' });
-                    }
-                    return Promise.resolve(null);
-                }),
-                run: vi.fn(() => Promise.resolve({ success: true, meta: { last_row_id: 1, changes: 1 }, results: [] })),
-                all: vi.fn(() => Promise.resolve({ results: [], success: true }))
-            }))
-        }));
-        (db as any).exec = vi.fn(() => Promise.resolve());
-        (db as any).batch = vi.fn(() => Promise.resolve([]));
-
-        const env = createMockEnv({ DB: db });
-        const req = authedRequest('PUT', '/api/organizations/1/members/2', { role: 'admin' }, { orgId: '1', memberUserId: '2' });
-        const res = await handleUpdateMemberRole(req, env, mockCtx);
-        expect(res.status).toBe(200);
-    });
-
     it('returns 403 when caller is not super_admin', async () => {
         const db = createMockDB({
             'SELECT role FROM user_organizations': { first: { role: 'admin' } }
@@ -172,89 +144,22 @@ describe('handleUpdateMemberRole', () => {
 // --- handleRemoveMember ---
 
 describe('handleRemoveMember', () => {
-    it('returns 204 when admin removes a regular member', async () => {
-        let callCount = 0;
-        const db = createMockDB({});
-        (db as any).prepare = vi.fn((sql: string) => ({
-            bind: vi.fn(() => ({
-                first: vi.fn(() => {
-                    callCount++;
-                    if (callCount === 1) return Promise.resolve({ role: 'admin' });   // caller
-                    if (callCount === 2) return Promise.resolve({ role: 'member' });  // target
-                    return Promise.resolve(null);
-                }),
-                run: vi.fn(() => Promise.resolve({ success: true, meta: { last_row_id: 1 }, results: [] })),
-                all: vi.fn(() => Promise.resolve({ results: [], success: true }))
-            }))
-        }));
-        (db as any).exec = vi.fn(() => Promise.resolve());
-        (db as any).batch = vi.fn(() => Promise.resolve([]));
-
-        const env = createMockEnv({ DB: db });
-        const req = authedRequest('DELETE', '/api/organizations/1/members/2', undefined, { orgId: '1', memberUserId: '2' });
-        const res = await handleRemoveMember(req, env, mockCtx);
-        // 200, not 204: removal now reports which vault keys the client must
-        // rotate. Deleting the member's key shares stops them fetching a key
-        // again, but they may already have cached it, so the key itself has to
-        // change — and only a client that can decrypt the vault can do that.
-        expect(res.status).toBe(200);
-        expect((await res.json() as any).rotateVaultIds).toEqual([]);
-    });
-
-    it('drops the removed member\'s vault key shares in the same batch', async () => {
-        let callCount = 0;
-        const db = createMockDB({});
-        (db as any).prepare = vi.fn((sql: string) => ({
-            bind: vi.fn(() => ({
-                first: vi.fn(() => {
-                    callCount++;
-                    if (callCount === 1) return Promise.resolve({ role: 'admin' });
-                    if (callCount === 2) return Promise.resolve({ role: 'member' });
-                    return Promise.resolve(null);
-                }),
-                run: vi.fn(() => Promise.resolve({ success: true, meta: { last_row_id: 1 }, results: [] })),
-                all: vi.fn(() => Promise.resolve({ results: [{ id: 11 }, { id: 12 }], success: true }))
-            }))
-        }));
-        (db as any).batch = vi.fn(() => Promise.resolve([]));
-
-        const env = createMockEnv({ DB: db });
-        const req = authedRequest('DELETE', '/api/organizations/1/members/2', undefined, { orgId: '1', memberUserId: '2' });
-        const res = await handleRemoveMember(req, env, mockCtx);
-
-        expect(res.status).toBe(200);
-        expect((await res.json() as any).rotateVaultIds).toEqual([11, 12]);
-        // membership delete + one share delete per reachable vault
-        expect((db as any).batch.mock.calls[0][0]).toHaveLength(3);
-    });
+    // Four tests once lived here — "super_admin changes a member role",
+    // "admin removes a regular member", "drops the removed member's vault key
+    // shares in the same batch", and "admin cannot remove a super_admin". Each
+    // drove a mock whose first() returned a different role per call, sequenced
+    // by a counter: caller first, target second.
+    //
+    // That is order-dependent (inserting any query upstream shifts every later
+    // answer) and it can assert states SQL cannot produce — one row yielding two
+    // different roles (#89 §6). They now run against real SQLite, as two real
+    // membership rows, in integration/authz-real-db.test.ts, where the key-share
+    // revocation is checked by reading the surviving rows rather than counting
+    // the length of a batch array.
 
     it('returns 403 when trying to remove self', async () => {
         const env = createMockEnv();
         const req = authedRequest('DELETE', '/api/organizations/1/members/1', undefined, { orgId: '1', memberUserId: '1' });
-        const res = await handleRemoveMember(req, env, mockCtx);
-        expect(res.status).toBe(403);
-    });
-
-    it('returns 403 when admin tries to remove a super_admin', async () => {
-        let callCount = 0;
-        const db = createMockDB({});
-        (db as any).prepare = vi.fn(() => ({
-            bind: vi.fn(() => ({
-                first: vi.fn(() => {
-                    callCount++;
-                    if (callCount === 1) return Promise.resolve({ role: 'admin' });        // caller
-                    if (callCount === 2) return Promise.resolve({ role: 'super_admin' });  // target
-                    return Promise.resolve(null);
-                }),
-                run: vi.fn(() => Promise.resolve({ success: true, meta: { last_row_id: 1 }, results: [] })),
-                all: vi.fn(() => Promise.resolve({ results: [], success: true }))
-            }))
-        }));
-        (db as any).exec = vi.fn(() => Promise.resolve());
-        (db as any).batch = vi.fn(() => Promise.resolve([]));
-
-        const env = createMockEnv({ DB: db });
-        const req = authedRequest('DELETE', '/api/organizations/1/members/2', undefined, { orgId: '1', memberUserId: '2' });
         const res = await handleRemoveMember(req, env, mockCtx);
         expect(res.status).toBe(403);
     });

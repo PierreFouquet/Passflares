@@ -152,6 +152,8 @@ and an interactive runner (for local development):
 | `npm run test:security` | The security-regression subset only | A fast check after touching auth, crypto, or anything parsing untrusted input |
 | `npm run test:mutation` | The falsifiability gate — breaks one behaviour at a time and fails if the suite stays green | After adding or changing a security-relevant test, to prove it can actually fail |
 | `npm run test:coverage` | Vitest with v8 coverage and the per-area floors in `vitest.config.mts` | Before adding a handler or module, to check it isn't shipping untested |
+| `npm run test:guardrails` | The source greps only (`tests/guardrails/`) | After touching `public/` assets or anything the static rules cover |
+| `npm run test:stryker` | Generated mutation testing over `src/` — slow, on demand, not in CI | Hunting for gaps nobody thought to write a mutant for |
 | `npm run preflight` | `typecheck` + `test:audit` + Vitest + Playwright | **Run this before opening a PR** |
 
 ### Layers, and what each one is for
@@ -167,6 +169,23 @@ Backend tests come in two flavours, deliberately:
   the real SQL. This is where the `auth_version` upgrade's atomicity and
   rollback behaviour are actually proven, because a live account only gets one
   attempt at it.
+
+**Anything shaped like authorization belongs in the integration suite.** The
+substring mock returns the same row whatever is bound, so it cannot tell "scoped
+to this user" from "scoped to nobody" — a test asserting that only the owner
+opens a vault passes just as happily with `AND owner_id = ?` deleted. That is
+not a theory: pointing the falsifiability gate at `middleware.test.ts` alone
+leaves all three vault-scoping mutants alive. The scoping is asserted in
+`integration/vault-permission-real-db.test.ts` instead, and the unit file is
+labelled for what it covers.
+
+A third flavour sits apart:
+
+- **Guardrails** (`tests/guardrails/`) grep project files as text. They never
+  import `src/` or `public/js/` — enforced, not merely intended — so they
+  contribute no coverage and prove nothing about behaviour. Kept because they
+  catch a class of regression behavioural tests miss, separated so their count
+  is not mistaken for coverage. See `tests/guardrails/README.md`.
 
 **CodeQL runs on every pull request** and is part of the gate — do not merge a
 red run. It is not reproducible locally without the CodeQL CLI, so anything it
@@ -205,6 +224,16 @@ no behavioural coverage at all. The floors are per-area, in
 loose on the page controllers that Playwright covers instead. It is a necessary
 check, not a sufficient one: it counts lines, not whether the tests touching
 them can fail. Lowering a floor to turn a build green defeats the entire point.
+
+**Stryker** (`npm run test:stryker`) generates mutants rather than relying on
+someone having thought of them, and is run on demand — it is far too slow for a
+per-PR job. Treat a survivor as a *lead, not a finding*: its per-test coverage
+analysis under-selects on this project, and of the first five survivors checked
+by hand, three were killed outright by the full backend suite. Reproduce by
+applying the mutation and running `npx vitest run tests/backend` before writing
+anything. The two that did reproduce — Turnstile's secret never being checked on
+the wire, and a non-2xx from siteverify being parsed as a verdict — are now
+curated mutants, so the gate holds them permanently.
 
 The security promises in [Security model](#security-model) are themselves
 asserted, in `tests/frontend/zero-knowledge-invariants.test.js`. Each block
