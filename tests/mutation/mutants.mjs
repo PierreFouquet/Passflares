@@ -452,5 +452,27 @@ export const mutants = [
         // the session key material must not.
         find: 'export function setWrappedPrivateKey(blob) { state.wrappedPrivateKey = blob; }',
         replace: "export function setWrappedPrivateKey(blob) { state.wrappedPrivateKey = blob; try { localStorage.setItem('privateKeyEnc', blob); } catch { /* non-DOM env */ } }"
+    },
+
+    // ── the KDF itself ─────────────────────────────────────────────
+    //
+    // The only mutant over public/vendor/. Everything else here breaks code
+    // this project wrote; this one breaks the vendored Argon2id, because that
+    // is where the corresponding real-world risk lives. Nobody edits
+    // public/vendor/ by hand — `npm update` and scripts/vendor-noble.mjs do,
+    // together, in a diff that reads as a lockfile bump.
+    //
+    // vendor-integrity.test.ts cannot see it: it proves the copy matches
+    // node_modules, which stays true when node_modules is what changed. Nor can
+    // any same-in-same-out test, since a swapped implementation is perfectly
+    // self-consistent. Only a pinned vector notices, which is what
+    // tests/frontend/argon2-known-answer.test.js is for.
+    {
+        id: 'fe-argon2id-is-argon2i',
+        file: 'public/vendor/noble-hashes/argon2.js',
+        suite: 'tests/frontend',
+        desc: 'argon2id() silently computes Argon2i, changing every derived master key',
+        find: 'const AT = { Argon2d: 0, Argon2i: 1, Argon2id: 2 };',
+        replace: 'const AT = { Argon2d: 0, Argon2i: 1, Argon2id: 1 };'
     }
 ];
