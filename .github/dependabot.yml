@@ -23,6 +23,12 @@ updates:
       time: "06:00"
       timezone: Europe/London
     open-pull-requests-limit: 5
+    # Dependabot's half of the release-age hold in .npmrc: don't propose a
+    # version until it has been out for 3 days, so a hijacked release can be
+    # caught first. GitHub already defaults to 3 days; this pins it so a
+    # change of default can't shorten it. Security updates skip the cooldown.
+    cooldown:
+      default-days: 3
     groups:
       npm-minor-and-patch:
         update-types:
