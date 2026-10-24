@@ -23,6 +23,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
+          # Resolve the newest 26.x rather than whatever the runner image has
+          # cached, so CI never lags a Node security release (26.12.1 for the
+          # October 2026 one; see engines in package.json).
+          check-latest: true
           cache: npm
       - run: npm ci
       # Runs before the tests so a type/tsconfig break fails fast. Nothing
@@ -40,6 +44,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
+          check-latest: true
           cache: npm
       - run: npm ci
       # Breaks one security-critical behaviour at a time and fails if the suite
@@ -61,6 +66,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
+          check-latest: true
           cache: npm
       - run: npm ci
       # Stops a new handler shipping with zero behavioural coverage (#89 §4).
@@ -81,6 +87,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
+          check-latest: true
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
