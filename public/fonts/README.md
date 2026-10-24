@@ -9,19 +9,22 @@
 ## Material Symbols Rounded (`material-symbols/MaterialSymbolsRounded.woff2`)
 
 This file is a **subset** containing only the icons referenced by the app. Full
-font is ~5.3 MB; the subset is ~64 KB.
+font is ~5.3 MB; the subset is ~85 KB.
 
 - License: Apache 2.0 (<https://github.com/google/material-design-icons/blob/master/LICENSE>)
-- Subset icons (keep in sync with `public/css/base.css` and any icon used in JS):
+- Subset icons (keep in sync with `public/css/base.css` and any icon used in JS;
+  `tests/backend/icon-subset.test.ts` checks the code, this list and the .woff2
+  against each other):
 
 ```
-add, add_circle, arrow_back, arrow_forward, brightness_auto, check,
-check_circle, close, content_copy, dark_mode, dark_mode_outline, delete,
-download, edit, error, expand_more, folder, format_size, groups, history,
-home, info, key, light_mode, lock, login, logout, menu, menu_book, more_vert,
-open_in_new, palette, password, person, person_add, radio_button_unchecked,
-refresh, remove_moderator, rocket_launch, rounded_corner, save, search,
-security, settings, shield, sync, upload, visibility, visibility_off, warning
+add, add_circle, arrow_back, arrow_forward, block, brightness_auto, check,
+check_circle, close, content_copy, corporate_fare, dark_mode, delete,
+download, edit, error, expand_more, folder, format_size, group, groups,
+history, home, info, key, light_mode, lock, login, logout, manage_accounts,
+menu, menu_book, more_vert, open_in_new, palette, password, person,
+person_add, person_remove, radio_button_unchecked, refresh, remove_moderator,
+rocket_launch, rounded_corner, save, search, security, settings, shield, sync,
+upgrade, upload, verified_user, visibility, visibility_off, warning
 ```
 
 ### Re-generating the subset when new icons are added
