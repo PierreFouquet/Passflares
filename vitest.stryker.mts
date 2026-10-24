@@ -12,7 +12,6 @@ export default defineConfig({
     test: {
         include: ['tests/backend/**/*.test.ts'],
         environment: 'node',
-        setupFiles: ['tests/setup/localstorage-node26.ts'],
         globals: false,
         alias: {
             'cloudflare:workers': resolve(import.meta.dirname, 'tests/mocks/cloudflare-workers.ts')

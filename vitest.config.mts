@@ -13,11 +13,6 @@ export default defineConfig({
         environmentOptions: {
             happyDOM: { width: 1280, height: 720 }
         },
-        // Runs after the environment is built, per test file. Node 26 defines a
-        // global `localStorage` accessor that shadows happy-dom's and returns
-        // undefined without `--localstorage-file`; this takes it back. See the
-        // file for why `--localstorage-file` is the wrong fix.
-        setupFiles: ['tests/setup/localstorage-node26.ts'],
         globals: false,
         // Coverage floor (#89 §4, #83 §E). Necessary, not sufficient: it stops a
         // new handler shipping with *zero* behavioural coverage, which is the
