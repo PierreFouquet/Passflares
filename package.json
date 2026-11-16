@@ -27,7 +27,7 @@
     "node": ">=26.12.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261106.1",
+    "@cloudflare/workers-types": "^5.20261113.1",
     "@playwright/test": "^1.65.0",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/vitest-runner": "^10.1.1",
@@ -36,9 +36,9 @@
     "@vitest/coverage-v8": "^5.1.0",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6",
+    "vite": "^8.3.8",
     "vitest": "^5.0.5",
-    "wrangler": "^4.158.0"
+    "wrangler": "^4.161.0"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",
